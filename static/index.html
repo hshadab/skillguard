@@ -1,0 +1,1943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SkillGuard — Cryptographic Guardrails for Agent Skills</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-primary: #0a0e17;
+  --bg-card: #1a2236;
+  --bg-input: #0f1629;
+  --border: #2a3550;
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent: #3b82f6;
+  --safe: #22c55e;
+  --safe-bg: rgba(34,197,94,0.12);
+  --caution: #eab308;
+  --caution-bg: rgba(234,179,8,0.12);
+  --dangerous: #f97316;
+  --dangerous-bg: rgba(249,115,22,0.12);
+  --deny: #ef4444;
+  --deny-bg: rgba(239,68,68,0.12);
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.container { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+
+header { text-align: center; margin-bottom: 32px; position: relative; }
+.header-top { text-align: left; margin-bottom: 8px; }
+.header-logo { height: 32px; width: auto; }
+header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
+header h1 span { color: var(--accent); }
+.title-sub { font-weight: 400; color: var(--text-secondary); }
+header .subtitle { color: var(--text-secondary); margin-top: 8px; font-size: 0.92rem; line-height: 1.5; }
+header .subtitle a { color: var(--accent); text-decoration: none; }
+header .subtitle a:hover { text-decoration: underline; }
+header .tagline { color: var(--text-muted); margin-top: 6px; font-size: 0.8rem; letter-spacing: 0.03em; }
+header .tagline a { color: var(--accent); text-decoration: none; }
+header .tagline a:hover { text-decoration: underline; }
+
+/* How It Works (collapsible) */
+.how-it-works { margin-bottom: 20px; }
+.how-it-works summary {
+  cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px;
+}
+.how-it-works summary::-webkit-details-marker { display: none; }
+.how-it-works summary .card-title { margin-bottom: 0; }
+.how-it-works summary .toggle-icon {
+  font-size: 0.7rem; color: var(--text-muted); transition: transform 0.2s;
+}
+.how-it-works[open] summary .toggle-icon { transform: rotate(90deg); }
+.how-it-works .how-body { padding-top: 14px; }
+.how-intro {
+  color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; margin-bottom: 16px;
+}
+.how-intro strong { color: var(--text-primary); }
+.how-steps {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; position: relative;
+}
+.how-step {
+  text-align: center; padding: 12px 8px; position: relative;
+}
+.how-step-num {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--accent); color: #fff; font-size: 0.82rem; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; margin-bottom: 8px;
+}
+.how-step-title { font-size: 0.8rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+.how-step-desc { font-size: 0.72rem; color: var(--text-secondary); line-height: 1.45; }
+.how-step-arrow {
+  position: absolute; right: -8px; top: 22px; color: var(--text-muted); font-size: 1rem;
+}
+.how-step:last-child .how-step-arrow { display: none; }
+.how-cert {
+  margin-top: 14px; padding: 10px 14px;
+  background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2);
+  border-radius: var(--radius); font-size: 0.8rem; color: var(--text-secondary);
+  text-align: center; line-height: 1.5;
+}
+.how-cert strong { color: var(--text-primary); }
+.proof-counter-badge {
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 10px 16px; text-align: right;
+  min-width: 140px;
+}
+.proof-counter-label {
+  font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.06em; font-weight: 600; margin-bottom: 2px;
+}
+.proof-counter-value {
+  font-size: 1.2rem; font-weight: 700; color: var(--safe);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+@media (max-width: 700px) {
+  .proof-counter-badge {
+    position: static; transform: none; margin: 10px auto 0; text-align: center;
+  }
+}
+
+.card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 20px; margin-bottom: 20px;
+}
+.card-title {
+  font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-muted); margin-bottom: 12px; font-weight: 600;
+}
+.card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
+}
+.card-header .card-title { margin-bottom: 0; }
+
+/* Status */
+.status-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.status-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600;
+}
+.status-badge.online { background: var(--safe-bg); color: var(--safe); }
+.status-badge.offline { background: var(--deny-bg); color: var(--deny); }
+.status-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.status-meta { color: var(--text-secondary); font-size: 0.82rem; }
+.status-meta span { margin-right: 16px; }
+.status-meta code { color: var(--text-primary); font-size: 0.8rem; }
+
+/* x402 info */
+.x402-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+}
+.x402-item { background: var(--bg-input); border-radius: var(--radius); padding: 12px 14px; }
+.x402-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+.x402-value { font-size: 0.9rem; color: var(--text-primary); font-family: 'SF Mono', 'Fira Code', monospace; word-break: break-all; }
+.x402-value.highlight { color: var(--safe); font-weight: 600; }
+
+/* Stats grid */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.stat-card {
+  background: var(--bg-input); border-radius: var(--radius); padding: 14px;
+  text-align: center;
+}
+.stat-value { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); }
+.stat-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+
+/* Classification breakdown bars */
+.breakdown { margin-top: 4px; }
+.breakdown-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+}
+.breakdown-label { width: 80px; font-size: 0.8rem; color: var(--text-secondary); text-align: right; }
+.breakdown-track { flex: 1; height: 20px; background: var(--bg-primary); border-radius: 4px; overflow: hidden; position: relative; }
+.breakdown-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; min-width: 0; }
+.breakdown-count { width: 50px; font-size: 0.82rem; color: var(--text-primary); font-family: monospace; }
+
+/* Endpoint table */
+.endpoint-table { width: 100%; border-collapse: collapse; }
+.endpoint-table th, .endpoint-table td {
+  text-align: left; padding: 8px 12px; font-size: 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+.endpoint-table th { color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.endpoint-table td { color: var(--text-primary); }
+.endpoint-table td code { font-size: 0.82rem; color: var(--accent); }
+.endpoint-table td.price { color: var(--safe); font-family: monospace; }
+.endpoint-table td.free { color: var(--text-muted); }
+
+footer {
+  text-align: center; color: var(--text-muted); font-size: 0.78rem;
+  margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+}
+footer a { color: var(--accent); text-decoration: none; }
+footer a:hover { text-decoration: underline; }
+
+/* Try It form */
+.try-form { display: flex; flex-direction: column; gap: 12px; }
+.try-form label { font-size: 0.82rem; color: var(--text-secondary); font-weight: 600; }
+.try-form input[type="text"],
+.try-form textarea {
+  width: 100%; background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 12px; color: var(--text-primary);
+  font-family: inherit; font-size: 0.88rem; resize: vertical; outline: none;
+  transition: border-color 0.2s;
+}
+.try-form input[type="text"]:focus,
+.try-form textarea:focus { border-color: var(--accent); }
+.try-form textarea { min-height: 80px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.82rem; }
+.try-form .field { display: flex; flex-direction: column; gap: 4px; }
+.try-form .row { display: flex; gap: 12px; }
+.try-form .row .field { flex: 1; }
+
+.try-buttons { display: flex; gap: 10px; margin-top: 4px; }
+.try-buttons button {
+  padding: 10px 20px; border: none; border-radius: var(--radius);
+  font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s;
+}
+.try-buttons button:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-classify { background: var(--accent); color: #fff; }
+.btn-classify:hover:not(:disabled) { opacity: 0.85; }
+
+.advanced-toggle {
+  background: none; border: none; color: var(--text-muted); font-size: 0.8rem;
+  cursor: pointer; padding: 0; text-align: left;
+}
+.advanced-toggle:hover { color: var(--text-secondary); }
+
+.try-result { margin-top: 16px; }
+.try-result .result-card {
+  background: var(--bg-input); border-radius: var(--radius); padding: 16px;
+  border: 1px solid var(--border);
+}
+.result-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.result-badge {
+  display: inline-flex; align-items: center; padding: 4px 14px;
+  border-radius: 20px; font-size: 0.88rem; font-weight: 700; text-transform: capitalize;
+}
+.result-badge.safe { background: var(--safe-bg); color: var(--safe); }
+.result-badge.caution { background: var(--caution-bg); color: var(--caution); }
+.result-badge.dangerous { background: var(--dangerous-bg); color: var(--dangerous); }
+.result-decision { font-size: 0.85rem; color: var(--text-secondary); }
+.result-decision strong { color: var(--text-primary); }
+.result-confidence { font-size: 0.85rem; color: var(--text-secondary); }
+
+.result-scores { margin-top: 12px; }
+.result-scores .breakdown-row { margin-bottom: 6px; }
+.result-scores .breakdown-label { width: 70px; font-size: 0.75rem; }
+.result-scores .breakdown-count { width: 44px; font-size: 0.78rem; }
+
+.proof-meta { margin-top: 12px; display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.82rem; color: var(--text-secondary); }
+.proof-meta span code { color: var(--text-primary); }
+.proof-toggle {
+  background: none; border: none; color: var(--accent); font-size: 0.8rem;
+  cursor: pointer; padding: 0; margin-top: 8px;
+}
+.proof-toggle:hover { text-decoration: underline; }
+.proof-raw {
+  margin-top: 8px; background: var(--bg-primary); border-radius: var(--radius);
+  padding: 12px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.72rem;
+  color: var(--text-secondary); max-height: 300px; overflow: auto;
+  white-space: pre-wrap; word-break: break-all;
+}
+
+.try-error {
+  margin-top: 12px; padding: 12px 14px; background: var(--deny-bg);
+  border-radius: var(--radius); color: var(--deny); font-size: 0.85rem;
+}
+
+.try-loading {
+  margin-top: 12px; color: var(--text-muted); font-size: 0.85rem;
+}
+.try-loading .spinner {
+  display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+}
+
+/* Wallet connection */
+.wallet-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
+  padding: 8px 12px; background: var(--bg-input); border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.wallet-section {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.wallet-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.wallet-label {
+  font-size: 0.72rem; color: var(--text-muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.btn-copy {
+  padding: 3px 10px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg-card); color: var(--text-secondary); font-size: 0.72rem;
+  cursor: pointer; transition: border-color 0.2s, color 0.2s; white-space: nowrap;
+}
+.btn-copy:hover { border-color: var(--accent); color: var(--accent); }
+.btn-copy.copied { border-color: var(--safe); color: var(--safe); }
+.btn-wallet {
+  padding: 7px 16px; border: none; border-radius: var(--radius);
+  font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s;
+}
+.btn-wallet:hover { opacity: 0.85; }
+.btn-connect { background: #f6851b; color: #fff; }
+.btn-disconnect { background: var(--border); color: var(--text-secondary); font-size: 0.78rem; padding: 5px 12px; }
+.wallet-addr {
+  font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.82rem;
+  color: var(--text-primary);
+}
+.wallet-balance {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;
+  background: var(--safe-bg); color: var(--safe);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.wallet-network {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 10px; border-radius: 12px; font-size: 0.72rem; font-weight: 600;
+}
+.wallet-network.base { background: rgba(59,130,246,0.15); color: var(--accent); }
+.wallet-network.wrong { background: var(--deny-bg); color: var(--deny); }
+.payment-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;
+  background: rgba(59,130,246,0.15); color: var(--accent); margin-left: 4px;
+}
+.payment-badge.payment-link {
+  text-decoration: none; cursor: pointer;
+  background: rgba(34,197,94,0.15); color: #22c55e;
+}
+.payment-badge.payment-link:hover { background: rgba(34,197,94,0.25); }
+.payment-badge.payment-failed {
+  background: rgba(239,68,68,0.15); color: #ef4444;
+}
+
+/* Mode tabs */
+.mode-tabs {
+  display: flex; gap: 0; margin-bottom: 14px;
+  border-bottom: 2px solid var(--border);
+}
+.mode-tab {
+  padding: 8px 18px; font-size: 0.85rem; font-weight: 600;
+  color: var(--text-muted); background: none; border: none;
+  cursor: pointer; border-bottom: 2px solid transparent;
+  margin-bottom: -2px; transition: color 0.2s, border-color 0.2s;
+}
+.mode-tab:hover { color: var(--text-secondary); }
+.mode-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Search input */
+.search-input-wrap {
+  position: relative; margin-bottom: 10px;
+}
+.search-input {
+  width: 100%; background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 12px 10px 36px; color: var(--text-primary);
+  font-family: inherit; font-size: 0.88rem; outline: none; transition: border-color 0.2s;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-icon {
+  position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+  color: var(--text-muted); font-size: 0.95rem; pointer-events: none;
+}
+
+/* Search filters */
+.search-filters {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+  font-size: 0.82rem; color: var(--text-secondary);
+}
+.filter-select {
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 5px 10px; color: var(--text-primary);
+  font-size: 0.82rem; outline: none; cursor: pointer;
+}
+.filter-select:focus { border-color: var(--accent); }
+
+/* Skill results */
+.skill-results {
+  max-height: 360px; overflow-y: auto; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--bg-input);
+}
+.skill-result-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  cursor: default; transition: background 0.15s;
+}
+.skill-result-item:last-child { border-bottom: none; }
+.skill-result-item:hover { background: rgba(59,130,246,0.06); }
+.skill-result-info { flex: 1; min-width: 0; }
+.skill-result-name {
+  font-size: 0.88rem; font-weight: 600; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.skill-result-name .author {
+  font-weight: 400; color: var(--text-muted); font-size: 0.8rem; margin-left: 6px;
+}
+.skill-result-desc {
+  font-size: 0.78rem; color: var(--text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;
+}
+.skill-result-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.category-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 0.68rem; font-weight: 600; background: rgba(59,130,246,0.12);
+  color: var(--accent); white-space: nowrap;
+}
+.btn-quick-classify {
+  padding: 5px 12px; border: none; border-radius: var(--radius);
+  background: var(--accent); color: #fff; font-size: 0.78rem; font-weight: 600;
+  cursor: pointer; white-space: nowrap; transition: opacity 0.2s;
+}
+.btn-quick-classify:hover { opacity: 0.85; }
+.btn-quick-classify:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Search status */
+.search-status {
+  padding: 24px 14px; text-align: center; color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.search-status .spinner {
+  display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px;
+}
+
+/* URL detect banner */
+.url-detect {
+  display: none; padding: 12px 14px; margin-bottom: 10px;
+  background: rgba(59,130,246,0.1); border: 1px solid var(--accent);
+  border-radius: var(--radius); font-size: 0.85rem; color: var(--text-primary);
+}
+.url-detect .url-detect-label {
+  font-weight: 600; margin-bottom: 6px;
+}
+.btn-fetch-classify {
+  padding: 7px 16px; border: none; border-radius: var(--radius);
+  background: var(--accent); color: #fff; font-size: 0.82rem; font-weight: 600;
+  cursor: pointer; transition: opacity 0.2s; margin-top: 4px;
+}
+.btn-fetch-classify:hover { opacity: 0.85; }
+.btn-fetch-classify:disabled { opacity: 0.5; cursor: not-allowed; }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.form-errors {
+  padding: 10px 14px; background: var(--deny-bg); border: 1px solid var(--deny);
+  border-radius: var(--radius); margin-bottom: 10px; display: none;
+}
+.form-errors ul { list-style: none; padding: 0; margin: 0; }
+.form-errors li { color: var(--deny); font-size: 0.82rem; padding: 2px 0; }
+.form-errors li::before { content: "\2716 "; }
+
+@media (max-width: 600px) {
+  .container { padding: 16px 12px; }
+  .header-logo { height: 26px; }
+  header h1 { font-size: 1.5rem; }
+  header .subtitle { font-size: 0.82rem; }
+  header .tagline { font-size: 0.72rem; }
+  .how-steps { grid-template-columns: 1fr; gap: 0; }
+  .how-step { text-align: left; padding: 8px 0 8px 44px; position: relative; }
+  .how-step-num { position: absolute; left: 0; top: 8px; }
+  .how-step-arrow { display: none; }
+  .x402-grid { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .try-form .row { flex-direction: column; gap: 12px; }
+  .try-buttons { flex-direction: column; }
+  .skill-result-item { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .skill-result-meta { width: 100%; justify-content: space-between; }
+  .result-header { gap: 8px; }
+  .result-badge { font-size: 0.78rem; padding: 3px 10px; }
+  .payment-badge { font-size: 0.68rem; padding: 2px 8px; }
+  .proof-meta { flex-direction: column; gap: 4px; }
+  .endpoint-table { font-size: 0.78rem; }
+  .endpoint-table th, .endpoint-table td { padding: 6px 8px; }
+  .card { padding: 14px; }
+  .mode-tabs button { font-size: 0.82rem; padding: 6px 14px; }
+  .wallet-section { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="header-top">
+      <img src="https://cdn.prod.website-files.com/65d52b07d5bc41614daa723f/665df12739c532f45b665fe7_logo-novanet.svg" alt="Novanet" class="header-logo">
+    </div>
+    <h1><span>Skill</span>Guard<span class="title-sub">: SSL for Agent Skills</span></h1>
+    <div class="subtitle">
+      Unforgeable cryptographic safety guardrails for OpenClaw agent skills.
+    </div>
+    <div class="tagline">
+      Powered by <a href="https://github.com/ICME-Lab/jolt-atlas" target="_blank" rel="noopener">Jolt Atlas</a> zero-knowledge machine learning proofs &middot; Paid via <a href="https://www.x402.org/" target="_blank" rel="noopener">x402</a> on Base
+    </div>
+    <div class="proof-counter-badge" id="proof-counter-badge">
+      <div class="proof-counter-label">zkML Proofs Generated:</div>
+      <div class="proof-counter-value" id="proof-counter-value">0</div>
+    </div>
+  </header>
+
+  <!-- How It Works (collapsible) -->
+  <details class="card how-it-works">
+    <summary>
+      <span class="toggle-icon">&#9654;</span>
+      <span class="card-title">How It Works</span>
+    </summary>
+    <div class="how-body">
+      <div class="how-intro">
+        Before an agent can transact, it installs skills — packages of code that give it new abilities.
+        This is the <strong>agent skill supply chain</strong>. If a malicious skill enters the supply chain,
+        every downstream action is compromised: stolen credentials, exfiltrated data, unauthorized transactions.
+        SkillGuard is the cryptographic checkpoint at the boundary.
+      </div>
+      <div class="how-steps">
+        <div class="how-step">
+          <div class="how-step-num">1</div>
+          <div class="how-step-title">Skill submitted</div>
+          <div class="how-step-desc">Developer publishes a skill to ClawHub, or submits data directly via API</div>
+          <span class="how-step-arrow">&rarr;</span>
+        </div>
+        <div class="how-step">
+          <div class="how-step-num">2</div>
+          <div class="how-step-title">Features extracted</div>
+          <div class="how-step-desc">35 security signals analyzed: shell exec, reverse shells, credential access, obfuscation, entropy, exfiltration, density ratios, interaction terms. Code blocks in SKILL.md are extracted and scanned</div>
+          <span class="how-step-arrow">&rarr;</span>
+        </div>
+        <div class="how-step">
+          <div class="how-step-num">3</div>
+          <div class="how-step-title">Classified with proof</div>
+          <div class="how-step-desc">Neural network classifies the skill. Jolt Atlas generates a ~53 KB SNARK proof of the computation</div>
+          <span class="how-step-arrow">&rarr;</span>
+        </div>
+        <div class="how-step">
+          <div class="how-step-num">4</div>
+          <div class="how-step-title">Anyone verifies</div>
+          <div class="how-step-desc">The proof can be independently verified in milliseconds — no trust in SkillGuard required</div>
+          <span class="how-step-arrow">&rarr;</span>
+        </div>
+        <div class="how-step">
+          <div class="how-step-num">5</div>
+          <div class="how-step-title">Classification made</div>
+          <div class="how-step-desc">ALLOW, FLAG, or DENY. The proof becomes a tamperproof safety certificate for the skill</div>
+        </div>
+      </div>
+      <div class="how-cert">
+        Like an SSL certificate for agent skills: every classification is backed by a <strong>zero-knowledge machine learning proof</strong> — a cryptographic receipt that the neural network ran correctly on the claimed inputs. The proof reveals the decision but not the model weights. Anyone can verify. No one can forge.
+      </div>
+    </div>
+  </details>
+
+  <!-- How the Classifier Works (collapsible) -->
+  <details class="card how-it-works">
+    <summary>
+      <span class="toggle-icon">&#9654;</span>
+      <span class="card-title">How the Classifier Works</span>
+    </summary>
+    <div class="how-body">
+      <div class="how-intro">
+        The classifier is a small neural network that learned to spot dangerous patterns by studying
+        hundreds of real OpenClaw skills (scaling to 1,400+ with the v3.0 training pipeline). It doesn't "understand" code — it counts
+        security-relevant signals and uses learned patterns to decide.
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px">
+        <div style="padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius)">
+          <div style="font-weight:600;font-size:0.82rem;margin-bottom:6px;color:var(--text-primary)">Feature Extraction (35 signals)</div>
+          <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.55">
+            Each skill is reduced to 35 numbers: shell exec count, network calls, obfuscation
+            score, reverse shell patterns, credential access, author reputation, download counts,
+            byte entropy, code density ratios, and more. Code blocks inside SKILL.md files are
+            extracted and scanned even when no separate scripts exist. Each value is scaled
+            to 0&ndash;128.
+          </div>
+        </div>
+        <div style="padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius)">
+          <div style="font-weight:600;font-size:0.82rem;margin-bottom:6px;color:var(--text-primary)">Neural Network (4,419 params)</div>
+          <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.55">
+            Three layers of neurons (35&rarr;56&rarr;40&rarr;3) mix the features into progressively
+            higher-level patterns. Layer 1 detects basic combinations ("obfuscation + shell exec").
+            Layer 2 builds compound indicators ("credential stealer" vs "API client").
+            Layer 3 outputs three scores: SAFE, CAUTION, DANGEROUS. Highest wins.
+          </div>
+        </div>
+        <div style="padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius)">
+          <div style="font-weight:600;font-size:0.82rem;margin-bottom:6px;color:var(--text-primary)">Confidence &amp; Decisions</div>
+          <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.55">
+            Raw scores are converted to probabilities via softmax (T=0.95 on integer-scale logits). If the distribution
+            is spread out (high entropy), the model flags it for human review. DANGEROUS
+            results need &ge;50% confidence for DENY; otherwise they're flagged. SAFE/CAUTION
+            results get ALLOW unless entropy is too high.
+          </div>
+        </div>
+        <div style="padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius)">
+          <div style="font-weight:600;font-size:0.82rem;margin-bottom:6px;color:var(--text-primary)">Integer Arithmetic &amp; ZK Proofs</div>
+          <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.55">
+            All math uses integers (scale=128) instead of floating-point, because the entire
+            forward pass runs inside a zero-knowledge SNARK (Jolt Atlas). This produces a ~53 KB
+            cryptographic proof that the classification was computed correctly. Anyone can verify
+            the proof without trusting SkillGuard or seeing the model weights.
+          </div>
+        </div>
+      </div>
+      <div class="how-cert" style="margin-top:14px">
+        Trained on <strong>LLM-labeled real OpenClaw skills</strong> (3 classes: SAFE, CAUTION, DANGEROUS).
+        Adversarially hardened with FGSM perturbations. v3.0 pipeline adds boundary-aware labeling, stratified sampling, held-out evaluation, and human review.
+      </div>
+      <div style="margin-top:14px;display:flex;gap:16px;flex-wrap:wrap;font-size:0.78rem;color:var(--text-secondary)">
+        <span>Dataset: <strong style="color:var(--text-primary)">425</strong> real skills (v2.0), <strong style="color:var(--text-primary)">1,400+</strong> target (v3.0)</span>
+        <span>v2.0: <strong style="color:var(--safe)">144 SAFE</strong> &middot; <strong style="color:var(--caution)">267 CAUTION</strong> &middot; <strong style="color:var(--dangerous)">14 DANGEROUS</strong> + 106 augmented</span>
+        <span>Calibration: <strong style="color:var(--text-primary)">ECE 0.045</strong></span>
+        <span>Entropy threshold: <strong style="color:var(--text-primary)">0.67</strong> (5% flag rate)</span>
+      </div>
+    </div>
+  </details>
+
+  <!-- Server Status -->
+  <div class="card">
+    <div class="card-title">Service Status</div>
+    <div class="status-row">
+      <span class="status-badge offline" id="status-badge"><span class="dot"></span> <span id="status-text">Checking...</span></span>
+    </div>
+    <div class="status-meta" id="status-meta" style="margin-top:10px"></div>
+  </div>
+
+  <!-- x402 Payment Info -->
+  <div class="card">
+    <div class="card-title">x402 Payment</div>
+    <div class="x402-grid">
+      <div class="x402-item">
+        <div class="x402-label">Price per provable classification</div>
+        <div class="x402-value highlight">$0.001 USDC</div>
+      </div>
+      <div class="x402-item">
+        <div class="x402-label">Includes</div>
+        <div class="x402-value highlight">zkML proof</div>
+      </div>
+      <div class="x402-item">
+        <div class="x402-label">Network</div>
+        <div class="x402-value">Base (eip155:8453)</div>
+      </div>
+      <div class="x402-item">
+        <div class="x402-label">Protocol</div>
+        <div class="x402-value">HTTP 402 / x402</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Try It -->
+  <div class="card">
+    <div class="card-title">Try It</div>
+    <div class="wallet-bar">
+      <div class="wallet-section" id="wallet-section">
+        <div class="wallet-row">
+          <button class="btn-wallet btn-connect" id="btn-connect-wallet" type="button" aria-label="Connect wallet">Connect Wallet</button>
+          <span class="wallet-label" id="wallet-label" style="display:none">Your Wallet</span>
+          <span class="wallet-addr" id="wallet-addr" style="display:none"></span>
+          <button class="btn-copy btn-copy-addr" id="btn-copy-addr" type="button" style="display:none" aria-label="Copy wallet address to clipboard">Copy</button>
+          <span class="wallet-balance" id="wallet-balance" style="display:none"></span>
+          <span class="wallet-network" id="wallet-network" style="display:none"></span>
+          <button class="btn-wallet btn-disconnect" id="btn-disconnect-wallet" type="button" style="display:none" aria-label="Disconnect wallet">Disconnect</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode-tabs">
+      <button class="mode-tab active" id="tab-search" type="button">Search Skills</button>
+      <button class="mode-tab" id="tab-custom" type="button">Custom Skill</button>
+    </div>
+
+    <!-- Search Mode -->
+    <div id="search-mode">
+      <div class="search-input-wrap">
+        <span class="search-icon">&#128269;</span>
+        <input type="text" class="search-input" id="search-input" placeholder="Search 3,000+ OpenClaw skills..." autocomplete="off">
+      </div>
+      <div class="search-filters">
+        <select class="filter-select" id="filter-category"><option value="">All Categories</option></select>
+        <span id="results-count" style="margin-left:auto"></span>
+      </div>
+      <div class="skill-results" id="skill-results">
+        <div class="search-status" id="search-status"><span class="spinner"></span>Loading skill directory...</div>
+      </div>
+      <div class="url-detect" id="url-detect">
+        <div class="url-detect-label">GitHub URL detected</div>
+        <div id="url-detect-preview" style="font-size:0.8rem;color:var(--text-secondary);word-break:break-all;margin-bottom:6px"></div>
+        <button class="btn-fetch-classify" id="btn-fetch-classify" type="button">Fetch &amp; Classify + Prove</button>
+      </div>
+    </div>
+
+    <!-- Custom Mode -->
+    <div id="custom-mode" style="display:none">
+      <div class="try-form" id="try-form">
+        <div class="row">
+          <div class="field">
+            <label for="try-name">Skill Name</label>
+            <input type="text" id="try-name" placeholder="e.g. my-weather-skill" required>
+          </div>
+          <div class="field">
+            <label for="try-author">Author</label>
+            <input type="text" id="try-author" placeholder="e.g. alice" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="try-skillmd">SKILL.md Content</label>
+          <textarea id="try-skillmd" rows="5" placeholder="Paste SKILL.md content...">## Weather Lookup
+This skill fetches current weather data from a public API and returns a friendly summary.
+
+### Permissions
+- network: api.open-meteo.com</textarea>
+        </div>
+        <div class="field">
+          <label for="try-scripts">Scripts <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+          <textarea id="try-scripts" rows="3" placeholder="Paste script content if any..."></textarea>
+        </div>
+        <button class="advanced-toggle" type="button" id="try-adv-toggle">&#9654; Advanced</button>
+        <div class="field" id="try-adv-section" style="display:none">
+          <label for="try-apikey">API Key</label>
+          <input type="text" id="try-apikey" placeholder="Bearer token (if auth is enabled)">
+        </div>
+        <div class="form-errors" id="form-errors" role="alert"><ul></ul></div>
+        <div class="try-buttons">
+          <button class="btn-classify" id="btn-classify" type="button" aria-label="Classify skill and generate zkML proof">Classify + Prove</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="try-output" role="status" aria-live="polite"></div>
+  </div>
+
+  <!-- ZKML Proving -->
+  <div class="card">
+    <div class="card-title">ZKML Proving</div>
+    <div class="x402-grid">
+      <div class="x402-item">
+        <div class="x402-label">Proving Scheme</div>
+        <div class="x402-value">Jolt / Dory</div>
+      </div>
+      <div class="x402-item">
+        <div class="x402-label">Model Size</div>
+        <div class="x402-value">4,419 params (35-56-40-3)</div>
+      </div>
+      <div class="x402-item">
+        <div class="x402-label">Proofs Generated</div>
+        <div class="x402-value" id="st-proofs-gen">0</div>
+      </div>
+      <div class="x402-item">
+        <div class="x402-label">Proofs Verified</div>
+        <div class="x402-value" id="st-proofs-ver">0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Endpoints -->
+  <div class="card">
+    <div class="card-title">Endpoints</div>
+    <table class="endpoint-table">
+      <thead>
+        <tr><th>Method</th><th>Path</th><th>Auth</th><th>Price</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>POST</td><td><code>/api/v1/evaluate</code></td><td>API key or x402</td><td class="price">$0.001</td></tr>
+        <tr><td>POST</td><td><code>/api/v1/verify</code></td><td>None</td><td class="free">Free</td></tr>
+        <tr><td>GET</td><td><code>/health</code></td><td>None</td><td class="free">Free</td></tr>
+        <tr><td>GET</td><td><code>/stats</code></td><td>None</td><td class="free">Free</td></tr>
+        <tr><td>GET</td><td><code>/openapi.json</code></td><td>None</td><td class="free">Free</td></tr>
+        <tr><td>GET</td><td><code>/.well-known/ai-plugin.json</code></td><td>None</td><td class="free">Free</td></tr>
+        <tr><td>GET</td><td><code>/.well-known/llms.txt</code></td><td>None</td><td class="free">Free</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Live Stats -->
+  <div class="card">
+    <div class="card-title">Live Statistics</div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-value" id="st-total">-</div><div class="stat-label">Total Requests</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-errors">-</div><div class="stat-label">Errors</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-ep-eval">-</div><div class="stat-label">Evaluate</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-ep-name">-</div><div class="stat-label">By Name</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-ep-prove">-</div><div class="stat-label">Prove</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-ep-verify">-</div><div class="stat-label">Verify</div></div>
+    </div>
+  </div>
+
+  <!-- Classification Breakdown -->
+  <div class="card">
+    <div class="card-title">Classifications</div>
+    <div class="breakdown" id="cls-breakdown">
+      <div class="breakdown-row">
+        <div class="breakdown-label">Safe</div>
+        <div class="breakdown-track"><div class="breakdown-fill" id="bar-safe" style="width:0%;background:var(--safe)"></div></div>
+        <div class="breakdown-count" id="ct-safe">0</div>
+      </div>
+      <div class="breakdown-row">
+        <div class="breakdown-label">Caution</div>
+        <div class="breakdown-track"><div class="breakdown-fill" id="bar-caution" style="width:0%;background:var(--caution)"></div></div>
+        <div class="breakdown-count" id="ct-caution">0</div>
+      </div>
+      <div class="breakdown-row">
+        <div class="breakdown-label">Dangerous</div>
+        <div class="breakdown-track"><div class="breakdown-fill" id="bar-dangerous" style="width:0%;background:var(--dangerous)"></div></div>
+        <div class="breakdown-count" id="ct-dangerous">0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Decisions -->
+  <div class="card">
+    <div class="card-title">Decisions</div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-value" id="st-allow" style="color:var(--safe)">-</div><div class="stat-label">Allow</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-deny" style="color:var(--deny)">-</div><div class="stat-label">Deny</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-flag" style="color:var(--caution)">-</div><div class="stat-label">Flag</div></div>
+    </div>
+  </div>
+
+  <footer>
+    <span id="footer-version">SkillGuard</span> &middot;
+    <a href="https://github.com/hshadab/skillguard" target="_blank" rel="noopener">GitHub</a> &middot;
+    <a href="https://github.com/ICME-Lab/jolt-atlas" target="_blank" rel="noopener">Jolt Atlas</a> &middot;
+    <a href="https://www.x402.org/" target="_blank" rel="noopener">x402 Protocol</a>
+  </footer>
+
+</div>
+
+<script>
+var CONFIG = {
+  apiBase: '',
+  healthEndpoint: '/health',
+  statsEndpoint: '/stats',
+  evaluateEndpoint: '/api/v1/evaluate',
+  verifyEndpoint: '/api/v1/verify',
+  skillIndexUrl: 'https://raw.githubusercontent.com/VoltAgent/awesome-openclaw-skills/main/README.md',
+  baseRpcUrl: 'https://mainnet.base.org',
+  usdcContract: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+  baseChainId: '0x2105',
+  baseExplorerUrl: 'https://basescan.org',
+  healthIntervalMs: 30000,
+  statsIntervalMs: 10000,
+  skillCacheTtlMs: 3600000
+};
+
+function $(id) { return document.getElementById(id); }
+
+function escHtml(str) {
+  var d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function formatUptime(s) {
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+  var h = Math.floor(s / 3600);
+  var m = Math.floor((s % 3600) / 60);
+  if (h < 24) return h + 'h ' + m + 'm';
+  var days = Math.floor(h / 24);
+  return days + 'd ' + (h % 24) + 'h';
+}
+
+function checkHealth() {
+  fetch(CONFIG.healthEndpoint)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      $('status-badge').className = 'status-badge online';
+      $('status-text').textContent = 'Online';
+      var uptime = formatUptime(d.uptime_seconds);
+      var hash = d.model_hash.length > 20 ? d.model_hash.slice(0, 20) + '...' : d.model_hash;
+      var zkml = d.zkml_enabled ? 'ZKML: Ready' : 'ZKML: Initializing';
+      $('status-meta').innerHTML =
+        '<span>Version: <code>' + escHtml(d.version) + '</code></span>' +
+        '<span>Model: <code>' + escHtml(hash) + '</code></span>' +
+        '<span><code>' + escHtml(zkml) + '</code></span>' +
+        '<span>Uptime: <code>' + escHtml(uptime) + '</code></span>';
+      $('footer-version').textContent = 'SkillGuard v' + d.version;
+    })
+    .catch(function() {
+      $('status-badge').className = 'status-badge offline';
+      $('status-text').textContent = 'Offline';
+      $('status-meta').innerHTML = '';
+    });
+}
+
+function loadStats() {
+  fetch(CONFIG.statsEndpoint)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      $('st-total').textContent = d.requests.total;
+      $('st-errors').textContent = d.requests.errors;
+      $('st-ep-eval').textContent = d.endpoints.evaluate;
+      $('st-ep-name').textContent = d.endpoints.evaluate_by_name;
+      $('st-ep-prove').textContent = d.endpoints.prove;
+      $('st-ep-verify').textContent = d.endpoints.verify;
+      $('st-allow').textContent = d.decisions.allow;
+      $('st-deny').textContent = d.decisions.deny;
+      $('st-flag').textContent = d.decisions.flag;
+
+      $('st-proofs-gen').textContent = d.proofs.total_generated;
+      $('st-proofs-ver').textContent = d.proofs.total_verified;
+      $('proof-counter-value').textContent = d.proofs.total_generated;
+
+      var cls = d.classifications;
+      var total = cls.safe + cls.caution + cls.dangerous;
+      var max = Math.max(cls.safe, cls.caution, cls.dangerous, 1);
+
+      $('ct-safe').textContent = cls.safe;
+      $('ct-caution').textContent = cls.caution;
+      $('ct-dangerous').textContent = cls.dangerous;
+
+      $('bar-safe').style.width = (cls.safe / max * 100) + '%';
+      $('bar-caution').style.width = (cls.caution / max * 100) + '%';
+      $('bar-dangerous').style.width = (cls.dangerous / max * 100) + '%';
+    })
+    .catch(function() {});
+}
+
+/* ── Wallet connection (EIP-1193 / window.ethereum) ── */
+var walletState = { connected: false, address: null, chainId: null };
+var BASE_CHAIN_ID = CONFIG.baseChainId;
+var USDC_BASE = CONFIG.usdcContract;
+
+function truncateAddr(addr) {
+  return addr.slice(0, 6) + '...' + addr.slice(-4);
+}
+
+async function fetchUsdcBalance(address) {
+  // ERC-20 balanceOf(address) — selector 0x70a08231 + address padded to 32 bytes
+  var padded = address.toLowerCase().replace('0x', '').padStart(64, '0');
+  var callData = '0x70a08231' + padded;
+
+  try {
+    // Use public Base RPC directly — more reliable than routing through wallet provider
+    var r = await fetch(CONFIG.baseRpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'eth_call',
+        params: [{ to: USDC_BASE, data: callData }, 'latest']
+      })
+    });
+    var resp = await r.json();
+    if (!resp.result) return '0.00';
+    var raw = parseInt(resp.result, 16);
+    if (isNaN(raw)) raw = 0;
+    // USDC has 6 decimals
+    var balance = (raw / 1e6).toFixed(3);
+    var balEl = $('wallet-balance');
+    balEl.textContent = balance + ' USDC';
+    balEl.style.display = '';
+    return balance;
+  } catch (e) {
+    // Non-critical — balance just won't show
+    return '0.00';
+  }
+}
+
+function updateWalletUI() {
+  var btnConnect = $('btn-connect-wallet');
+  var labelEl = $('wallet-label');
+  var addrEl = $('wallet-addr');
+  var btnCopy = $('btn-copy-addr');
+  var balEl = $('wallet-balance');
+  var netEl = $('wallet-network');
+  var btnDisconnect = $('btn-disconnect-wallet');
+
+  if (walletState.connected) {
+    btnConnect.style.display = 'none';
+    labelEl.style.display = '';
+    addrEl.textContent = truncateAddr(walletState.address);
+    addrEl.style.display = '';
+    btnCopy.style.display = '';
+    btnDisconnect.style.display = '';
+
+    var isBase = walletState.chainId === BASE_CHAIN_ID ||
+                 walletState.chainId === '0x2105' ||
+                 parseInt(walletState.chainId, 16) === 8453;
+    netEl.style.display = '';
+    if (isBase) {
+      netEl.className = 'wallet-network base';
+      netEl.textContent = 'Base';
+      fetchUsdcBalance(walletState.address);
+    } else {
+      netEl.className = 'wallet-network wrong';
+      netEl.textContent = 'Wrong Network';
+      balEl.style.display = 'none';
+    }
+  } else {
+    btnConnect.style.display = '';
+    labelEl.style.display = 'none';
+    addrEl.style.display = 'none';
+    btnCopy.style.display = 'none';
+    balEl.style.display = 'none';
+    netEl.style.display = 'none';
+    btnDisconnect.style.display = 'none';
+  }
+}
+
+function withTimeout(promise, ms, msg) {
+  return new Promise(function(resolve, reject) {
+    var timer = setTimeout(function() {
+      reject(new Error(msg || 'Timed out after ' + ms + 'ms'));
+    }, ms);
+    promise.then(function(val) {
+      clearTimeout(timer);
+      resolve(val);
+    }, function(err) {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
+function getProvider() {
+  // Return a promise that resolves to window.ethereum, waiting up to 3s for injection
+  if (window.ethereum) return Promise.resolve(window.ethereum);
+  return new Promise(function(resolve, reject) {
+    var resolved = false;
+    window.addEventListener('ethereum#initialized', function() {
+      if (!resolved) { resolved = true; resolve(window.ethereum); }
+    }, { once: true });
+    // Also check via EIP-6963 (multi-wallet standard)
+    window.addEventListener('eip6963:announceProvider', function(e) {
+      if (!resolved && e.detail && e.detail.provider) {
+        resolved = true;
+        resolve(e.detail.provider);
+      }
+    }, { once: true });
+    window.dispatchEvent(new Event('eip6963:requestProvider'));
+    setTimeout(function() {
+      if (!resolved) {
+        resolved = true;
+        if (window.ethereum) resolve(window.ethereum);
+        else reject(new Error('No wallet detected. Install a browser wallet (Phantom, MetaMask, Rabby, etc.) to pay with USDC on Base.'));
+      }
+    }, 3000);
+  });
+}
+
+async function connectWallet() {
+  // Update button text while connecting
+  var btns = document.querySelectorAll('.btn-connect');
+  for (var i = 0; i < btns.length; i++) btns[i].textContent = 'Connecting...';
+
+  try {
+    var provider = await getProvider();
+    // Ensure event listeners are attached
+    if (!window.ethereum) window.ethereum = provider;
+    attachWalletListeners();
+
+    var accounts = await withTimeout(
+      provider.request({ method: 'eth_requestAccounts' }),
+      30000,
+      'Wallet did not respond. Open your wallet extension and approve the connection request.'
+    );
+    if (!accounts || !accounts.length) throw new Error('No accounts returned by wallet.');
+    walletState.address = accounts[0];
+    walletState.connected = true;
+
+    var chainId = await window.ethereum.request({ method: 'eth_chainId' });
+    walletState.chainId = chainId;
+    if (chainId !== BASE_CHAIN_ID) {
+      try {
+        await switchToBase();
+        walletState.chainId = BASE_CHAIN_ID;
+      } catch (e) {
+        // User rejected chain switch — stay connected but show wrong network
+      }
+    }
+
+    updateWalletUI();
+  } catch (err) {
+    // Reset button text on failure
+    var btns2 = document.querySelectorAll('.btn-connect');
+    for (var j = 0; j < btns2.length; j++) btns2[j].textContent = 'Connect Wallet';
+    throw err; // Re-throw so callers can handle
+  }
+}
+
+function switchToBase() {
+  return window.ethereum.request({
+    method: 'wallet_switchEthereumChain',
+    params: [{ chainId: BASE_CHAIN_ID }]
+  }).catch(function(err) {
+    if (err.code === 4902) {
+      return window.ethereum.request({
+        method: 'wallet_addEthereumChain',
+        params: [{
+          chainId: BASE_CHAIN_ID,
+          chainName: 'Base',
+          nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+          rpcUrls: [CONFIG.baseRpcUrl],
+          blockExplorerUrls: [CONFIG.baseExplorerUrl]
+        }]
+      });
+    }
+    throw err;
+  });
+}
+
+function disconnectWallet() {
+  walletState = { connected: false, address: null, chainId: null };
+  updateWalletUI();
+}
+
+// Auto-detect wallet events — defer to avoid racing provider initialization
+function attachWalletListeners() {
+  if (!window.ethereum) return;
+  window.ethereum.on('accountsChanged', function(accounts) {
+    if (accounts.length === 0) {
+      disconnectWallet();
+    } else {
+      walletState.address = accounts[0];
+      walletState.connected = true;
+      updateWalletUI();
+    }
+  });
+  window.ethereum.on('chainChanged', function(chainId) {
+    walletState.chainId = chainId;
+    updateWalletUI();
+  });
+}
+if (window.ethereum) {
+  attachWalletListeners();
+} else {
+  window.addEventListener('ethereum#initialized', attachWalletListeners, { once: true });
+}
+
+/* ── x402 payment helpers ── */
+function randomBytes32() {
+  var arr = new Uint8Array(32);
+  crypto.getRandomValues(arr);
+  return '0x' + Array.from(arr).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+}
+
+async function parse402Response(response) {
+  // V2 protocol: base64 JSON in Payment-Required header
+  var raw = response.headers.get('Payment-Required');
+  if (raw) {
+    try { return JSON.parse(atob(raw)); } catch (e) { /* fall through to body */ }
+  }
+  // V1 protocol: payment requirements in JSON response body
+  try { return await response.json(); } catch (e) { return null; }
+}
+
+async function signX402Payment(requirements) {
+  var accept = requirements.accepts[0];
+  var USDC_ADDRESS = accept.asset || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+  var extraName = (accept.extra && accept.extra.name) || 'USD Coin';
+  var extraVersion = (accept.extra && accept.extra.version) || '2';
+  var maxTimeout = accept.maxTimeoutSeconds || 30;
+  var validBeforeNum = Math.floor(Date.now() / 1000) + maxTimeout;
+  var nonce = randomBytes32();
+  // V1 uses maxAmountRequired, V2 uses amount
+  var paymentAmount = accept.maxAmountRequired || accept.amount;
+
+  // EIP-712 typed data for ERC-3009 TransferWithAuthorization
+  var typedData = {
+    types: {
+      EIP712Domain: [
+        { name: 'name', type: 'string' },
+        { name: 'version', type: 'string' },
+        { name: 'chainId', type: 'uint256' },
+        { name: 'verifyingContract', type: 'address' }
+      ],
+      TransferWithAuthorization: [
+        { name: 'from', type: 'address' },
+        { name: 'to', type: 'address' },
+        { name: 'value', type: 'uint256' },
+        { name: 'validAfter', type: 'uint256' },
+        { name: 'validBefore', type: 'uint256' },
+        { name: 'nonce', type: 'bytes32' }
+      ]
+    },
+    primaryType: 'TransferWithAuthorization',
+    domain: {
+      name: extraName,
+      version: extraVersion,
+      chainId: 8453,
+      verifyingContract: USDC_ADDRESS
+    },
+    message: {
+      from: walletState.address,
+      to: accept.payTo,
+      value: String(paymentAmount),
+      validAfter: '0',
+      validBefore: String(validBeforeNum),
+      nonce: nonce
+    }
+  };
+
+  var signature = await window.ethereum.request({
+    method: 'eth_signTypedData_v4',
+    params: [walletState.address, JSON.stringify(typedData)]
+  });
+  // Build v1 PaymentPayload per x402-types v1 spec:
+  // { x402Version: 1, scheme, network, payload: { signature, authorization } }
+  var paymentPayload = {
+    x402Version: 1,
+    scheme: accept.scheme || 'exact',
+    network: accept.network || 'base',
+    payload: {
+      signature: signature,
+      authorization: {
+        from: walletState.address,
+        to: accept.payTo,
+        value: String(paymentAmount),
+        validAfter: '0',
+        validBefore: String(validBeforeNum),
+        nonce: nonce
+      }
+    }
+  };
+  return btoa(JSON.stringify(paymentPayload));
+}
+
+// Try It form logic
+(function() {
+  /* ── Track current skill source URL for linking in results ── */
+  var currentSkillUrl = null;
+
+  /* ── Tab switching ── */
+  var tabSearch = $('tab-search');
+  var tabCustom = $('tab-custom');
+  var searchMode = $('search-mode');
+  var customMode = $('custom-mode');
+
+  tabSearch.addEventListener('click', function() {
+    tabSearch.classList.add('active');
+    tabCustom.classList.remove('active');
+    searchMode.style.display = '';
+    customMode.style.display = 'none';
+  });
+  tabCustom.addEventListener('click', function() {
+    tabCustom.classList.add('active');
+    tabSearch.classList.remove('active');
+    customMode.style.display = '';
+    searchMode.style.display = 'none';
+  });
+
+  /* ── Advanced toggle (custom mode) ── */
+  var advToggle = $('try-adv-toggle');
+  var advSection = $('try-adv-section');
+  advToggle.addEventListener('click', function() {
+    var open = advSection.style.display !== 'none';
+    advSection.style.display = open ? 'none' : 'flex';
+    advToggle.innerHTML = (open ? '&#9654;' : '&#9660;') + ' Advanced';
+  });
+
+  /* ── Wallet buttons ── */
+  function onConnectClick() {
+    connectWallet().catch(function(err) {
+      if (err && err.code === 4001) {
+        setOutput('<div class="try-error">Wallet connection rejected by user.</div>');
+      } else {
+        setOutput('<div class="try-error">Wallet connection failed: ' + escHtml(err.message || String(err)) + '</div>');
+      }
+    });
+  }
+  $('btn-connect-wallet').addEventListener('click', onConnectClick);
+  $('btn-disconnect-wallet').addEventListener('click', function() { disconnectWallet(); });
+
+  /* ── Copy user wallet address ── */
+  $('btn-copy-addr').addEventListener('click', function() {
+    if (!walletState.address) return;
+    navigator.clipboard.writeText(walletState.address).then(function() {
+      var btn = $('btn-copy-addr');
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(function() { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+
+  /* ── Shared helpers ── */
+  function getFormData() {
+    var name = $('try-name').value.trim();
+    var author = $('try-author').value.trim();
+    var skillmd = $('try-skillmd').value.trim();
+    var scripts = $('try-scripts').value.trim();
+    if (!name || !author || !skillmd) return null;
+    var body = {
+      skill: {
+        name: name,
+        version: '1.0.0',
+        author: author,
+        description: '',
+        skill_md: skillmd,
+        scripts: [],
+        metadata: {},
+        files: []
+      }
+    };
+    if (scripts) {
+      body.skill.scripts = [{ name: 'script.sh', content: scripts, extension: 'sh' }];
+    }
+    return body;
+  }
+
+  function getHeaders() {
+    var h = { 'Content-Type': 'application/json' };
+    var apiKeyEl = $('try-apikey');
+    var key = apiKeyEl ? apiKeyEl.value.trim() : '';
+    if (key) h['Authorization'] = 'Bearer ' + key;
+    return h;
+  }
+
+  function setOutput(html) {
+    $('try-output').innerHTML = html;
+  }
+
+  function showLoading(msg) {
+    setOutput(
+      '<div class="try-loading"><span class="spinner"></span>' + escHtml(msg) + '</div>'
+    );
+  }
+
+  function showError(msg) {
+    setOutput('<div class="try-error">' + escHtml(msg) + '</div>');
+  }
+
+  function classColor(cls) {
+    var c = cls.toLowerCase();
+    if (c === 'safe') return 'safe';
+    if (c === 'caution') return 'caution';
+    return 'dangerous';
+  }
+
+  function pct(v) { return (v * 100).toFixed(1) + '%'; }
+
+  function renderScores(scores) {
+    var cats = [
+      { key: 'SAFE', label: 'Safe', color: 'var(--safe)' },
+      { key: 'CAUTION', label: 'Caution', color: 'var(--caution)' },
+      { key: 'DANGEROUS', label: 'Dangerous', color: 'var(--dangerous)' }
+    ];
+    var html = '<div class="result-scores">';
+    html += '<div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:6px">Class Probabilities</div>';
+    for (var i = 0; i < cats.length; i++) {
+      var c = cats[i];
+      var val = scores[c.key] || 0;
+      var w = (val * 100).toFixed(1);
+      html += '<div class="breakdown-row">' +
+        '<div class="breakdown-label">' + c.label + '</div>' +
+        '<div class="breakdown-track"><div class="breakdown-fill" style="width:' + w + '%;background:' + c.color + '"></div></div>' +
+        '<div class="breakdown-count">' + pct(val) + '</div>' +
+        '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderResult(ev, proofBundle, timeMs, paidViaX402, settlement, sourceUrl) {
+    var cls = classColor(ev.classification);
+    // ev.confidence is the top-class softmax probability (0.0–1.0)
+    var confidence = (typeof ev.confidence === 'number') ? ev.confidence : 0;
+    var confPct = (confidence * 100).toFixed(1);
+    // For a 3-class classifier, random chance is 33%. Tiers are calibrated accordingly:
+    //   >= 50%  → High   (clearly dominant class)
+    //   >= 40%  → Moderate (above uniform, some separation)
+    //   <  40%  → Low    (near-uniform, model genuinely uncertain)
+    var isLowCertainty = confidence < 0.40;
+
+    var html = '<div class="result-card">';
+    html += '<div class="result-header">';
+    html += '<span class="result-badge ' + cls + '">' + escHtml(ev.classification) + ' (' + confPct + '%)</span>';
+    html += '<span class="result-decision">Decision: <strong>' + escHtml(ev.decision) + '</strong></span>';
+    if (typeof ev.confidence === 'number') {
+      var tierLabel, tierColor;
+      if (confidence >= 0.50) { tierLabel = 'High'; tierColor = 'var(--safe)'; }
+      else if (confidence >= 0.40) { tierLabel = 'Moderate'; tierColor = 'var(--caution)'; }
+      else { tierLabel = 'Low'; tierColor = 'var(--dangerous)'; }
+      html += '<span class="result-confidence" style="color:' + tierColor + '">Confidence: <strong>' + tierLabel + '</strong> <span style="font-size:0.78rem;color:var(--text-muted)">(' + confPct + '%)</span></span>';
+    }
+    if (paidViaX402) {
+      if (settlement && settlement.success && settlement.transaction) {
+        var txHash = settlement.transaction;
+        var shortTx = txHash.slice(0, 10) + '...' + txHash.slice(-8);
+        html += '<a href="' + CONFIG.baseExplorerUrl + '/tx/' + escHtml(txHash) + '" target="_blank" rel="noopener" class="payment-badge payment-link">&#x2714; x402 settled &middot; ' + shortTx + '</a>';
+      } else if (settlement && !settlement.success) {
+        html += '<span class="payment-badge payment-failed">&#x2718; x402 settlement failed</span>';
+      } else {
+        html += '<span class="payment-badge">Paid via x402</span>';
+      }
+    }
+    html += '</div>';
+    if (isLowCertainty) {
+      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.2);border-radius:var(--radius);font-size:0.8rem;color:var(--text-secondary);line-height:1.5">' +
+        'The model could not clearly distinguish between safety classes. ' +
+        'The top class (<strong style="color:var(--text-primary)">' + escHtml(ev.classification) + '</strong> at ' + confPct + '%) only narrowly leads. ' +
+        'This skill has been <strong style="color:var(--text-primary)">' + escHtml(ev.decision.toLowerCase()) + (ev.decision === 'FLAG' ? 'ged' : ev.decision === 'DENY' ? 'ied' : 'ed') + '</strong> for review.</div>';
+    }
+    if (ev.scores) html += renderScores(ev.scores);
+    if (ev.reasoning) {
+      html += '<div style="margin-top:10px;font-size:0.82rem;color:var(--text-secondary)"><strong>Reasoning:</strong> ' + escHtml(ev.reasoning) + '</div>';
+    }
+    // Show raw logits and entropy if available (model diagnostics)
+    if (ev.raw_logits || typeof ev.entropy === 'number') {
+      html += '<div style="margin-top:8px;display:flex;gap:16px;font-size:0.75rem;color:var(--text-muted);font-family:monospace">';
+      if (ev.raw_logits) {
+        html += '<span>Logits: [' + ev.raw_logits.join(', ') + ']</span>';
+      }
+      if (typeof ev.entropy === 'number') {
+        html += '<span>Entropy: ' + ev.entropy.toFixed(4) + '</span>';
+      }
+      html += '</div>';
+    }
+    if (sourceUrl) {
+      html += '<div style="margin-top:10px"><a href="' + escHtml(sourceUrl) + '" target="_blank" rel="noopener" style="font-size:0.82rem;color:var(--accent);text-decoration:none">View skill source on GitHub &#x2197;</a></div>';
+    }
+    if (proofBundle) {
+      var sizeKB = (proofBundle.proof_size_bytes / 1024).toFixed(1);
+      var proveSec = (proofBundle.proving_time_ms / 1000).toFixed(2);
+      html += '<div class="proof-meta">';
+      html += '<span>Proof size: <code>' + sizeKB + ' KB</code></span>';
+      html += '<span>Proving time: <code>' + proveSec + 's</code></span>';
+      html += '<span id="verify-status" style="color:var(--text-muted)"><span class="spinner" style="width:12px;height:12px;border-width:1.5px;margin-right:4px"></span>Verifying...</span>';
+      html += '</div>';
+      html += '<button class="proof-toggle">Show raw proof JSON</button>';
+      html += '<div class="proof-raw" style="display:none">' + escHtml(JSON.stringify(proofBundle, null, 2)) + '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function autoVerifyProof(proofBundle) {
+    if (!proofBundle || !proofBundle.proof_b64) return;
+    var el = document.getElementById('verify-status');
+    if (!el) return;
+    withTimeout(fetch(CONFIG.verifyEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        proof_b64: proofBundle.proof_b64,
+        program_io: proofBundle.program_io
+      })
+    }), 30000, 'Proof verification timed out')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var verifySec = (d.verification_time_ms / 1000).toFixed(3);
+      if (d.valid) {
+        el.innerHTML = 'Verified in <code style="color:var(--safe);font-weight:700">' + verifySec + 's</code>';
+        el.style.color = 'var(--safe)';
+        el.style.fontWeight = '600';
+      } else {
+        el.innerHTML = 'Verification failed <code>' + verifySec + 's</code>';
+        el.style.color = 'var(--deny)';
+      }
+    })
+    .catch(function() {
+      el.innerHTML = 'Verification unavailable';
+      el.style.color = 'var(--text-muted)';
+    });
+  }
+
+
+  function safeJson(r) {
+    return r.text().then(function(text) {
+      if (!text || !text.trim()) return null;
+      try { return JSON.parse(text); } catch (e) { return null; }
+    });
+  }
+
+  function parseSettlementHeader(response) {
+    // X-Payment-Response is base64-encoded JSON from the facilitator
+    var raw = response.headers.get('X-Payment-Response');
+    if (!raw) return null;
+    try { return JSON.parse(atob(raw)); } catch (e) { return null; }
+  }
+
+  function handleResponse(r, paidViaX402) {
+    // Capture settlement info before consuming response body
+    var settlement = paidViaX402 ? parseSettlementHeader(r) : null;
+    return safeJson(r).then(function(d) {
+      if (!d) throw new Error('Server returned empty response (HTTP ' + r.status + ').');
+      if (!r.ok || !d.success) throw new Error(d.error || 'Request failed (HTTP ' + r.status + ')');
+      var html;
+      if (d.evaluation) {
+        var proof = d.evaluation.proof;
+        html = renderResult(d.evaluation, proof, d.processing_time_ms, paidViaX402, settlement, currentSkillUrl);
+      } else {
+        html = '<div class="try-error">Unexpected response format.</div>';
+      }
+      setOutput('<div class="try-result">' + html + '</div>');
+      document.querySelectorAll('.proof-toggle').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var raw = this.nextElementSibling;
+          raw.style.display = raw.style.display === 'none' ? 'block' : 'none';
+        });
+      });
+      // Auto-verify the proof
+      if (proof) autoVerifyProof(proof);
+    });
+  }
+
+  /* ── doRequest(url, bodyObj) — refactored ── */
+  function doRequest(url, bodyObj) {
+    var data;
+    if (bodyObj) {
+      data = bodyObj;
+    } else {
+      data = getFormData();
+      if (!data) {
+        showError('Please fill in Skill Name, Author, and SKILL.md Content.');
+        return;
+      }
+    }
+    showLoading('Classifying + generating zkML proof...');
+    var btnC = $('btn-classify');
+    if (btnC) btnC.disabled = true;
+    // Disable all quick classify buttons
+    var qcBtns = document.querySelectorAll('.btn-quick-classify');
+    for (var i = 0; i < qcBtns.length; i++) qcBtns[i].disabled = true;
+
+    var reqBody = JSON.stringify(data);
+
+    withTimeout(fetch(url, { method: 'POST', headers: getHeaders(), body: reqBody }), 60000, 'Classification request timed out')
+      .then(async function(r) {
+        if (r.status === 401) throw new Error('API key required. Provide a valid key under Advanced.');
+        if (r.status === 402) {
+          var requirements = await parse402Response(r);
+          if (!requirements || !requirements.accepts || !requirements.accepts.length) {
+            throw new Error('Payment required but server sent no payment details.');
+          }
+          // Connect wallet if needed
+          var walletReady;
+          if (!walletState.connected) {
+            showLoading('Connecting wallet \u2014 check your wallet popup...');
+            walletReady = connectWallet();
+          } else {
+            walletReady = Promise.resolve();
+          }
+
+          return walletReady.then(async function() {
+            // Ensure wallet is on Base (8453) before signing
+            var currentChain = await window.ethereum.request({ method: 'eth_chainId' });
+            if (currentChain !== BASE_CHAIN_ID) {
+              showLoading('Switching to Base network...');
+              await switchToBase();
+              walletState.chainId = BASE_CHAIN_ID;
+            }
+            // Check USDC balance before signing
+            var requiredAmount = parseInt(requirements.accepts[0].maxAmountRequired || requirements.accepts[0].amount) || 0;
+            return fetchUsdcBalance(walletState.address).then(function(bal) {
+              var balUnits = Math.round(parseFloat(bal) * 1e6);
+              if (balUnits < requiredAmount) {
+                var needed = (requiredAmount / 1e6).toFixed(4);
+                throw new Error('Insufficient USDC balance. You need at least $' + needed + ' USDC on Base. Your balance: ' + bal + ' USDC. Send USDC (Base network) to your wallet: ' + walletState.address);
+              }
+            }).catch(function(e) {
+              if (e.message && e.message.indexOf('Insufficient') !== -1) throw e;
+              // Balance check failed (network issue) — continue anyway
+            });
+          }).then(function() {
+            showLoading('Signing USDC payment \u2014 check your wallet...');
+            return signX402Payment(requirements);
+          }).then(function(paymentHeader) {
+            var headers = getHeaders();
+            headers['X-PAYMENT'] = paymentHeader;
+            showLoading('Classifying with zkML proof (paid via x402)...');
+            return fetch(url, { method: 'POST', headers: headers, body: reqBody });
+          }).then(function(r2) {
+            if (!r2.ok && r2.status !== 200) {
+              return safeJson(r2).then(function(d) {
+                var msg = (d && d.error) || 'Payment failed';
+                if (d && d.details) msg += ': ' + d.details;
+                msg += ' (HTTP ' + r2.status + ')';
+                throw new Error(msg);
+              });
+            }
+            return handleResponse(r2, true).then(function() {
+              // Refresh wallet balance after successful x402 payment
+              if (walletState.connected) {
+                fetchUsdcBalance(walletState.address);
+              }
+            });
+          });
+        }
+        return handleResponse(r, false);
+      })
+      .catch(function(err) {
+        if (err && err.code === 4001) {
+          showError('Payment rejected by user.');
+        } else {
+          showError(err.message || 'Network error');
+        }
+      })
+      .finally(function() {
+        if (btnC) btnC.disabled = false;
+        var qcBtns2 = document.querySelectorAll('.btn-quick-classify');
+        for (var j = 0; j < qcBtns2.length; j++) qcBtns2[j].disabled = false;
+      });
+  }
+
+  /* ── Client-side form validation ── */
+  function validateForm() {
+    var errors = [];
+    var name = $('try-name').value.trim();
+    var skillmd = $('try-skillmd').value.trim();
+    var scripts = $('try-scripts').value.trim();
+
+    if (!name) {
+      errors.push('Skill name is required.');
+    }
+    if (!skillmd && !scripts) {
+      errors.push('At least SKILL.md content or a script must be provided.');
+    }
+
+    var errBox = $('form-errors');
+    var errList = errBox.querySelector('ul');
+    if (errors.length > 0) {
+      errList.innerHTML = errors.map(function(e) { return '<li>' + escHtml(e) + '</li>'; }).join('');
+      errBox.style.display = 'block';
+      return false;
+    }
+    errBox.style.display = 'none';
+    errList.innerHTML = '';
+    return true;
+  }
+
+  /* ── Custom mode buttons ── */
+  $('btn-classify').addEventListener('click', function() {
+    if (!validateForm()) return;
+    currentSkillUrl = null;
+    doRequest(CONFIG.evaluateEndpoint);
+  });
+
+  /* ── Skill Index ── */
+  var skillIndex = [];
+  var ENTRY_RE = /^[\s*-]*\[([^\]]+)\]\((https:\/\/github\.com\/[^)]+)\)\s*[-\u2013\u2014:]?\s*(.*?)$/;
+  var CATEGORY_RE = /(?:^#{2,3}\s+(.+?)$|<summary>(?:<[^>]*>)?\s*(.+?)\s*(?:<[^>]*>)?<\/summary>)/;
+
+  function extractAuthor(url) {
+    var stripped = url.replace(/^https?:\/\/github\.com\//, '');
+    return stripped.split('/')[0] || 'unknown';
+  }
+
+  function githubUrlToRaw(url) {
+    var stripped = url.replace(/^https?:\/\/github\.com\//, '');
+    var parts = stripped.split('/');
+    // OWNER/REPO/tree/BRANCH/path... or OWNER/REPO/blob/BRANCH/path...
+    if (parts.length >= 5 && (parts[2] === 'tree' || parts[2] === 'blob')) {
+      return 'https://raw.githubusercontent.com/' + parts[0] + '/' + parts[1] + '/' + parts[3] + '/' + parts.slice(4).join('/');
+    }
+    return 'https://raw.githubusercontent.com/' + stripped;
+  }
+
+  function populateCategoryDropdown() {
+    var catCounts = {};
+    for (var j = 0; j < skillIndex.length; j++) {
+      var c = skillIndex[j].category;
+      catCounts[c] = (catCounts[c] || 0) + 1;
+    }
+    var catSelect = $('filter-category');
+    // Clear existing options beyond the first "All Categories" option
+    while (catSelect.options.length > 1) catSelect.remove(1);
+    var sortedCats = Object.keys(catCounts).filter(function(c) {
+      return catCounts[c] >= 5;
+    }).sort();
+    for (var k = 0; k < sortedCats.length; k++) {
+      var opt = document.createElement('option');
+      opt.value = sortedCats[k];
+      opt.textContent = sortedCats[k] + ' (' + catCounts[sortedCats[k]] + ')';
+      catSelect.appendChild(opt);
+    }
+  }
+
+  function loadSkillIndex() {
+    var statusEl = $('search-status');
+    statusEl.innerHTML = '<span class="spinner"></span>Loading skill directory...';
+
+    // Check localStorage cache first
+    try {
+      var cached = localStorage.getItem('skillguard_skill_index');
+      if (cached) {
+        var parsed = JSON.parse(cached);
+        if (parsed.ts && (Date.now() - parsed.ts) < CONFIG.skillCacheTtlMs && parsed.data) {
+          skillIndex = parsed.data;
+          populateCategoryDropdown();
+          renderSearchResults('');
+          return;
+        }
+      }
+    } catch (e) { /* cache miss or corrupt — fetch fresh */ }
+
+    fetch(CONFIG.skillIndexUrl)
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+      .then(function(md) {
+        var currentCategory = 'Uncategorized';
+        var lines = md.split('\n');
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i];
+          var catMatch = line.match(CATEGORY_RE);
+          if (catMatch) {
+            var cat = (catMatch[1] || catMatch[2] || '').trim();
+            if (cat) currentCategory = cat;
+            continue;
+          }
+          var entryMatch = line.match(ENTRY_RE);
+          if (entryMatch) {
+            var name = entryMatch[1].trim();
+            var url = entryMatch[2].trim();
+            var desc = entryMatch[3].trim();
+            if (!name || !url) continue;
+            skillIndex.push({
+              name: name,
+              url: url,
+              description: desc,
+              author: extractAuthor(url),
+              category: currentCategory
+            });
+          }
+        }
+        // Save to localStorage cache
+        try {
+          localStorage.setItem('skillguard_skill_index', JSON.stringify({ ts: Date.now(), data: skillIndex }));
+        } catch (e) { /* storage full or unavailable */ }
+
+        populateCategoryDropdown();
+        renderSearchResults('');
+      })
+      .catch(function() {
+        statusEl.innerHTML = 'Could not load skill directory. <a href="#" id="link-switch-custom" style="color:var(--accent)">Use Custom Skill tab</a>';
+        var link = document.getElementById('link-switch-custom');
+        if (link) {
+          link.addEventListener('click', function(e) {
+            e.preventDefault();
+            tabCustom.click();
+          });
+        }
+      });
+  }
+
+  /* ── Search + Render ── */
+  var searchTimer = null;
+
+  function renderSearchResults(query) {
+    var cat = $('filter-category').value;
+    var q = query.toLowerCase();
+    var filtered = [];
+
+    if (!q && !cat) {
+      // No query and no category filter: show a diverse sample across categories
+      var byCat = {};
+      for (var ci = 0; ci < skillIndex.length; ci++) {
+        var sc = skillIndex[ci];
+        if (!byCat[sc.category]) byCat[sc.category] = [];
+        byCat[sc.category].push(sc);
+      }
+      var catNames = Object.keys(byCat).sort();
+      var round = 0;
+      while (filtered.length < 50 && round < 20) {
+        for (var ck = 0; ck < catNames.length && filtered.length < 50; ck++) {
+          var arr = byCat[catNames[ck]];
+          if (round < arr.length) filtered.push(arr[round]);
+        }
+        round++;
+      }
+    } else {
+      for (var i = 0; i < skillIndex.length; i++) {
+        var s = skillIndex[i];
+        if (cat && s.category !== cat) continue;
+        if (q) {
+          var haystack = (s.name + ' ' + s.description + ' ' + s.author + ' ' + s.category).toLowerCase();
+          if (haystack.indexOf(q) === -1) continue;
+        }
+        filtered.push(s);
+        if (filtered.length >= 50) break;
+      }
+    }
+
+    var countEl = $('results-count');
+    var totalMatch = 0;
+    if (q || cat) {
+      for (var j = 0; j < skillIndex.length; j++) {
+        var s2 = skillIndex[j];
+        if (cat && s2.category !== cat) continue;
+        if (q) {
+          var h2 = (s2.name + ' ' + s2.description + ' ' + s2.author + ' ' + s2.category).toLowerCase();
+          if (h2.indexOf(q) === -1) continue;
+        }
+        totalMatch++;
+      }
+      countEl.textContent = totalMatch + ' skill' + (totalMatch !== 1 ? 's' : '') + ' found';
+    } else {
+      countEl.textContent = skillIndex.length + ' skills';
+    }
+
+    var container = $('skill-results');
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="search-status">No skills match your search.</div>';
+      return;
+    }
+
+    var html = '';
+    for (var k = 0; k < filtered.length; k++) {
+      var sk = filtered[k];
+      html += '<div class="skill-result-item">' +
+        '<div class="skill-result-info">' +
+          '<div class="skill-result-name"><a href="' + escHtml(sk.url) + '" target="_blank" rel="noopener" style="color:inherit;text-decoration:none" title="View source on GitHub">' + escHtml(sk.name) + ' <span style="font-size:0.7rem;color:var(--text-muted)">&#x2197;</span></a><span class="author">' + escHtml(sk.author) + '</span></div>' +
+          (sk.description ? '<div class="skill-result-desc">' + escHtml(sk.description) + '</div>' : '') +
+        '</div>' +
+        '<div class="skill-result-meta">' +
+          '<span class="category-badge">' + escHtml(sk.category) + '</span>' +
+          '<button class="btn-quick-classify" data-slug="' + escHtml(sk.name) + '">Classify + Prove</button>' +
+        '</div>' +
+      '</div>';
+    }
+    container.innerHTML = html;
+
+    // Attach click handlers to classify buttons
+    var btns = container.querySelectorAll('.btn-quick-classify');
+    for (var m = 0; m < btns.length; m++) {
+      btns[m].addEventListener('click', function() {
+        var slug = this.getAttribute('data-slug');
+        // Look up GitHub URL from skill index
+        currentSkillUrl = null;
+        for (var si = 0; si < skillIndex.length; si++) {
+          if (skillIndex[si].name === slug) { currentSkillUrl = skillIndex[si].url; break; }
+        }
+        doRequest(CONFIG.evaluateEndpoint, { skill: slug });
+      });
+    }
+  }
+
+  $('search-input').addEventListener('input', function() {
+    var val = this.value.trim();
+    var urlDetect = $('url-detect');
+    var resultsEl = $('skill-results');
+
+    // URL detection
+    if (/^https?:\/\/github\.com\//i.test(val)) {
+      urlDetect.style.display = 'block';
+      resultsEl.style.display = 'none';
+      $('url-detect-preview').textContent = val;
+      return;
+    }
+    urlDetect.style.display = 'none';
+    resultsEl.style.display = '';
+
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function() {
+      renderSearchResults(val);
+    }, 250);
+  });
+
+  $('filter-category').addEventListener('change', function() {
+    var val = $('search-input').value.trim();
+    if (!/^https?:\/\/github\.com\//i.test(val)) {
+      renderSearchResults(val);
+    }
+  });
+
+  /* ── URL mode: Fetch & Classify ── */
+  $('btn-fetch-classify').addEventListener('click', function() {
+    var url = $('search-input').value.trim();
+    if (!url) return;
+    var btn = $('btn-fetch-classify');
+    btn.disabled = true;
+    showLoading('Fetching SKILL.md from GitHub...');
+
+    // Ensure URL points to SKILL.md
+    var fetchUrl = url;
+    if (fetchUrl.indexOf('SKILL.md') === -1) {
+      // Append SKILL.md if it looks like a directory
+      if (fetchUrl.charAt(fetchUrl.length - 1) !== '/') fetchUrl += '/';
+      fetchUrl += 'SKILL.md';
+    }
+
+    var rawUrl = githubUrlToRaw(fetchUrl);
+    currentSkillUrl = url;
+
+    // Extract name and author from URL
+    var stripped = url.replace(/^https?:\/\/github\.com\//, '');
+    var parts = stripped.split('/');
+    var author = parts[0] || 'unknown';
+    // Name: last meaningful directory segment before SKILL.md
+    var name = 'unknown';
+    for (var i = parts.length - 1; i >= 0; i--) {
+      var seg = parts[i].replace(/SKILL\.md$/i, '').replace(/\/$/, '');
+      if (seg && seg !== 'tree' && seg !== 'blob' && seg !== 'main' && seg !== 'master' && seg !== parts[0] && seg !== parts[1]) {
+        name = seg;
+        break;
+      }
+    }
+
+    fetch(rawUrl)
+      .then(function(r) {
+        if (!r.ok) throw new Error('Could not fetch SKILL.md (HTTP ' + r.status + ')');
+        return r.text();
+      })
+      .then(function(skillMd) {
+        doRequest(CONFIG.evaluateEndpoint, {
+          skill: {
+            name: name,
+            version: '1.0.0',
+            author: author,
+            description: '',
+            skill_md: skillMd,
+            scripts: [],
+            metadata: {},
+            files: []
+          }
+        });
+      })
+      .catch(function(err) {
+        showError(err.message || 'Failed to fetch SKILL.md');
+      })
+      .finally(function() {
+        btn.disabled = false;
+      });
+  });
+
+  /* ── Init ── */
+  loadSkillIndex();
+})();
+
+checkHealth();
+loadStats();
+
+// Visibility-aware polling: pause when tab is hidden, resume when visible
+(function() {
+  var healthTimer = setInterval(checkHealth, CONFIG.healthIntervalMs);
+  var statsTimer = setInterval(loadStats, CONFIG.statsIntervalMs);
+
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+      clearInterval(healthTimer);
+      clearInterval(statsTimer);
+      healthTimer = null;
+      statsTimer = null;
+    } else {
+      // Refresh immediately on return, then resume polling
+      checkHealth();
+      loadStats();
+      healthTimer = setInterval(checkHealth, CONFIG.healthIntervalMs);
+      statsTimer = setInterval(loadStats, CONFIG.statsIntervalMs);
+    }
+  });
+})();
+</script>
+</body>
+</html>

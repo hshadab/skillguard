@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: skillguard
+    runtime: docker
+    repo: https://github.com/hshadab/skillguard.git
+    branch: main
+    plan: pro plus
+    region: oregon
+    healthCheckPath: /health
+    disk:
+      name: skillguard-cache
+      mountPath: /var/data/skillguard-cache
+      sizeGB: 1
+    envVars:
+      - key: SKILLGUARD_API_KEY
+        sync: false
+      - key: SKILLGUARD_PAY_TO
+        sync: false
+      - key: SKILLGUARD_FACILITATOR_URL
+        value: https://pay.openfacilitator.io
+      - key: RUST_LOG
+        value: info
+      - key: SKILLGUARD_SKIP_PROVER
+        value: "0"
+      - key: METRICS_BASELINE
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: skillguard-redis
+          property: connectionString
+  - type: redis
+    name: skillguard-redis
+    plan: starter
+    region: oregon
+    maxmemoryPolicy: noeviction

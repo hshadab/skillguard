@@ -1,0 +1,1115 @@
+[
+  {
+    "skill_name": "sheetsmith",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.4125748565759693,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Runs Python scripts that read and write spreadsheet files (CSV/Excel), including an --inplace flag that can overwrite source data. Legitimate data tool, but file-write capability warrants caution."
+  },
+  {
+    "skill_name": "pbe-extractor",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.421428495570561,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Pure text-analysis skill that extracts principles from content using prompt engineering. No shell commands, no file writes, no network calls, no tools -- just structured text comprehension."
+  },
+  {
+    "skill_name": "wyoming-clawdbot",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.39631963419051336,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Bridges voice commands to an AI assistant via Docker and network protocols. Involves cloning a git repo, running Docker containers, and opening network ports, which are standard but potentially risky operations."
+  },
+  {
+    "skill_name": "sportsbet-advisor",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.3394309407801244,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Provides sports betting opinions based on web research. Uses web search for information gathering only, produces text output, and includes responsible-gambling disclaimers. No dangerous capabilities."
+  },
+  {
+    "skill_name": "flyio-cli",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.4318566118607485,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Wraps the Fly.io CLI for cloud deployments, SSH access, secrets management, and production state changes. Has explicit safety guardrails (read-only by default, requires user approval for mutations), but the underlying capabilities are powerful."
+  },
+  {
+    "skill_name": "remotion-best-practices",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.3394309407801244,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Pure documentation and best-practices reference for Remotion video creation in React. Contains only links to rule files and descriptions -- no executable tools or commands."
+  },
+  {
+    "skill_name": "detox-counter",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.38604859183896667,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A personal health tracker for logging detox symptoms and milestones. All data stays local, no network calls, no shell commands, no file system operations beyond local data storage."
+  },
+  {
+    "skill_name": "niri-ipc",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.4520670699496055,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Controls the Niri Wayland compositor via IPC, including spawning commands, closing windows, and executing shell actions. Legitimate desktop automation tool, but the ability to spawn arbitrary commands warrants caution."
+  },
+  {
+    "skill_name": "bambu-cli",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.3677044264415836,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Controls BambuLab 3D printers over MQTT/FTPS, including sending raw gcode, starting/stopping prints, and accessing camera feeds. Has good safety guardrails (confirmation required, dry-run support), but controls physical hardware."
+  },
+  {
+    "skill_name": "stoic-scope-creep",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.4767006233186497,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Pure self-help content applying Stoic philosophy to project management scope creep. Contains no code, no tools, no commands -- entirely philosophical and advisory text."
+  },
+  {
+    "skill_name": "game-cog",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.395325163095395,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Creative tool for generating game assets (sprites, 3D models, game design documents) via the CellCog API. Uses API calls for content generation but has no file-system, shell, or dangerous capabilities."
+  },
+  {
+    "skill_name": "sfsymbol-generator",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.32362672271270715,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Runs shell scripts and Node.js to generate Xcode SF Symbol asset catalogs from SVGs. Writes files to the project asset catalog, but operations are narrowly scoped to symbol generation."
+  },
+  {
+    "skill_name": "weather-pollen",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.39540354378051307,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Fetches weather and pollen data from free public APIs (Open-Meteo, Pollen.com) using curl. Read-only network calls to well-known services with no authentication required."
+  },
+  {
+    "skill_name": "quantum-lab",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.3488042899166214,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Runs arbitrary Python scripts from a specific repo in a pre-existing virtual environment, can install packages via pip, and can start a web server. Legitimate quantum computing tool but executes code and opens network ports."
+  },
+  {
+    "skill_name": "email-to-calendar",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.5972063240388795,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Reads Gmail messages, creates Google Calendar events, and sends email notifications using wrapper scripts. Accesses sensitive personal data (email content, calendar) but has safety guards like duplicate detection, user confirmation, and undo support."
+  },
+  {
+    "skill_name": "1password",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.6278636587448909,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Integrates with the 1Password CLI to read and inject secrets. Has strong guardrails (never paste secrets into logs, prefer op run/inject over disk writes, tmux isolation), but inherently handles sensitive credential data."
+  },
+  {
+    "skill_name": "moltr",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.3606180812546377,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "A social platform client for AI agents that posts content, sends messages, and sets up automated cron jobs for periodic posting. Stores API credentials locally and makes network calls to an external service, with automated behavior via cron."
+  },
+  {
+    "skill_name": "hackernews",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.4318422444726492,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Read-only CLI for browsing and searching Hacker News via its public API. No authentication, no writes, no shell commands beyond the provided script -- purely fetches and displays public information."
+  },
+  {
+    "skill_name": "data-lineage-tracker",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.4875502249415527,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A Python library providing data classes and methods for tracking data lineage in construction projects. Pure code library with no shell commands, no network calls, and no file system operations beyond what the calling code does."
+  },
+  {
+    "skill_name": "anthropology",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.4318566118607485,
+    "llm_label": "SAFE",
+    "llm_reasoning": "An educational knowledge base containing 580K tokens of anthropology content for teaching purposes. Pure reference material with no tools, commands, or executable components."
+  },
+  {
+    "skill_name": "canvas-lms",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.5300632932667884,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Uses shell commands (curl) with API bearer tokens to access a school's Canvas LMS API for reading courses, grades, and assignments. Legitimate educational tool, but the use of stored credentials and shell-based HTTP calls warrants caution."
+  },
+  {
+    "skill_name": "codex-orchestration",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.3980868525239072,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Orchestrates parallel Codex workers via background PTY terminals and shell commands. Legitimate development workflow tool, but it spawns sub-agents and runs arbitrary commands in background sessions, which requires care."
+  },
+  {
+    "skill_name": "telecom-agent-skill",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.44734359955208086,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Manages bulk calling campaigns (10,000+ numbers) and single calls via Twilio. Legitimate telecom automation tool, but the ability to mass-dial phone numbers and record calls carries potential for misuse."
+  },
+  {
+    "skill_name": "seo-competitor-analysis",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.32575018612435575,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Uses web search and web fetch to analyze competitor websites for SEO insights. Read-only research tool with no shell commands, credential handling, or file writes."
+  },
+  {
+    "skill_name": "servicenow-agent",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.4461915492706327,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Read-only CLI for ServiceNow APIs that explicitly prohibits POST/PUT/PATCH/DELETE operations. Uses credentials from a .env file for authentication, which warrants caution, but the read-only design limits risk."
+  },
+  {
+    "skill_name": "todo-management-1-1-2",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.46582517803501894,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A local SQLite-based todo manager operated entirely through a bash script. Only modifies a local todo.db file with no network access, no credential handling, and no external communication."
+  },
+  {
+    "skill_name": "gsd",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.4872207410655122,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "A project planning and execution framework that spawns sub-agent workers, runs builds, tests, and shell commands as part of its development workflow. Legitimate but uses broad system access for orchestration."
+  },
+  {
+    "skill_name": "x-article-editor",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.5067487974543736,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A pure content editing and writing guide for X (Twitter) articles. Contains only text formatting instructions and writing frameworks with no code execution, no file I/O, and no network access."
+  },
+  {
+    "skill_name": "checkers-sixty60",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.45461092244374945,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Uses browser automation to shop for groceries on Checkers.co.za, including adding items to cart and managing orders. Browser automation on an e-commerce site could interact with payment flows, warranting caution."
+  },
+  {
+    "skill_name": "migrator",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.41963965473270215,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Packages sensitive agent state (config files, auth tokens) into an encrypted archive for migration between machines. Handles sensitive credentials, but enforces AES-256-GCM encryption and requires a password, which are good safeguards."
+  },
+  {
+    "skill_name": "quit-vaping",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.38809892986912387,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A health and wellness tracker for quitting vaping, with streak tracking and motivational milestones. All data is local, no network calls, no shell commands, and no sensitive data handling."
+  },
+  {
+    "skill_name": "tesy",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.38766892970636846,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "An adversarial analysis and red-teaming skill that sends HTTP POST requests to a localhost notification endpoint and loads user customization files from disk. Legitimate critique tool, but the network call and file loading from user-configurable paths warrant caution."
+  },
+  {
+    "skill_name": "frontend-design",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.3431371781112891,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Purely instructional guidelines for creating frontend UI with distinctive design. Contains no code execution, no tools, no shell commands, and no file operations -- only design philosophy and aesthetic advice."
+  },
+  {
+    "skill_name": "ranked-gym",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.3977210335495996,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A gamified gym workout tracker with XP, levels, and achievements. All data stays local with no network access, no shell commands, and no sensitive data handling."
+  },
+  {
+    "skill_name": "oauth-helper",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.3325752735146092,
+    "llm_label": "DANGEROUS",
+    "llm_reasoning": "Automates OAuth login flows by programmatically clicking through authentication pages for 7 providers (Google, Apple, Microsoft, GitHub, Discord, WeChat, QQ), handling passwords, account selection, and 2FA. Even though it asks for Telegram confirmation, the skill has browser-level access to authentication sessions and credentials across major platforms, creating significant credential exposure risk."
+  },
+  {
+    "skill_name": "creator-rights-assistant",
+    "mlp_label": "SAFE",
+    "mlp_confidence": 0.5035688893880528,
+    "llm_label": "SAFE",
+    "llm_reasoning": "An organizational tool that helps creators manage metadata, provenance, and attribution for their content. Purely informational with explicit disclaimers about not providing legal advice. No code execution or system access."
+  },
+  {
+    "skill_name": "seo-article-gen",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.3410894080118896,
+    "llm_label": "SAFE",
+    "llm_reasoning": "An SEO-optimized article generator with affiliate link integration. Provides content templates and writing guidance through API functions. No shell commands, no credential harvesting, and no direct system access."
+  },
+  {
+    "skill_name": "daily-devotion",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.5278821283523967,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Generates daily Christian devotions by fetching a verse of the day from a public API (ourmanna.com) and producing structured prayer text. A single benign GET request and templated text output with no security concerns."
+  },
+  {
+    "skill_name": "google-gemini-media",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.8549938098830349,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "A comprehensive wrapper around Google Gemini APIs for image, video, audio generation and understanding. Uses API keys, makes network calls to Google services, and writes output files locally. Legitimate media tool, but the API key usage, file uploads, and local file writes warrant caution."
+  },
+  {
+    "skill_name": "naif",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.7740688896658692,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Creates and manages AI-powered trading bots that can place real-money orders via the VibeTrader platform. Connects to an external MCP server and can execute live financial trades. Legitimate trading tool, but the ability to execute real financial transactions with API keys warrants caution."
+  },
+  {
+    "skill_name": "moltbot-ha",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.772770555436864,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Controls smart home devices by running shell commands through a CLI tool, which can toggle lights, locks, and garage doors. It has a built-in safety confirmation system for critical actions, but it still executes real-world physical device commands on the user's behalf."
+  },
+  {
+    "skill_name": "meetgeek",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.5126141665427245,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Queries a cloud API for meeting transcripts and summaries using an API key, and can write transcript files to disk. The capabilities are reasonable for its purpose, but it handles potentially sensitive meeting content and stores credentials locally."
+  },
+  {
+    "skill_name": "dhmz-weather",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.7486175852314455,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Fetches publicly available Croatian weather data from official government XML endpoints using curl. No authentication required, no file writes, no sensitive data -- purely read-only public information retrieval."
+  },
+  {
+    "skill_name": "microsoft-ads-mcp",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.5961018678980049,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Manages Microsoft Advertising campaigns through an MCP server, including creating and activating ad campaigns that spend real money. Requires OAuth credentials and a developer token, and campaigns start paused as a safety measure, but it can activate live ad spend."
+  },
+  {
+    "skill_name": "seekdb-docs",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.528549922349672,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A documentation lookup tool that searches a local JSONL catalog and reads markdown files, with a GitHub raw URL fallback. It only reads documentation content and does not execute commands, write files, or access sensitive resources."
+  },
+  {
+    "skill_name": "gno-bak-2026-01-28t18-01-20-10-30",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.47190905408794825,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Indexes local files and directories for semantic search, including embedding generation and running a local web UI server. It reads potentially sensitive local documents and runs shell commands, but all operations are local-first with no cloud dependency."
+  },
+  {
+    "skill_name": "autoresponder",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.8532850014204401,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Automatically monitors incoming iMessages and sends AI-generated replies on the user's behalf, which could impersonate the user in conversations. It has rate limiting and safety controls, but it reads message history, uses an AI API, and sends real messages without per-message user approval."
+  },
+  {
+    "skill_name": "linear",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.8599445391046574,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Manages Linear project management issues via API calls and shell scripts, including creating issues, changing statuses, and running git commands for branch/worktree creation. Legitimate project management tool that uses an API key and executes shell commands."
+  },
+  {
+    "skill_name": "agentvibes-openclaw-skill",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.5888497007392789,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Manages text-to-speech voice settings like switching voices, muting, and previewing audio using local TTS engines (Piper, macOS say). It only plays audio and manages configuration files -- no network calls to untrusted services, no sensitive data access."
+  },
+  {
+    "skill_name": "raglite-local-rag-cache",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.6523103582261763,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Installs Python packages from a specific GitHub repository via pip, runs shell scripts, and indexes local documents into a Chroma database. The git clone and pip install from a third-party repo introduce supply-chain risk, though the tool's purpose is legitimate local document indexing."
+  },
+  {
+    "skill_name": "skill-reviewer",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.4143858123867894,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A purely analytical framework for reviewing and scoring SKILL.md files against quality criteria. It provides checklists and rubrics for evaluation but does not execute commands, make network calls, or modify files beyond reading the skill being reviewed."
+  },
+  {
+    "skill_name": "stegstr",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.4434121909602312,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Embeds and extracts hidden data in PNG images using steganography, and builds from source via git clone and cargo build. While steganography can be used to hide data covertly, this is a legitimate open-source Nostr client with a clear, documented purpose."
+  },
+  {
+    "skill_name": "feishu-doc",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.7200177880192157,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Reads and writes documents on Feishu/Lark using app credentials (app_id and app_secret), and can overwrite or append to cloud documents. Legitimate document management tool, but it has write access to cloud documents and handles API secrets."
+  },
+  {
+    "skill_name": "atlassian-mcp",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.515650802498869,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Runs a Docker container with Jira API credentials (username and API token) to interact with Atlassian services. Legitimate DevOps integration, but it passes credentials as environment variables to a third-party Docker image pulled from a container registry."
+  },
+  {
+    "skill_name": "overleaf",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.4270506713395694,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Accesses Overleaf projects by reading browser cookies from the system keychain, which grants broad access to the user's browser cookie storage. While it is a legitimate LaTeX sync tool, the keychain access for cookie extraction is a notable privilege escalation beyond typical CLI tools."
+  },
+  {
+    "skill_name": "voice-wake-say",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.3825930049389165,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Uses the built-in macOS say command to speak text aloud when triggered by voice input. It only pipes text to a system TTS binary with no network calls, file writes, or access to sensitive data."
+  },
+  {
+    "skill_name": "valyu-search",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.6090158040950212,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Performs web searches, content extraction from arbitrary URLs, and deep research using the Valyu cloud API. It makes network calls to external services and processes web content, but this is standard behavior for a search tool and requires a user-provided API key."
+  },
+  {
+    "skill_name": "moltcasino",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.48947430795379143,
+    "llm_label": "SAFE",
+    "llm_reasoning": "An informational skill describing a browser-based 3D casino game. It only provides a URL and basic browser automation examples -- no local commands, no credential handling, no file system access beyond opening a web page."
+  },
+  {
+    "skill_name": "oh-my-opencode",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.6811519879599685,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "A complex multi-agent orchestration plugin that installs packages via bunx, spawns multiple background AI agents, manages tmux sessions, and runs shell commands. The broad system access and background process management are significant but reasonable for its role as a development orchestrator."
+  },
+  {
+    "skill_name": "sound-fx",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.6040569117182251,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Calls the ElevenLabs cloud API to generate audio files and runs ffmpeg for format conversion. It makes network calls and writes media files to disk, but these are standard operations for a sound generation tool with no access to sensitive data."
+  },
+  {
+    "skill_name": "shopping-expert",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.9097335796972327,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Runs Python scripts that call external APIs (SerpAPI, Google Places) to search for products. Legitimate shopping tool that makes network calls and requires API keys, but does nothing beyond its stated purpose."
+  },
+  {
+    "skill_name": "gotrain",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.347013751388172,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Read-only CLI tool that queries NYC MTA train schedules and service alerts. No file writes, no network calls beyond the installed CLI fetching public transit data, and no sensitive capabilities."
+  },
+  {
+    "skill_name": "nia",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.6973793442994294,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Code indexing and search tool that uses curl/jq to call the Nia API. Can upload local folders and database contents to a remote service, and stores an API key locally, but these are core to its legitimate research purpose."
+  },
+  {
+    "skill_name": "firecrawl-search",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.5712976451777771,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Web scraping and crawling tool via the Firecrawl API. Makes network calls to scrape websites and extract content, which is its intended purpose. Requires an API key but poses no risks beyond standard web scraping."
+  },
+  {
+    "skill_name": "teams-anthropic-integration",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.9448745914471284,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Documentation and tutorial for integrating Anthropic Claude models into Microsoft Teams apps. Contains only code examples and setup instructions with no executable scripts or risky operations."
+  },
+  {
+    "skill_name": "imap-email",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.3891206721920945,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Reads and manages email via IMAP protocol, handling sensitive credentials (email passwords) and accessing email content. Legitimate email client tool, but works with sensitive authentication data and personal communications."
+  },
+  {
+    "skill_name": "gcal-pro",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.5282444434636366,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Google Calendar integration that can read, create, and delete calendar events via OAuth. Stores OAuth tokens locally and accesses personal schedule data, but includes confirmation prompts for destructive actions."
+  },
+  {
+    "skill_name": "glitchward-shield",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.8746304273472003,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Security tool that sends user prompts to an external API for prompt-injection scanning. Legitimate protective purpose, but sends potentially sensitive user input to a third-party service for analysis."
+  },
+  {
+    "skill_name": "agent-credit",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.9168510425572602,
+    "llm_label": "DANGEROUS",
+    "llm_reasoning": "Allows an AI agent to autonomously borrow cryptocurrency against a user's DeFi collateral using a stored private key. A misconfigured or compromised agent could drain funds, and the config stores private keys in plaintext -- significant financial risk even with built-in safety checks."
+  },
+  {
+    "skill_name": "brave-images",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.8396831053971744,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Simple image search using the Brave Search API via a single curl call. Read-only, returns search results, and poses no security risk beyond requiring an API key."
+  },
+  {
+    "skill_name": "moltopia",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.8059510651268839,
+    "llm_label": "DANGEROUS",
+    "llm_reasoning": "Virtual world game skill with a self-update mechanism that fetches and overwrites its own SKILL.md and HEARTBEAT.md from a remote server. If the remote server is compromised, the agent's instructions could be silently replaced with malicious content, making this a supply-chain risk."
+  },
+  {
+    "skill_name": "portable-tools",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.8809442731785813,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Pure documentation skill teaching best practices for writing portable, cross-device tools. Contains only methodology guidelines and code examples with no executable scripts or risky operations."
+  },
+  {
+    "skill_name": "exa",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.6293029893420371,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Neural web search via the Exa AI API using bash scripts that make curl calls. Legitimate search and content extraction tool that requires an API key and makes network requests."
+  },
+  {
+    "skill_name": "gitclassic",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.39910533895700473,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Read-only GitHub browser that serves lightweight HTML pages. Only fetches and displays public repository content via curl, with no write operations or sensitive capabilities."
+  },
+  {
+    "skill_name": "lemonsqueezy-admin",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.49366220879688444,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Admin CLI for viewing Lemon Squeezy store data like orders and subscriptions. Accesses business-sensitive data (customer emails, revenue) via an API key, but is read-only and straightforward."
+  },
+  {
+    "skill_name": "agent-registry",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.7441729629012227,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Agent discovery and lazy-loading system that runs a hook on every user prompt to search for relevant agents. Executes JavaScript via bun on each user input, but the purpose is legitimate agent management and context optimization."
+  },
+  {
+    "skill_name": "weak-accept",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.46526059287367677,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "arXiv paper client that fetches papers and submits comments via a hardcoded IP address API server. Legitimate research tool, but the hardcoded IP (rather than a domain) and ability to post comments on behalf of the user warrant mild caution."
+  },
+  {
+    "skill_name": "moltcomm",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.37288328925696457,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Pure protocol specification for decentralized agent-to-agent communication. Contains only documentation describing how to implement the protocol, with no executable code or scripts."
+  },
+  {
+    "skill_name": "whoop-morning",
+    "mlp_label": "CAUTION",
+    "mlp_confidence": 0.5478120617258994,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "WHOOP fitness tracker integration that fetches health and recovery data via OAuth2. Handles sensitive health data and OAuth refresh tokens, but is a straightforward health monitoring tool."
+  },
+  {
+    "skill_name": "brevo",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.5418918867010719,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Brevo email marketing API client that can send emails, manage contacts, and run campaigns. Has the ability to send bulk emails, but includes responsible practices like blacklist checking and is a standard marketing tool."
+  },
+  {
+    "skill_name": "academic-deep-research",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.5150167453619178,
+    "llm_label": "SAFE",
+    "llm_reasoning": "This is a purely instructional prompt that guides an AI through a structured research methodology using only read-only tools (web_search, web_fetch, memory_search). It does not execute code, write files, or access any system resources."
+  },
+  {
+    "skill_name": "mineru-pdf",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.39932433201681355,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "This skill parses PDF documents by running a Python CLI tool or installing an MCP server via uvx. It executes shell commands and writes output files to disk, but does so for a legitimate PDF extraction purpose with no signs of misuse."
+  },
+  {
+    "skill_name": "sharesight-skill",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.5924052536938461,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "This is a legitimate API wrapper for the Sharesight portfolio management service. It requires API credentials and can perform CRUD operations on financial data, but write operations are disabled by default and must be explicitly enabled, showing good safety design."
+  },
+  {
+    "skill_name": "tailscale",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.5619599863619503,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "This is a legitimate management interface for Tailscale VPN, using both the CLI and API. It handles network-sensitive operations like device authorization, DNS management, and SSH, but these are standard Tailscale administration tasks for an authorized user."
+  },
+  {
+    "skill_name": "claude-connect",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.44678044334461686,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "This skill reads OAuth tokens from the macOS Keychain and writes them to a configuration file for Clawdbot, then sets up auto-refresh via launchd. While it handles sensitive credentials, it does so for the legitimate purpose of maintaining an authenticated connection, and the tokens stay local."
+  },
+  {
+    "skill_name": "reddapi",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.47606088572578625,
+    "llm_label": "SAFE",
+    "llm_reasoning": "This skill makes read-only API calls to reddapi.dev to search Reddit data and analyze trends. It only retrieves publicly available information and does not write files, execute arbitrary code, or access system resources."
+  },
+  {
+    "skill_name": "postproxy",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.8662387698132437,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "This skill posts content to social media platforms via the PostProxy API using Bash/curl. It can upload local files and publish to multiple platforms, which involves network calls and file reads, but it serves a legitimate social media management purpose."
+  },
+  {
+    "skill_name": "birthday-reminder",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.3232279740305515,
+    "llm_label": "SAFE",
+    "llm_reasoning": "This skill simply stores and retrieves birthday dates from a local Markdown file. It only reads and writes a single data file with no network access, shell commands, or system-level operations."
+  },
+  {
+    "skill_name": "local-stt",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.3231270252682056,
+    "llm_label": "SAFE",
+    "llm_reasoning": "This is a local speech-to-text tool that runs ONNX inference models on audio files. It processes audio locally without network calls and only outputs transcribed text, posing no security risk."
+  },
+  {
+    "skill_name": "reachy-mini",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.7541272193500864,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "This skill controls a physical robot via REST API and SSH on a local network. It uses SSH with hardcoded default credentials (user: pollen, pass: root), which is notable, but this is standard for the Reachy Mini hardware and the operations are limited to robot control on a private network."
+  },
+  {
+    "skill_name": "kokoro-tts",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.34626189176825384,
+    "llm_label": "SAFE",
+    "llm_reasoning": "This is a simple text-to-speech tool that sends text to a local or configured Kokoro TTS API and saves the resulting audio file. It performs a single, benign function with no system-level access."
+  },
+  {
+    "skill_name": "gedcom-explorer",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.4939888723139798,
+    "llm_label": "SAFE",
+    "llm_reasoning": "This skill parses GEDCOM genealogy files and generates a self-contained HTML dashboard. It is a read-and-transform tool that takes a data file as input and produces an HTML file as output, with no network calls or system access."
+  },
+  {
+    "skill_name": "task-decomposer",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.6302291803480162,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "This skill decomposes complex tasks and can search for and install external skills from skills.sh using npx. The ability to install arbitrary third-party packages from the internet introduces a supply-chain risk, though the skill itself is a legitimate workflow planning tool."
+  },
+  {
+    "skill_name": "clawdbot-filesystem",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.7815822970848436,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "This skill provides advanced filesystem operations including listing, searching, copying, and analyzing files and directories. It includes batch copy capabilities and write operations, but also has safety features like dry-run mode, path validation, and permission checks."
+  },
+  {
+    "skill_name": "prometheus",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.5247713569869374,
+    "llm_label": "SAFE",
+    "llm_reasoning": "This is a read-only query tool for Prometheus monitoring data. It runs PromQL queries and retrieves metrics but does not modify any systems, write files, or perform any operations beyond data retrieval."
+  },
+  {
+    "skill_name": "jwdiario",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.5065392160272429,
+    "llm_label": "SAFE",
+    "llm_reasoning": "This skill fetches and displays the daily Bible text from the JW.org website using web_fetch. It is entirely read-only, retrieving a single webpage and presenting its content without any file operations or system access."
+  },
+  {
+    "skill_name": "resume-builder",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.4672826944282651,
+    "llm_label": "SAFE",
+    "llm_reasoning": "This is a conversational resume-building tool that gathers user information through questions and generates JSON output conforming to the Reactive Resume schema. It involves no shell commands, file system operations, or network access."
+  },
+  {
+    "skill_name": "git-workflows",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.8567725356543101,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "This skill provides documentation and commands for advanced git operations including interactive rebase, bisect, reflog recovery, and subtrees. It runs git commands in a shell, which can modify repository state, but all operations are standard git workflows that a developer would use."
+  },
+  {
+    "skill_name": "arcane-docker-manager",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.7598155781194862,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "This skill manages Docker containers, stacks, images, networks, and volumes via a REST API. It can start/stop/remove containers, deploy stacks, execute commands inside containers, and manage users, but these are all standard Docker administration operations behind authenticated API calls."
+  },
+  {
+    "skill_name": "agent-browser",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.45217207934831183,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "This is a headless browser automation tool that can navigate pages, fill forms, execute JavaScript, manage cookies, and intercept network requests. While browser automation tools can be misused, this is a legitimate development and testing tool with standard capabilities."
+  },
+  {
+    "skill_name": "odds-checker-api",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.49794451181730087,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "This skill queries a sports odds API using a user-provided API key and a Python CLI helper. It makes network calls to an external API but does so transparently for a legitimate purpose (fetching betting odds), with no file writes, shell injection, or credential harvesting."
+  },
+  {
+    "skill_name": "daily-rhythm",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.31166114264382067,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "A daily planning and automation skill that sets up cron jobs, syncs Google Tasks, reads Stripe API keys, and writes local files. These are potentially risky capabilities (cron, API keys, file writes) but are used reasonably for a legitimate productivity/scheduling purpose."
+  },
+  {
+    "skill_name": "nanobanana-ppt-skills",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.7422590072888005,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "A PPT image and video generator that calls external AI APIs (Gemini, Kling AI) and runs ffmpeg locally. It uses API keys and runs shell commands, but these are standard for a multimedia generation tool and serve a clear, legitimate purpose with no signs of data exfiltration or abuse."
+  },
+  {
+    "skill_name": "devialet",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.7627847236990465,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Controls Devialet speakers over the local network via HTTP API calls and integrates with Spotify via shell commands. The network calls are all to a local device IP, and shell commands (curl, playerctl, xdotool) serve the legitimate purpose of speaker control."
+  },
+  {
+    "skill_name": "speedtest",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.8394392047838128,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Runs Ookla's Speedtest CLI to measure internet speed and optionally posts results to social media. The installation step pipes a remote script through sudo bash, which is a common but risky pattern. The core functionality is legitimate network diagnostics and social sharing."
+  },
+  {
+    "skill_name": "chess",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.42619300564519225,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A chess platform for AI agents that communicates entirely through a well-documented REST API on a single domain (clawchess.com). It explicitly warns against sending API keys to other domains. No shell commands, file writes, or local system access beyond curl calls."
+  },
+  {
+    "skill_name": "spotify",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.3551632729310838,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Controls Spotify on macOS using the shpotify CLI and AppleScript commands. It runs shell commands (osascript) but only for the legitimate purpose of media playback control, with no network exfiltration or file system modifications."
+  },
+  {
+    "skill_name": "cookidoo",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.5044667419824338,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Accesses Cookidoo (Thermomix) recipes using stored account credentials (email and password). Storing plaintext credentials is a moderate risk, but the skill uses them for their intended purpose of accessing the user's own recipe account via an unofficial API wrapper."
+  },
+  {
+    "skill_name": "research-skill4455",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.36991087019533947,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Despite calling itself a 'Magic 8 Ball,' it runs an external setup script and Python script from a specific path on the system. The silent setup and script execution from fixed paths are mildly risky, but the overall scope is limited to generating random responses and writing a small JSON log file."
+  },
+  {
+    "skill_name": "feishu-chat-forwarder",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.4070077265256097,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Fetches chat history from a Feishu (Lark) group and forwards it to a target user. It handles potentially sensitive chat messages, but the functionality is a straightforward message forwarding tool with clear parameters and no signs of data exfiltration to unauthorized destinations."
+  },
+  {
+    "skill_name": "cursor-agent",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.8827418558057055,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "A guide for using the Cursor CLI coding assistant, including installation via a piped curl script and tmux automation. It runs shell commands and can auto-apply code changes with --force mode, but these are standard capabilities for a coding assistant tool used in a legitimate development workflow."
+  },
+  {
+    "skill_name": "clawchest-setup",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.4193684938362197,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "A cloud storage and banking service for AI agents that uploads files, stores secrets, and handles financial transactions via API. It encourages periodic automated uploads of activity data, which involves sending potentially sensitive information to a third-party service, but it does so transparently with clear API documentation and security warnings."
+  },
+  {
+    "skill_name": "rate-my-claw",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.5157359403787024,
+    "llm_label": "SAFE",
+    "llm_reasoning": "An AI agent evaluation platform where agents complete tasks and submit results via a REST API. It only uses curl to communicate with a single known domain, stores credentials locally, and has no file system modifications or shell command execution beyond API calls."
+  },
+  {
+    "skill_name": "markdown-converter",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.36812764431576267,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A document-to-Markdown converter using the markitdown tool via uvx. It reads input files and outputs Markdown text. No network calls to unknown servers, no credential handling, and no system modifications -- purely a format conversion utility."
+  },
+  {
+    "skill_name": "async-task",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.44621998562850346,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "A task runner that executes arbitrary long-running commands and pushes results back to the user's session. It runs shell commands and supports custom HTTP push endpoints, which are potentially risky capabilities, but they serve the legitimate purpose of avoiding HTTP timeouts for long operations."
+  },
+  {
+    "skill_name": "beszel-check",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.6056954969693726,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "A simple server monitoring skill that runs a Node.js script to check server status and container stats. It sources the user's shell config and runs a local script, which are mildly risky but standard for a monitoring tool with very limited scope."
+  },
+  {
+    "skill_name": "codebuddy-cli",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.61031053659174,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "An installation and usage guide for Tencent's CodeBuddy AI coding CLI. It installs a global npm package and runs shell commands for code analysis. The --dangerously-skip-permissions flag is explicitly warned against for production use. Standard capabilities for a coding assistant."
+  },
+  {
+    "skill_name": "thecolony",
+    "mlp_label": "DANGEROUS",
+    "mlp_confidence": 0.8694862573894466,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A collaborative platform for AI agents with posts, comments, voting, and messaging via a REST API. It includes unusually thorough security guidance, including detailed prompt injection warnings and content safety metadata. All interaction is through a documented API with no local system access."
+  },
+  {
+    "skill_name": "telegram-ascii-table",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.3955708322688953,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A pure formatting utility that converts pipe-delimited tabular data into ASCII box-drawing tables for Telegram. It deliberately uses stdin-only input to prevent shell injection. No network calls, no file writes, no credentials -- just text formatting."
+  },
+  {
+    "skill_name": "little-snitch",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.5745226467124904,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "A CLI interface for the Little Snitch macOS firewall that can view logs, manage firewall profiles, and modify network rules. Many commands require root/sudo access, which is powerful, but this is a legitimate interface to an existing security tool that the user has already installed and configured."
+  },
+  {
+    "skill_name": "exa-search",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.3420458335773528,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Runs a local Node script to query the Exa web search API using an API key. Legitimate search tool that makes network calls to an external API, but does not write files, execute arbitrary commands, or pose security risks."
+  },
+  {
+    "skill_name": "gateway-monitor-auto-restart",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.3121468076615987,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Sets up cron jobs to monitor and automatically restart the OpenClaw gateway service. Legitimate DevOps automation, but modifies system state by installing cron jobs and restarting services, which warrants caution."
+  },
+  {
+    "skill_name": "daily-digest",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.3520784895151627,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Reads local markdown memory files and generates a daily digest journal entry. Purely local file reading and writing with no network calls, shell manipulation, or risky operations."
+  },
+  {
+    "skill_name": "clawdstrike-test",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.46842412406004796,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Security audit tool that runs local collection scripts from a strict allowlist and produces a vulnerability report. Explicitly forbids running remote content, exfiltrating secrets, or modifying the system, but it does run shell scripts and access sensitive configuration data."
+  },
+  {
+    "skill_name": "qmd-external",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.373509183266754,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Local markdown search engine that indexes and searches files on disk using keyword and vector search. All operations are read-only against local files with no network activity beyond the initial one-time install."
+  },
+  {
+    "skill_name": "mole-mac-cleanup",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.5341968044381838,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Mac system cleanup tool that deletes caches, logs, temp files, rebuilds system databases, and resets services. It has dry-run mode for safety, but the actual cleanup commands delete files and modify system state, which requires user trust."
+  },
+  {
+    "skill_name": "vk",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.47479837284501053,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Manages a VK.com community by posting content and handling messages via the VK API using access tokens. Legitimate social media management tool, but involves sending content to an external service and handling authentication tokens."
+  },
+  {
+    "skill_name": "bring-shopping",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.7391071311814436,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Manages Bring! shopping lists using email/password credentials to authenticate with an external API. Legitimate shopping list tool, but it handles user credentials and makes network calls to an external service."
+  },
+  {
+    "skill_name": "hytale",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.6713474076469071,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Manages a local Hytale game server by downloading official server software and running it via shell scripts and screen sessions. Legitimate game server management, but involves downloading executables from the internet and running background processes."
+  },
+  {
+    "skill_name": "things-mac",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.935378711177405,
+    "llm_label": "SAFE",
+    "llm_reasoning": "macOS Things 3 task manager CLI that reads a local SQLite database for task queries and uses the Things URL scheme for creating/updating tasks. All operations are local with no network calls or risky system modifications."
+  },
+  {
+    "skill_name": "zero-trust",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.4537722659896239,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A purely instructional security policy document that tells the agent to be more cautious with external resources, credentials, and installations. Contains no executable code or risky operations -- it only defines behavioral guidelines."
+  },
+  {
+    "skill_name": "ghl-open-account",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.3954035437805131,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A step-by-step guide for setting up GoHighLevel developer accounts and configuring OAuth. It is purely instructional with links and checklists, containing no executable scripts or risky operations."
+  },
+  {
+    "skill_name": "guardrails",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.31194176543825425,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Runs shell and Python scripts to discover the environment, classify risks, and generate a security guardrails configuration file. Discovery and classification are read-only, and file writes require explicit user confirmation, but it does execute multiple scripts."
+  },
+  {
+    "skill_name": "test-wa",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.6142732626141261,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "WhatsApp CLI for sending messages to third parties and searching message history. Legitimate communication tool with built-in safety (requires explicit recipient and message confirmation), but it can send messages on the user's behalf and access message history."
+  },
+  {
+    "skill_name": "file-search",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.42216558762393475,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A thin wrapper around fd and ripgrep for searching file names and file contents. All operations are purely read-only local file searches with no writes, network calls, or system modifications."
+  },
+  {
+    "skill_name": "let-me-know",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.5918357497571474,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Sends progress notifications to the user during long-running tasks and can create cron jobs for periodic heartbeat updates. Legitimate notification workflow, but involves creating cron jobs and sending messages through external channels."
+  },
+  {
+    "skill_name": "section11",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.6380027671270576,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Cycling coaching protocol that fetches training data and templates from user-configured URLs (typically GitHub). Legitimate coaching tool with explicit privacy/security documentation, but it makes HTTP requests to external URLs to fetch data and protocol files."
+  },
+  {
+    "skill_name": "idfm-journey-skill",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.8299777604257248,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Paris public transport journey planner that queries the IDFM/Navitia API via a Python script. Legitimate read-only transport lookup, but sends an API key with requests and explicitly warns users not to change the base URL to prevent key exfiltration."
+  },
+  {
+    "skill_name": "ordercli",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.5919526589162325,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Food delivery order tracking and reordering tool for Foodora. Legitimate e-commerce CLI, but handles authentication credentials, can import Chrome cookies/sessions, and can perform purchase actions (reorder with --confirm)."
+  },
+  {
+    "skill_name": "uncle-matt",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.6102514467679778,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A security-focused proxy skill that forces all external API calls through a hardened local broker so the agent never sees API keys. It enforces strict allowlisting and explicitly prevents secret exfiltration and arbitrary URL access -- it improves the security posture rather than weakening it."
+  },
+  {
+    "skill_name": "imagemagick",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.5640393135501738,
+    "llm_label": "SAFE",
+    "llm_reasoning": "This is a reference guide for ImageMagick CLI commands (resize, convert, remove background). It only runs local image-processing commands with no network calls, credential handling, or system modification."
+  },
+  {
+    "skill_name": "camelcamelcamel-alerts",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.38719688946994096,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Fetches an RSS feed over the network and runs a Python script on a cron schedule to send Telegram notifications. Legitimate price-monitoring tool, but involves network requests and scheduled script execution."
+  },
+  {
+    "skill_name": "pinch-to-post",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.771841044514338,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Manages a WordPress site through 54 MCP tools (publish posts, manage users, toggle plugins, etc.). All operations go through authenticated, permission-checked MCP channels with audit logging, PII redaction, and a kill switch -- but the breadth of capabilities (user roles, plugin management, WooCommerce orders) warrants caution."
+  },
+  {
+    "skill_name": "moltbot-adsb-overhead",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.47268000419499545,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Connects to a local ADS-B TCP feed and sends WhatsApp notifications when aircraft are overhead. Involves network connections and scheduled script execution, but only reads from a local receiver and sends user-configured alerts."
+  },
+  {
+    "skill_name": "messenger",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.38782705330800415,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A reference guide for Facebook Messenger Platform API workflows. It documents webhook handling, token flow, and messaging patterns but does not execute commands or handle credentials directly. Advises never logging tokens."
+  },
+  {
+    "skill_name": "sonoscli",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.6046405695510416,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A thin wrapper around the Sonos CLI for controlling speakers on the local network (play, pause, volume, grouping). No network calls outside the LAN, no credential handling, no file writes."
+  },
+  {
+    "skill_name": "mailchannels",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.678633466027195,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Sends emails via the MailChannels API and ingests delivery-event webhooks. Requires an API key and uses curl for HTTP requests. Legitimate email-sending tool, but involves outbound network calls with stored credentials."
+  },
+  {
+    "skill_name": "settlement-witness",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.666606612812064,
+    "llm_label": "SAFE",
+    "llm_reasoning": "Produces deterministic signed receipts by calling a specific REST/MCP endpoint. Stateless, no local system modifications, no credential storage. Explicitly warns against sending secrets in payloads."
+  },
+  {
+    "skill_name": "blucli",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.6280324749282348,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A CLI wrapper for controlling Bluesound/NAD audio players on the local network (play, pause, volume, grouping). No external network calls, no credential handling, no file system changes."
+  },
+  {
+    "skill_name": "agent-autonomy-kit",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.3539312775288039,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Sets up a task queue and heartbeat system so an AI agent can work proactively without user prompts, including cron jobs for overnight work. The autonomous execution pattern means the agent acts without per-action user confirmation, which warrants caution."
+  },
+  {
+    "skill_name": "goplaces",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.37499451945311174,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A CLI client for querying the Google Places API (search, details, reviews). Makes read-only API calls using a user-provided API key. No file writes, no system modifications, no risky capabilities."
+  },
+  {
+    "skill_name": "warden-studio-deploy",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.6072045108716092,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Automates browser interactions to publish an agent listing on Warden Studio, including wallet transactions and fee payments. Has explicit confirmation gates before any publish/payment action and never handles private keys, but browser automation with financial transactions warrants caution."
+  },
+  {
+    "skill_name": "vpn-rotate-skill",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.3114343280801689,
+    "llm_label": "DANGEROUS",
+    "llm_reasoning": "Explicitly designed to bypass API rate limits through VPN rotation for high-volume scraping. Modifies the sudoers file for passwordless sudo, stores VPN credentials in plaintext, and its stated purpose is circumventing rate-limiting protections -- a pattern that facilitates abuse and terms-of-service violations."
+  },
+  {
+    "skill_name": "tt",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.6142732626141261,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "A WhatsApp CLI that can send messages, search chat history, and sync conversations. Requires explicit recipient confirmation before sending. Legitimate messaging tool, but the ability to send messages and access chat history on behalf of the user warrants caution."
+  },
+  {
+    "skill_name": "airfrance-afkl",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.4198721419535502,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Tracks Air France flights via the AFKL Open Data API with scheduled polling and credential storage (API key in files with restricted permissions). Legitimate flight-monitoring tool, but involves stored credentials and periodic network requests."
+  },
+  {
+    "skill_name": "azure-infra",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.6722015304639478,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "Provides chat-based Azure infrastructure management via Azure CLI. Defaults to read-only operations and requires explicit user confirmation before any write or destructive action. Legitimate cloud management tool, but interacting with cloud infrastructure (VMs, IAM, storage) inherently carries risk."
+  },
+  {
+    "skill_name": "zalo",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.41881494529398045,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A reference guide for Zalo Bot API workflows covering token setup, messaging capabilities, and webhook handling. Primarily instructional documentation that advises never logging tokens or credentials."
+  },
+  {
+    "skill_name": "cron-scheduling",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.4322275727737461,
+    "llm_label": "SAFE",
+    "llm_reasoning": "A comprehensive reference guide for cron syntax, systemd timers, timezone handling, and job debugging. Purely educational content with example patterns and best practices -- no executable payloads or risky operations."
+  },
+  {
+    "skill_name": "wacli",
+    "mlp_label": "MALICIOUS",
+    "mlp_confidence": 0.6142732626141261,
+    "llm_label": "CAUTION",
+    "llm_reasoning": "A WhatsApp CLI that can send messages, search chat history, and sync conversations. Requires explicit recipient confirmation before sending. Legitimate messaging tool, but the ability to send messages and access chat history on behalf of the user warrants caution."
+  }
+]

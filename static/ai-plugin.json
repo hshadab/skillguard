@@ -1,0 +1,12 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "SkillGuard: SSL for Agent Skills",
+  "name_for_model": "skillguard",
+  "description_for_human": "Verifiable AI skill safety classification with zero-knowledge ML proofs",
+  "description_for_model": "Classify AI agent skills as SAFE/CAUTION/DANGEROUS with mandatory cryptographic zkML proof. Every classification includes a zero-knowledge proof that the neural network produced the result. The model (3-layer MLP, 4,419 params) extracts 35 security features from each skill and classifies using fixed-point integer arithmetic inside a ZK circuit. v2.0: trained on 425 LLM-labeled real OpenClaw skills (68% accuracy, 0.80 DANGEROUS F1). v3.0 pipeline: scaling to 1,400+ labeled skills with boundary-aware labeling, stratified sampling, and held-out evaluation. To classify by name: POST /api/v1/evaluate with {\"skill\": \"slug-name\"}. To classify with full data: POST /api/v1/evaluate with {\"skill\": {\"name\": \"...\", \"version\": \"1.0.0\", \"author\": \"...\", \"skill_md\": \"...\", \"scripts\": [], \"files\": []}}. Look up cached results instantly via GET /api/v1/catalog/{skill_name} (free, no auth). Costs $0.001 USDC via x402 on Base. Verify proofs free: POST /api/v1/verify with {\"proof_b64\": \"...\", \"program_io\": {...}}. Every response includes a model_version field. LLM-readable docs at /.well-known/llms.txt.",
+  "auth": { "type": "none" },
+  "api": { "type": "openapi", "url": "https://skillguard.onrender.com/openapi.json" },
+  "logo_url": "https://cdn.prod.website-files.com/65d52b07d5bc41614daa723f/665df12739c532f45b665fe7_logo-novanet.svg",
+  "contact_email": "",
+  "legal_info_url": ""
+}

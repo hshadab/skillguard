@@ -1,0 +1,49 @@
+/target
+*.srs
+!dory_srs_24_variables.srs
+skillguard-access.jsonl
+skillguard-access.jsonl.*
+crawled-skills/
+
+# Demo agent wallets
+demo/wallets.env
+
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pk8
+*.p12
+*.pfx
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build / toolchain artifacts
+*.log
+.cargo/
+node_modules/
+
+# Coverage
+*.profraw
+lcov.info
+tarpaulin-report.html
+cobertura.xml
+coverage/
+training/__pycache__/
+
+# Generated artifacts
+label-sample*.json
+scan-report.json
+training/label-batch-*.json
+training/labels-batch-*.json

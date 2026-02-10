@@ -1,0 +1,5 @@
+{
+  "optimal_temperature": 0.1,
+  "ece": 9.315692661715502e-11,
+  "entropy_threshold": -7.213475800929758e-11
+}

@@ -1,0 +1,534 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SkillGuard: SSL for Agent Skills",
+    "version": "2.0.0",
+    "description": "SSL for Agent Skills — every classification is a verifiable certificate. SkillGuard evaluates AI agent skill metadata and scripts using a 3-layer MLP (35 features, 4,419 parameters), producing a safety classification (SAFE, CAUTION, DANGEROUS) backed by a zero-knowledge machine learning proof via Jolt/Dory SNARK. The model extracts 35 security signals from each skill (shell exec, obfuscation, reverse shells, credential access, entropy, etc.) and classifies using fixed-point integer arithmetic inside a ZK circuit. Like SSL proves server identity, SkillGuard proofs prove classification integrity.\n\nModel v2.0: trained on 425 LLM-labeled real OpenClaw skills (68% CV accuracy, 0.80 DANGEROUS F1). v3.0 training pipeline in progress: scaling to 1,400+ labeled skills with phased data collection (DANGEROUS-priority, SAFE/CAUTION boundary enrichment, stratified diversity fill), improved labeling prompt with boundary rules, and 15% held-out test set.\n\nQuick start: `curl -X POST https://skillguard.onrender.com/api/v1/evaluate -H 'Content-Type: application/json' -d '{\"skill\": \"4claw\"}'`\n\nAgent discovery: GET /.well-known/ai-plugin.json | LLM info: GET /.well-known/llms.txt",
+    "license": {
+      "name": "MIT",
+      "url": "https://github.com/hshadab/skillguard/blob/main/LICENSE"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://skillguard.onrender.com",
+      "description": "Production"
+    }
+  ],
+  "x-x402": {
+    "description": "Paid endpoints accept x402 payment as an alternative to an API key. Send a 402 payment header with USDC on Base to access evaluation results.",
+    "facilitator": "https://pay.openfacilitator.io",
+    "token": "USDC",
+    "network": "Base (EIP-155 chain 8453)"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "getDashboard",
+        "summary": "HTML dashboard",
+        "description": "Returns the embedded web UI for classifying skills and viewing results.",
+        "responses": {
+          "200": {
+            "description": "HTML page",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Health check",
+        "description": "Returns service health, version, model hash, uptime, and ZKML prover status.",
+        "responses": {
+          "200": {
+            "description": "Health status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stats": {
+      "get": {
+        "operationId": "getStats",
+        "summary": "Usage statistics",
+        "description": "Returns aggregate usage metrics: request counts, classification breakdowns, endpoint hits, and proof stats.",
+        "responses": {
+          "200": {
+            "description": "Usage statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "operationId": "getOpenApiSpec",
+        "summary": "OpenAPI specification",
+        "description": "Returns the OpenAPI 3.1 specification for SkillGuard.",
+        "responses": {
+          "200": {
+            "description": "OpenAPI JSON",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/ai-plugin.json": {
+      "get": {
+        "operationId": "getAiPluginManifest",
+        "summary": "AI plugin manifest",
+        "description": "Returns the ai-plugin.json manifest for agent discovery (ChatGPT plugin protocol).",
+        "responses": {
+          "200": {
+            "description": "AI plugin manifest JSON",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/llms.txt": {
+      "get": {
+        "operationId": "getLlmsTxt",
+        "summary": "LLM-readable API description",
+        "description": "Returns a plain-text description of the SkillGuard API optimized for LLM consumption. Includes endpoints, request formats, pricing, and examples.",
+        "responses": {
+          "200": {
+            "description": "Plain text API description",
+            "content": {
+              "text/plain": {
+                "schema": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/evaluate": {
+      "post": {
+        "operationId": "evaluateSkill",
+        "summary": "Classify a skill",
+        "description": "Single endpoint for all skill classifications. Every response includes a mandatory zkML proof.\n\nAccepts two request formats:\n\n1. **Name lookup:** `{\"skill\": \"skill-slug\"}` — fetches skill data from ClawHub, then classifies.\n2. **Full skill data:** `{\"skill\": {\"name\": \"...\", ...}}` — classifies the provided skill directly.\n\nBoth formats return the same response with classification, scores, reasoning, and a zkML proof bundle. If the prover is still initializing, the endpoint returns an error until it is ready.",
+        "parameters": [],
+        "x-x402-pricing": {
+          "amount": "0.001",
+          "currency": "USDC",
+          "network": "Base"
+        },
+        "security": [
+          { "BearerAuth": [] },
+          { "x402Payment": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/EvaluateByNameRequest" },
+                  { "$ref": "#/components/schemas/EvaluateFullRequest" }
+                ],
+                "examples": {
+                  "byName": {
+                    "summary": "Lookup by ClawHub slug",
+                    "value": {
+                      "skill": "4claw"
+                    }
+                  },
+                  "fullData": {
+                    "summary": "Full skill data",
+                    "value": {
+                      "skill": {
+                        "name": "hello-world",
+                        "version": "1.0.0",
+                        "author": "dev",
+                        "description": "A safe greeting skill",
+                        "skill_md": "# Hello World\nSays hello to the user.",
+                        "scripts": [],
+                        "files": []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Classification result with zkML proof",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key (when x402 is not available)"
+          },
+          "402": {
+            "description": "Payment required (x402) or payment settlement failed"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        }
+      }
+    },
+    "/api/v1/verify": {
+      "post": {
+        "operationId": "verifyProof",
+        "summary": "Verify a zkML proof",
+        "description": "Verify a previously generated SNARK proof. Free, no authentication required.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Verification result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/{skill_name}": {
+      "get": {
+        "operationId": "getCatalogEntry",
+        "summary": "Look up a skill in the catalog",
+        "description": "Returns cached classification data for a known skill. Free, no authentication required, instant response. If the skill has been previously evaluated, returns the most recent classification, scores, and metadata without re-running the model or generating a new proof.",
+        "parameters": [
+          {
+            "name": "skill_name",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Skill slug (e.g. '4claw')"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Catalog entry for the skill",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Skill not found in catalog"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "API key passed as a Bearer token."
+      },
+      "x402Payment": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-PAYMENT",
+        "description": "x402 USDC payment header on Base. $0.001 per request."
+      }
+    },
+    "schemas": {
+      "Skill": {
+        "type": "object",
+        "required": ["name", "version", "author", "skill_md"],
+        "properties": {
+          "name": { "type": "string" },
+          "version": { "type": "string" },
+          "author": { "type": "string" },
+          "description": { "type": "string", "default": "" },
+          "skill_md": { "type": "string", "description": "Full SKILL.md content" },
+          "scripts": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ScriptFile" },
+            "default": []
+          },
+          "metadata": { "$ref": "#/components/schemas/SkillMetadata" },
+          "files": {
+            "type": "array",
+            "items": { "type": "string" },
+            "default": []
+          }
+        }
+      },
+      "ScriptFile": {
+        "type": "object",
+        "required": ["name", "content"],
+        "properties": {
+          "name": { "type": "string" },
+          "content": { "type": "string" },
+          "extension": { "type": "string", "default": "" }
+        }
+      },
+      "SkillMetadata": {
+        "type": "object",
+        "properties": {
+          "stars": { "type": "integer", "default": 0 },
+          "downloads": { "type": "integer", "default": 0 },
+          "created_at": { "type": "string", "default": "" },
+          "updated_at": { "type": "string", "default": "" },
+          "author_account_created": { "type": "string", "default": "" },
+          "author_total_skills": { "type": "integer", "default": 0 }
+        }
+      },
+      "VTReport": {
+        "type": "object",
+        "required": ["malicious_count", "suspicious_count"],
+        "properties": {
+          "malicious_count": { "type": "integer" },
+          "suspicious_count": { "type": "integer" },
+          "analysis_date": { "type": "string", "default": "" }
+        }
+      },
+      "EvaluateByNameRequest": {
+        "type": "object",
+        "description": "Look up a skill on ClawHub by slug, then classify it.",
+        "required": ["skill"],
+        "properties": {
+          "skill": { "type": "string", "description": "Skill name (slug) on ClawHub" },
+          "version": {
+            "type": "string",
+            "description": "Optional version (defaults to latest)"
+          }
+        }
+      },
+      "EvaluateFullRequest": {
+        "type": "object",
+        "description": "Classify a skill from full metadata and scripts.",
+        "required": ["skill"],
+        "properties": {
+          "skill": { "$ref": "#/components/schemas/Skill" },
+          "vt_report": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/VTReport" },
+              { "type": "null" }
+            ]
+          }
+        }
+      },
+      "ClassScores": {
+        "type": "object",
+        "description": "Softmax-normalized confidence scores for each safety class.",
+        "required": ["SAFE", "CAUTION", "DANGEROUS"],
+        "properties": {
+          "SAFE": { "type": "number" },
+          "CAUTION": { "type": "number" },
+          "DANGEROUS": { "type": "number" }
+        }
+      },
+      "ProofBundle": {
+        "type": "object",
+        "description": "zkML proof bundle from Jolt/Dory SNARK proving the neural network forward pass.",
+        "required": ["proof_b64", "program_io", "proof_size_bytes", "proving_time_ms"],
+        "properties": {
+          "proof_b64": { "type": "string", "description": "Base64-encoded SNARK proof bytes" },
+          "program_io": { "description": "Program I/O as JSON (inputs and outputs visible to verifier)" },
+          "proof_size_bytes": { "type": "integer" },
+          "proving_time_ms": { "type": "integer" }
+        }
+      },
+      "EvaluationResult": {
+        "type": "object",
+        "description": "Classification result with mandatory zkML proof.",
+        "required": ["skill_name", "classification", "decision", "confidence", "scores", "reasoning", "proof"],
+        "properties": {
+          "skill_name": { "type": "string" },
+          "classification": { "type": "string", "enum": ["SAFE", "CAUTION", "DANGEROUS"] },
+          "decision": { "type": "string", "enum": ["ALLOW", "DENY", "FLAG"] },
+          "confidence": { "type": "number" },
+          "scores": { "$ref": "#/components/schemas/ClassScores" },
+          "reasoning": { "type": "string" },
+          "raw_logits": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Raw integer logits from the fixed-point neural network [SAFE, CAUTION, DANGEROUS]"
+          },
+          "entropy": {
+            "type": "number",
+            "description": "Normalized Shannon entropy of the softmax distribution (0.0 = certain, 1.0 = uniform). Predictions with entropy > 0.67 are flagged for review."
+          },
+          "proof": {
+            "$ref": "#/components/schemas/ProofBundle",
+            "description": "Mandatory zkML proof bundle — every classification includes a cryptographic proof that the neural network produced this result."
+          }
+        }
+      },
+      "EvaluateResponse": {
+        "type": "object",
+        "required": ["success", "processing_time_ms"],
+        "properties": {
+          "success": { "type": "boolean" },
+          "error": { "type": "string" },
+          "evaluation": { "$ref": "#/components/schemas/EvaluationResult" },
+          "processing_time_ms": { "type": "integer" },
+          "model_version": { "type": "string", "description": "Model version hash used for this classification" }
+        }
+      },
+      "VerifyRequest": {
+        "type": "object",
+        "required": ["proof_b64", "program_io"],
+        "properties": {
+          "proof_b64": { "type": "string" },
+          "program_io": { "description": "Program I/O JSON from the original proof" }
+        }
+      },
+      "VerifyResponse": {
+        "type": "object",
+        "required": ["valid", "verification_time_ms"],
+        "properties": {
+          "valid": { "type": "boolean" },
+          "verification_time_ms": { "type": "integer" }
+        }
+      },
+      "CatalogEntry": {
+        "type": "object",
+        "description": "Cached classification data for a previously evaluated skill.",
+        "required": ["skill_name", "classification", "decision", "confidence", "scores", "model_version", "evaluated_at"],
+        "properties": {
+          "skill_name": { "type": "string" },
+          "classification": { "type": "string", "enum": ["SAFE", "CAUTION", "DANGEROUS"] },
+          "decision": { "type": "string", "enum": ["ALLOW", "DENY", "FLAG"] },
+          "confidence": { "type": "number" },
+          "scores": { "$ref": "#/components/schemas/ClassScores" },
+          "model_version": { "type": "string", "description": "Model version hash used for this classification" },
+          "evaluated_at": { "type": "string", "format": "date-time", "description": "ISO 8601 timestamp of when the skill was last evaluated" }
+        }
+      },
+      "CatalogResponse": {
+        "type": "object",
+        "description": "Response wrapper for catalog lookups.",
+        "required": ["success", "entry"],
+        "properties": {
+          "success": { "type": "boolean" },
+          "entry": { "$ref": "#/components/schemas/CatalogEntry" }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": ["status", "version", "model_hash", "uptime_seconds", "zkml_enabled", "proving_scheme", "cache_writable"],
+        "properties": {
+          "status": { "type": "string" },
+          "version": { "type": "string" },
+          "model_hash": { "type": "string", "description": "SHA-256 hash of the model bytecode" },
+          "uptime_seconds": { "type": "integer" },
+          "zkml_enabled": { "type": "boolean", "description": "Whether the ZKML prover is initialized and available" },
+          "proving_scheme": { "type": "string", "description": "Polynomial commitment scheme (e.g. Jolt/Dory)" },
+          "cache_writable": { "type": "boolean", "description": "Whether the proof cache directory is writable" },
+          "pay_to": {
+            "type": "string",
+            "description": "Ethereum address receiving x402 payments (null if x402 is disabled)"
+          }
+        }
+      },
+      "StatsResponse": {
+        "type": "object",
+        "required": ["uptime_seconds", "model_hash", "requests", "classifications", "decisions", "endpoints", "proofs"],
+        "properties": {
+          "uptime_seconds": { "type": "integer" },
+          "model_hash": { "type": "string" },
+          "requests": { "$ref": "#/components/schemas/RequestStats" },
+          "classifications": { "$ref": "#/components/schemas/ClassificationStats" },
+          "decisions": { "$ref": "#/components/schemas/DecisionStats" },
+          "endpoints": { "$ref": "#/components/schemas/EndpointStats" },
+          "proofs": { "$ref": "#/components/schemas/ProofStats" }
+        }
+      },
+      "RequestStats": {
+        "type": "object",
+        "required": ["total", "errors"],
+        "properties": {
+          "total": { "type": "integer" },
+          "errors": { "type": "integer" }
+        }
+      },
+      "ClassificationStats": {
+        "type": "object",
+        "required": ["safe", "caution", "dangerous"],
+        "properties": {
+          "safe": { "type": "integer" },
+          "caution": { "type": "integer" },
+          "dangerous": { "type": "integer" }
+        }
+      },
+      "DecisionStats": {
+        "type": "object",
+        "required": ["allow", "deny", "flag"],
+        "properties": {
+          "allow": { "type": "integer" },
+          "deny": { "type": "integer" },
+          "flag": { "type": "integer" }
+        }
+      },
+      "EndpointStats": {
+        "type": "object",
+        "required": ["evaluate", "evaluate_by_name", "verify", "stats"],
+        "properties": {
+          "evaluate": { "type": "integer" },
+          "evaluate_by_name": { "type": "integer" },
+          "verify": { "type": "integer" },
+          "stats": { "type": "integer" }
+        }
+      },
+      "ProofStats": {
+        "type": "object",
+        "required": ["total_generated", "total_verified"],
+        "properties": {
+          "total_generated": { "type": "integer" },
+          "total_verified": { "type": "integer" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,107 @@
+[package]
+name = "skillguard"
+version = "2.0.0"
+edition = "2021"
+description = "Verifiable AI safety classifier powered by Jolt Atlas ZKML with x402 agentic commerce"
+license = "MIT"
+repository = "https://github.com/hshadab/skillguard"
+homepage = "https://github.com/hshadab/skillguard"
+readme = "README.md"
+keywords = ["zkml", "jolt", "x402", "safety", "classifier"]
+categories = ["command-line-utilities", "web-programming"]
+
+[lib]
+name = "skillguard"
+path = "src/lib.rs"
+
+[[bin]]
+name = "skillguard"
+path = "src/main.rs"
+
+[[bin]]
+name = "skillguard-mcp"
+path = "src/bin/skillguard_mcp.rs"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+sha2 = "0.10"
+hex = "0.4"
+eyre = "0.6"
+regex = "1.10"
+
+# Structured logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# HTTP server
+axum = "0.8"
+tokio = { version = "1.43", features = ["full"] }
+
+# Rate limiting
+governor = "0.6"
+lru = "0.12"
+
+# HTTP client for ClawHub API
+reqwest = { version = "0.12", features = ["json"] }
+
+# URL percent-encoding for user-supplied path segments
+urlencoding = "2.1"
+
+# Middleware
+tower-http = { version = "0.6", features = ["cors"] }
+
+# Redis for durable metrics persistence
+redis = { version = "1", features = ["aio", "tokio-comp", "connection-manager", "tokio-native-tls-comp"] }
+
+# Constant-time comparison
+subtle = "2.6"
+
+# x402 payment protocol
+x402-axum = "1"
+x402-types = "1"
+x402-chain-eip155 = { version = "1", features = ["server"] }
+alloy-primitives = "1.4"
+
+# ONNX model inference
+onnx-tracer = { git = "https://github.com/ICME-Lab/jolt-atlas", rev = "194ee927313f90f3827e86e885fb045742f3e971", features = ["matmul_power_of_two_padding"] }
+
+# ZK proving
+zkml-jolt-core = { git = "https://github.com/ICME-Lab/jolt-atlas", rev = "194ee927313f90f3827e86e885fb045742f3e971" }
+jolt-core = { git = "https://github.com/hshadab/zkml-jolt", rev = "b217e7e4", package = "jolt-core", default-features = true }
+ark-bn254 = "0.5.0"
+ark-serialize = { version = "0.5.0", default-features = false, features = ["derive"] }
+base64 = "0.22"
+
+[workspace.dependencies]
+ark-serialize = { version = "0.5.0", default-features = false, features = ["derive"] }
+
+[features]
+default = []
+crawler = []
+
+# Pinned to commit 76bb3a45 on dev/twist-shout.
+# Other git deps (jolt, dory) reference this branch directly — Cargo requires
+# the patch source string to match, so we keep `branch` here.
+[patch.crates-io]
+ark-ff = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+ark-ec = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+ark-serialize = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+ark-bn254 = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+
+# Redirect jolt-core from ICME-Lab to fork with const generics fix
+[patch."https://github.com/ICME-Lab/zkml-jolt"]
+jolt-core = { git = "https://github.com/hshadab/zkml-jolt", rev = "b217e7e4", package = "jolt-core" }
+
+[dev-dependencies]
+tempfile = "3"
+serial_test = "3"
+
+[profile.test]
+opt-level = 3
+lto = "off"
+
+[profile.release]
+lto = "thin"
