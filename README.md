@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/hshadab/skillguard/actions/workflows/ci.yml/badge.svg)](https://github.com/hshadab/skillguard/actions/workflows/ci.yml)
 
-Standalone skill safety classifier for [OpenClaw](https://openclaw.org)/[ClawHub](https://clawhub.ai) AI agent skills. A single-binary safety scanner with an embedded neural network, an HTTP API, a CLI, and an ecosystem crawler — no external model files, no cloud dependencies, no zero-knowledge proofs.
+Standalone skill safety classifier for [OpenClaw](https://openclaw.org)/[ClawHub](https://clawhub.ai) AI agent skills. A single-binary safety scanner with an embedded neural network, an HTTP API, a CLI, and an ecosystem crawler — no external model files, no cloud dependencies, no zero-knowledge proofs. Supports [x402](https://www.x402.org/) pay-per-request on Base mainnet so agents can pay $0.001 USDC per evaluation without needing an API key.
 
 ---
 
@@ -71,7 +71,7 @@ The result is returned as a JSON response (or printed to the terminal in CLI mod
 | `patterns.rs` | Pre-compiled regex patterns. Each `LazyLock<Vec<Regex>>` or `LazyLock<Regex>` is compiled once and reused across all classifications. Covers shell exec, network calls, file writes, env access, credentials, reverse shells, persistence, obfuscation, exfiltration, downloads, privilege escalation, dependencies, archives, and LLM secret exposure. Also includes PowerShell, Rust `std::process::Command`, Go `exec.Command`, DOM injection, and zero-width Unicode patterns. |
 | `skill.rs` | Data structures (`Skill`, `SkillFeatures`, `SafetyClassification`, `SafetyDecision`) and the feature extraction pipeline. Also parses YAML frontmatter from SKILL.md files for `name` and `description` fields. |
 | `scores.rs` | Softmax normalization of raw model output into per-class probabilities. |
-| `server.rs` | Axum HTTP server. Routes: `GET /health`, `POST /api/v1/evaluate`, `POST /api/v1/evaluate/name`, `GET /stats`. Includes per-IP rate limiting (token bucket via `governor`), JSONL access logging with size-based rotation, bearer token auth middleware on `/api/v1/*` routes, and usage metrics tracking. |
+| `server.rs` | Axum HTTP server. Routes: `GET /health`, `POST /api/v1/evaluate`, `POST /api/v1/evaluate/name`, `GET /stats`. Includes per-IP rate limiting (token bucket via `governor`), JSONL access logging with size-based rotation, bearer token auth middleware on `/api/v1/*` routes, x402 payment middleware for pay-per-request on Base mainnet, and usage metrics tracking. |
 | `clawhub.rs` | Async client for the ClawHub registry API. Fetches skill metadata (author, stars, downloads) and SKILL.md content. Used by the `evaluate/name` endpoint to look up skills by slug. |
 | `crawler.rs` | Parses the [awesome-openclaw-skills](https://github.com/VoltAgent/awesome-openclaw-skills) README to extract skill entries. Converts GitHub `tree` URLs to `raw.githubusercontent.com` URLs. Fetches SKILL.md files with concurrency control (`tokio::sync::Semaphore`) and optional GitHub token auth. Writes a `manifest.json` alongside the fetched files. |
 | `batch.rs` | Batch scanning pipeline. Two modes: directory (read local SKILL.md files) and live (fetch from awesome list + classify in one pass). Produces JSON, CSV, or text summary reports. Supports filtering by classification. |
@@ -250,7 +250,7 @@ curl http://localhost:8080/health
 
 ### `POST /api/v1/evaluate`
 
-Evaluate a skill from full skill data. Requires auth if `SKILLGUARD_API_KEY` is set.
+Evaluate a skill from full skill data. Requires auth via API key or x402 payment (if configured). See [x402 Pay-Per-Request](#x402-pay-per-request) for details on response tiers.
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/evaluate \
@@ -271,7 +271,7 @@ curl -X POST http://localhost:8080/api/v1/evaluate \
 
 ### `POST /api/v1/evaluate/name`
 
-Evaluate a skill by its ClawHub registry name. SkillGuard fetches the skill data from the ClawHub API automatically. Requires auth if `SKILLGUARD_API_KEY` is set.
+Evaluate a skill by its ClawHub registry name. SkillGuard fetches the skill data from the ClawHub API automatically. Requires auth via API key or x402 payment (if configured).
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/evaluate/name \
@@ -344,6 +344,99 @@ If `SKILLGUARD_API_KEY` is not set, all endpoints are open. This is the default 
 
 ---
 
+## x402 Pay-Per-Request
+
+### What This Is (Plain English)
+
+SkillGuard supports [x402](https://www.x402.org/), a payment protocol built on HTTP 402. Instead of getting an API key, an AI agent can pay $0.001 USDC per request to evaluate a skill. The payment happens on [Base](https://base.org/) (an Ethereum L2), and the agent gets back a classification and decision. No signup, no API key, no account — just pay and get an answer.
+
+This means any agent can discover SkillGuard through the [x402 Bazaar](https://www.x402.org/), hit the evaluate endpoint, include a payment header, and get a safety classification. The facilitator (Coinbase CDP) verifies and settles the payment on-chain.
+
+### How It Works
+
+1. Agent sends `POST /api/v1/evaluate` without an API key
+2. SkillGuard returns `402 Payment Required` with a `PAYMENT-REQUIRED` header containing the price ($0.001 USDC), the wallet address, and the facilitator URL
+3. Agent signs a USDC payment on Base and re-sends the request with a `PAYMENT-SIGNATURE` header
+4. The x402 middleware forwards the payment to the facilitator for verification and settlement
+5. If payment is valid, the request goes through and the agent gets a **basic response** (classification + decision only — no scores, confidence, or reasoning)
+
+API key holders continue to get the **full response** with scores, confidence, and reasoning. The two auth methods coexist on the same endpoints.
+
+### Configuration
+
+| Env Var | Required | Example | Purpose |
+|---------|----------|---------|---------|
+| `SKILLGUARD_PAY_TO` | Yes (to enable x402) | `0x742d35Cc6634C0532925a3b844Bc9e7595f2bD1e` | Your Base wallet address to receive USDC payments |
+| `SKILLGUARD_FACILITATOR_URL` | No | `https://api.cdp.coinbase.com/platform/v2/x402` | Facilitator URL (defaults to CDP mainnet) |
+| `SKILLGUARD_API_KEY` | No | `sk-...` | API key auth (works alongside x402) |
+
+### Enable x402
+
+```bash
+SKILLGUARD_PAY_TO=0xYourBaseWalletAddress skillguard serve --bind 0.0.0.0:8080
+```
+
+Or with both API key and x402:
+
+```bash
+SKILLGUARD_PAY_TO=0xYourBaseWalletAddress \
+  SKILLGUARD_API_KEY=your-secret-key \
+  skillguard serve --bind 0.0.0.0:8080
+```
+
+### Pricing
+
+| Endpoint | Price |
+|----------|-------|
+| `POST /api/v1/evaluate` | $0.001 USDC (1000 base units) |
+| `POST /api/v1/evaluate/name` | $0.001 USDC (1000 base units) |
+| `GET /health`, `GET /stats`, `GET /` | Free |
+
+### Response Tiers
+
+**API key users** get the full response:
+
+```json
+{
+  "success": true,
+  "evaluation": {
+    "skill_name": "weather-helper",
+    "classification": "SAFE",
+    "decision": "allow",
+    "confidence": 0.85,
+    "scores": { "safe": 0.72, "caution": 0.18, "dangerous": 0.07, "malicious": 0.03 },
+    "reasoning": "No concerning patterns detected"
+  },
+  "processing_time_ms": 3
+}
+```
+
+**x402 payers** get a basic response:
+
+```json
+{
+  "success": true,
+  "basic_evaluation": {
+    "skill_name": "weather-helper",
+    "classification": "SAFE",
+    "decision": "allow"
+  },
+  "processing_time_ms": 3
+}
+```
+
+### Auth Flow Summary
+
+| Request has... | Behavior |
+|----------------|----------|
+| Valid API key | Pass through, full response |
+| Invalid API key | 401 Unauthorized |
+| No API key, valid x402 payment | Payment settled, basic response |
+| No API key, no payment | 402 Payment Required |
+| No API key, no `pay_to` configured | Endpoints open (backward compatible) |
+
+---
+
 ## Docker
 
 ```bash
@@ -367,7 +460,10 @@ The Dockerfile is a two-stage build: Rust 1.88 builder + Debian bookworm-slim ru
 2. Create a new Web Service on Render.
 3. Set the build command to `docker build -t skillguard .`
 4. Set the start command to `/app/skillguard serve --bind 0.0.0.0:8080 --rate-limit 30`
-5. Set `SKILLGUARD_API_KEY` in the environment variables.
+5. Set environment variables:
+   - `SKILLGUARD_API_KEY` — your API key for bearer token auth
+   - `SKILLGUARD_PAY_TO` — your Base wallet address to enable x402 payments
+   - `SKILLGUARD_FACILITATOR_URL` — (optional) facilitator URL, defaults to CDP mainnet
 6. Expose port 8080.
 
 ---

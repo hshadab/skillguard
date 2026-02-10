@@ -42,6 +42,12 @@ governor = "0.6"
 # HTTP client for ClawHub API
 reqwest = { version = "0.12", features = ["json"] }
 
+# x402 payment protocol
+x402-axum = "1"
+x402-types = "1"
+x402-chain-eip155 = { version = "1", features = ["server"] }
+alloy-primitives = "1.4"
+
 # ONNX model inference
 onnx-tracer = { git = "https://github.com/ICME-Lab/jolt-atlas", rev = "194ee927313f90f3827e86e885fb045742f3e971" }
 

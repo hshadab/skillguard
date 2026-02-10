@@ -3,13 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SkillGuard — Skill Safety Classifier</title>
+<title>SkillGuard — Agent Dashboard</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
   --bg-primary: #0a0e17;
-  --bg-secondary: #111827;
   --bg-card: #1a2236;
   --bg-input: #0f1629;
   --border: #2a3550;
@@ -17,7 +16,6 @@
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
   --accent: #3b82f6;
-  --accent-hover: #2563eb;
   --safe: #22c55e;
   --safe-bg: rgba(34,197,94,0.12);
   --caution: #eab308;
@@ -26,9 +24,6 @@
   --dangerous-bg: rgba(249,115,22,0.12);
   --malicious: #ef4444;
   --malicious-bg: rgba(239,68,68,0.12);
-  --allow: #22c55e;
-  --deny: #ef4444;
-  --flag: #eab308;
   --radius: 8px;
   --radius-lg: 12px;
 }
@@ -41,29 +36,13 @@ body {
   min-height: 100vh;
 }
 
-.container { max-width: 900px; margin: 0 auto; padding: 24px 16px; }
+.container { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
 
-/* Header */
 header { text-align: center; margin-bottom: 32px; }
 header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
 header h1 span { color: var(--accent); }
 header p { color: var(--text-secondary); margin-top: 4px; font-size: 0.95rem; }
 
-/* API Key bar */
-.api-key-bar {
-  display: flex; gap: 8px; align-items: center;
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 10px 14px; margin-bottom: 24px;
-}
-.api-key-bar label { color: var(--text-secondary); font-size: 0.85rem; white-space: nowrap; }
-.api-key-bar input {
-  flex: 1; background: var(--bg-input); border: 1px solid var(--border);
-  border-radius: 4px; padding: 6px 10px; color: var(--text-primary);
-  font-family: monospace; font-size: 0.85rem; outline: none;
-}
-.api-key-bar input:focus { border-color: var(--accent); }
-
-/* Cards */
 .card {
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--radius-lg); padding: 20px; margin-bottom: 20px;
@@ -73,7 +52,7 @@ header p { color: var(--text-secondary); margin-top: 4px; font-size: 0.95rem; }
   color: var(--text-muted); margin-bottom: 12px; font-weight: 600;
 }
 
-/* Status section */
+/* Status */
 .status-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
 .status-badge {
   display: inline-flex; align-items: center; gap: 6px;
@@ -81,95 +60,19 @@ header p { color: var(--text-secondary); margin-top: 4px; font-size: 0.95rem; }
 }
 .status-badge.online { background: var(--safe-bg); color: var(--safe); }
 .status-badge.offline { background: var(--malicious-bg); color: var(--malicious); }
-.status-badge .dot {
-  width: 8px; height: 8px; border-radius: 50%; background: currentColor;
-}
+.status-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .status-meta { color: var(--text-secondary); font-size: 0.82rem; }
 .status-meta span { margin-right: 16px; }
 .status-meta code { color: var(--text-primary); font-size: 0.8rem; }
 
-/* Tabs */
-.tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
-.tab {
-  padding: 8px 16px; cursor: pointer; font-size: 0.88rem;
-  color: var(--text-secondary); border-bottom: 2px solid transparent;
-  background: none; border-top: none; border-left: none; border-right: none;
-  font-family: inherit; transition: color 0.15s;
+/* x402 info */
+.x402-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
 }
-.tab:hover { color: var(--text-primary); }
-.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-
-/* Form elements */
-textarea, input[type="text"] {
-  width: 100%; background: var(--bg-input); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 10px 12px; color: var(--text-primary);
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  font-size: 0.85rem; resize: vertical; outline: none;
-}
-textarea:focus, input[type="text"]:focus { border-color: var(--accent); }
-textarea { min-height: 160px; }
-
-.form-row { display: flex; gap: 10px; margin-bottom: 12px; }
-.form-row input { flex: 1; }
-
-.btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 10px 20px; border-radius: var(--radius);
-  font-size: 0.9rem; font-weight: 600; cursor: pointer;
-  border: none; transition: background 0.15s;
-  font-family: inherit;
-}
-.btn-primary { background: var(--accent); color: #fff; }
-.btn-primary:hover { background: var(--accent-hover); }
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.form-hint { color: var(--text-muted); font-size: 0.78rem; margin-top: 6px; }
-
-/* Results */
-.result-panel { display: none; }
-.result-panel.visible { display: block; }
-
-.result-header { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
-.badge {
-  display: inline-block; padding: 4px 14px; border-radius: 20px;
-  font-size: 0.82rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
-}
-.badge-safe { background: var(--safe-bg); color: var(--safe); }
-.badge-caution { background: var(--caution-bg); color: var(--caution); }
-.badge-dangerous { background: var(--dangerous-bg); color: var(--dangerous); }
-.badge-malicious { background: var(--malicious-bg); color: var(--malicious); }
-.badge-allow { background: var(--safe-bg); color: var(--allow); }
-.badge-deny { background: var(--malicious-bg); color: var(--deny); }
-.badge-flag { background: var(--caution-bg); color: var(--flag); }
-
-.confidence-row { margin-bottom: 14px; }
-.confidence-label { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px; }
-.bar-track {
-  height: 8px; background: var(--bg-input); border-radius: 4px; overflow: hidden;
-}
-.bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
-
-.score-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
-.score-item label {
-  display: flex; justify-content: space-between;
-  font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 3px;
-}
-.score-item label span:last-child { color: var(--text-primary); }
-
-.reasoning {
-  background: var(--bg-input); border-radius: var(--radius);
-  padding: 12px 14px; font-size: 0.85rem; color: var(--text-secondary);
-  line-height: 1.5; white-space: pre-wrap;
-}
-.processing-time { color: var(--text-muted); font-size: 0.78rem; margin-top: 8px; }
-
-/* Error display */
-.error-box {
-  background: var(--malicious-bg); border: 1px solid rgba(239,68,68,0.3);
-  border-radius: var(--radius); padding: 12px 14px; color: var(--malicious);
-  font-size: 0.85rem; display: none;
-}
-.error-box.visible { display: block; }
+.x402-item { background: var(--bg-input); border-radius: var(--radius); padding: 12px 14px; }
+.x402-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+.x402-value { font-size: 0.9rem; color: var(--text-primary); font-family: 'SF Mono', 'Fira Code', monospace; word-break: break-all; }
+.x402-value.highlight { color: var(--safe); font-weight: 600; }
 
 /* Stats grid */
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
@@ -180,7 +83,28 @@ textarea { min-height: 160px; }
 .stat-value { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); }
 .stat-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
 
-/* Footer */
+/* Classification breakdown bars */
+.breakdown { margin-top: 4px; }
+.breakdown-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+}
+.breakdown-label { width: 80px; font-size: 0.8rem; color: var(--text-secondary); text-align: right; }
+.breakdown-track { flex: 1; height: 20px; background: var(--bg-primary); border-radius: 4px; overflow: hidden; position: relative; }
+.breakdown-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; min-width: 0; }
+.breakdown-count { width: 50px; font-size: 0.82rem; color: var(--text-primary); font-family: monospace; }
+
+/* Endpoint table */
+.endpoint-table { width: 100%; border-collapse: collapse; }
+.endpoint-table th, .endpoint-table td {
+  text-align: left; padding: 8px 12px; font-size: 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+.endpoint-table th { color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.endpoint-table td { color: var(--text-primary); }
+.endpoint-table td code { font-size: 0.82rem; color: var(--accent); }
+.endpoint-table td.price { color: var(--safe); font-family: monospace; }
+.endpoint-table td.free { color: var(--text-muted); }
+
 footer {
   text-align: center; color: var(--text-muted); font-size: 0.78rem;
   margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
@@ -188,180 +112,143 @@ footer {
 footer a { color: var(--accent); text-decoration: none; }
 footer a:hover { text-decoration: underline; }
 
-/* Loading spinner */
-.spinner {
-  display: inline-block; width: 16px; height: 16px;
-  border: 2px solid var(--border); border-top-color: var(--accent);
-  border-radius: 50%; animation: spin 0.6s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
 @media (max-width: 600px) {
-  .score-bars { grid-template-columns: 1fr; }
+  .x402-grid { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
-  .form-row { flex-direction: column; }
 }
 </style>
 </head>
 <body>
 <div class="container">
 
-  <!-- Header -->
   <header>
     <h1><span>Skill</span>Guard</h1>
-    <p>Standalone skill safety classifier for OpenClaw / ClawHub skills</p>
+    <p>Agent safety classifier &mdash; pay-per-request via x402 on Base</p>
   </header>
 
-  <!-- API Key -->
-  <div class="api-key-bar">
-    <label for="api-key">API Key</label>
-    <input type="password" id="api-key" placeholder="Enter your API key (if required)" autocomplete="off">
-  </div>
-
   <!-- Server Status -->
-  <div class="card" id="status-card">
-    <div class="card-title">Server Status</div>
+  <div class="card">
+    <div class="card-title">Service Status</div>
     <div class="status-row">
       <span class="status-badge offline" id="status-badge"><span class="dot"></span> <span id="status-text">Checking...</span></span>
     </div>
     <div class="status-meta" id="status-meta" style="margin-top:10px"></div>
   </div>
 
-  <!-- Evaluate -->
+  <!-- x402 Payment Info -->
   <div class="card">
-    <div class="card-title">Evaluate Skill</div>
-    <div class="tabs">
-      <button class="tab active" data-tab="paste">Paste SKILL.md</button>
-      <button class="tab" data-tab="name">Lookup by Name</button>
-    </div>
-
-    <!-- Paste tab -->
-    <div id="tab-paste">
-      <textarea id="skill-input" placeholder="Paste a SKILL.md file or a full JSON evaluate request here..."></textarea>
-      <div class="form-hint">Plain text is auto-wrapped into a skill structure. JSON objects with a &quot;skill&quot; key are sent directly.</div>
-      <div style="margin-top:12px">
-        <button class="btn btn-primary" id="btn-evaluate" onclick="evaluatePaste()">Evaluate</button>
+    <div class="card-title">x402 Payment</div>
+    <div class="x402-grid">
+      <div class="x402-item">
+        <div class="x402-label">Price per evaluation</div>
+        <div class="x402-value highlight">$0.001 USDC</div>
       </div>
-    </div>
-
-    <!-- Name tab -->
-    <div id="tab-name" style="display:none">
-      <div class="form-row">
-        <input type="text" id="skill-name" placeholder="Skill name (e.g. weather-helper)">
-        <input type="text" id="skill-version" placeholder="Version (optional)">
+      <div class="x402-item">
+        <div class="x402-label">Network</div>
+        <div class="x402-value">Base (eip155:8453)</div>
       </div>
-      <button class="btn btn-primary" id="btn-lookup" onclick="evaluateByName()">Lookup &amp; Evaluate</button>
+      <div class="x402-item">
+        <div class="x402-label">Protocol</div>
+        <div class="x402-value">HTTP 402 / x402 v2</div>
+      </div>
+      <div class="x402-item">
+        <div class="x402-label">Facilitator</div>
+        <div class="x402-value">CDP Mainnet</div>
+      </div>
     </div>
   </div>
 
-  <!-- Error -->
-  <div class="error-box" id="error-box"></div>
-
-  <!-- Results -->
-  <div class="card result-panel" id="result-panel">
-    <div class="card-title">Results</div>
-    <div class="result-header">
-      <span class="badge" id="res-classification"></span>
-      <span class="badge" id="res-decision"></span>
-      <span style="color:var(--text-secondary);font-size:0.85rem" id="res-skill-name"></span>
-    </div>
-
-    <div class="confidence-row">
-      <div class="confidence-label">Confidence: <strong id="res-confidence-val"></strong></div>
-      <div class="bar-track"><div class="bar-fill" id="res-confidence-bar" style="width:0%;background:var(--accent)"></div></div>
-    </div>
-
-    <div class="score-bars" id="score-bars">
-      <div class="score-item">
-        <label><span>Safe</span><span id="score-safe">0%</span></label>
-        <div class="bar-track"><div class="bar-fill" id="bar-safe" style="width:0%;background:var(--safe)"></div></div>
-      </div>
-      <div class="score-item">
-        <label><span>Caution</span><span id="score-caution">0%</span></label>
-        <div class="bar-track"><div class="bar-fill" id="bar-caution" style="width:0%;background:var(--caution)"></div></div>
-      </div>
-      <div class="score-item">
-        <label><span>Dangerous</span><span id="score-dangerous">0%</span></label>
-        <div class="bar-track"><div class="bar-fill" id="bar-dangerous" style="width:0%;background:var(--dangerous)"></div></div>
-      </div>
-      <div class="score-item">
-        <label><span>Malicious</span><span id="score-malicious">0%</span></label>
-        <div class="bar-track"><div class="bar-fill" id="bar-malicious" style="width:0%;background:var(--malicious)"></div></div>
-      </div>
-    </div>
-
-    <div class="reasoning" id="res-reasoning"></div>
-    <div class="processing-time" id="res-time"></div>
+  <!-- Endpoints -->
+  <div class="card">
+    <div class="card-title">Endpoints</div>
+    <table class="endpoint-table">
+      <thead>
+        <tr><th>Method</th><th>Path</th><th>Auth</th><th>Price</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>POST</td><td><code>/api/v1/evaluate</code></td><td>API key or x402</td><td class="price">$0.001</td></tr>
+        <tr><td>POST</td><td><code>/api/v1/evaluate/name</code></td><td>API key or x402</td><td class="price">$0.001</td></tr>
+        <tr><td>GET</td><td><code>/health</code></td><td>None</td><td class="free">Free</td></tr>
+        <tr><td>GET</td><td><code>/stats</code></td><td>None</td><td class="free">Free</td></tr>
+      </tbody>
+    </table>
   </div>
 
-  <!-- Stats -->
-  <div class="card" id="stats-card">
-    <div class="card-title">Usage Statistics</div>
-    <div class="stats-grid" id="stats-grid">
+  <!-- Live Stats -->
+  <div class="card">
+    <div class="card-title">Live Statistics</div>
+    <div class="stats-grid">
       <div class="stat-card"><div class="stat-value" id="st-total">-</div><div class="stat-label">Total Requests</div></div>
       <div class="stat-card"><div class="stat-value" id="st-errors">-</div><div class="stat-label">Errors</div></div>
-      <div class="stat-card"><div class="stat-value" id="st-safe">-</div><div class="stat-label">Safe</div></div>
-      <div class="stat-card"><div class="stat-value" id="st-caution">-</div><div class="stat-label">Caution</div></div>
-      <div class="stat-card"><div class="stat-value" id="st-dangerous">-</div><div class="stat-label">Dangerous</div></div>
-      <div class="stat-card"><div class="stat-value" id="st-malicious">-</div><div class="stat-label">Malicious</div></div>
-      <div class="stat-card"><div class="stat-value" id="st-allow">-</div><div class="stat-label">Allow</div></div>
-      <div class="stat-card"><div class="stat-value" id="st-deny">-</div><div class="stat-label">Deny</div></div>
-      <div class="stat-card"><div class="stat-value" id="st-flag">-</div><div class="stat-label">Flag</div></div>
       <div class="stat-card"><div class="stat-value" id="st-ep-eval">-</div><div class="stat-label">Evaluate</div></div>
       <div class="stat-card"><div class="stat-value" id="st-ep-name">-</div><div class="stat-label">By Name</div></div>
-      <div class="stat-card"><div class="stat-value" id="st-ep-stats">-</div><div class="stat-label">Stats</div></div>
     </div>
   </div>
 
-  <!-- Footer -->
+  <!-- Classification Breakdown -->
+  <div class="card">
+    <div class="card-title">Classifications</div>
+    <div class="breakdown" id="cls-breakdown">
+      <div class="breakdown-row">
+        <div class="breakdown-label">Safe</div>
+        <div class="breakdown-track"><div class="breakdown-fill" id="bar-safe" style="width:0%;background:var(--safe)"></div></div>
+        <div class="breakdown-count" id="ct-safe">0</div>
+      </div>
+      <div class="breakdown-row">
+        <div class="breakdown-label">Caution</div>
+        <div class="breakdown-track"><div class="breakdown-fill" id="bar-caution" style="width:0%;background:var(--caution)"></div></div>
+        <div class="breakdown-count" id="ct-caution">0</div>
+      </div>
+      <div class="breakdown-row">
+        <div class="breakdown-label">Dangerous</div>
+        <div class="breakdown-track"><div class="breakdown-fill" id="bar-dangerous" style="width:0%;background:var(--dangerous)"></div></div>
+        <div class="breakdown-count" id="ct-dangerous">0</div>
+      </div>
+      <div class="breakdown-row">
+        <div class="breakdown-label">Malicious</div>
+        <div class="breakdown-track"><div class="breakdown-fill" id="bar-malicious" style="width:0%;background:var(--malicious)"></div></div>
+        <div class="breakdown-count" id="ct-malicious">0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Decisions -->
+  <div class="card">
+    <div class="card-title">Decisions</div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-value" id="st-allow" style="color:var(--safe)">-</div><div class="stat-label">Allow</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-deny" style="color:var(--malicious)">-</div><div class="stat-label">Deny</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-flag" style="color:var(--caution)">-</div><div class="stat-label">Flag</div></div>
+    </div>
+  </div>
+
   <footer>
     <span id="footer-version">SkillGuard</span> &middot;
-    <a href="https://github.com/hshadab/skillguard" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/hshadab/skillguard" target="_blank" rel="noopener">GitHub</a> &middot;
+    <a href="https://www.x402.org/" target="_blank" rel="noopener">x402 Protocol</a>
   </footer>
 
 </div>
 
 <script>
-// ---- Helpers ----
 function $(id) { return document.getElementById(id); }
 
-function apiKey() { return $('api-key').value.trim(); }
-
-function authHeaders() {
-  const key = apiKey();
-  const h = { 'Content-Type': 'application/json' };
-  if (key) h['Authorization'] = 'Bearer ' + key;
-  return h;
+function escHtml(str) {
+  var d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
 }
 
-function showError(msg) {
-  const el = $('error-box');
-  el.textContent = msg;
-  el.classList.add('visible');
+function formatUptime(s) {
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+  var h = Math.floor(s / 3600);
+  var m = Math.floor((s % 3600) / 60);
+  if (h < 24) return h + 'h ' + m + 'm';
+  var days = Math.floor(h / 24);
+  return days + 'd ' + (h % 24) + 'h';
 }
-function hideError() { $('error-box').classList.remove('visible'); }
 
-// Persist API key in sessionStorage
-$('api-key').addEventListener('input', function() {
-  sessionStorage.setItem('sg_api_key', this.value);
-});
-(function() {
-  const saved = sessionStorage.getItem('sg_api_key');
-  if (saved) $('api-key').value = saved;
-})();
-
-// ---- Tabs ----
-document.querySelectorAll('.tab').forEach(function(tab) {
-  tab.addEventListener('click', function() {
-    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
-    tab.classList.add('active');
-    var target = tab.getAttribute('data-tab');
-    $('tab-paste').style.display = target === 'paste' ? '' : 'none';
-    $('tab-name').style.display = target === 'name' ? '' : 'none';
-  });
-});
-
-// ---- Health check ----
 function checkHealth() {
   fetch('/health')
     .then(function(r) { return r.json(); })
@@ -383,172 +270,39 @@ function checkHealth() {
     });
 }
 
-function formatUptime(s) {
-  if (s < 60) return s + 's';
-  if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
-  var h = Math.floor(s / 3600);
-  var m = Math.floor((s % 3600) / 60);
-  return h + 'h ' + m + 'm';
-}
-
-function escHtml(str) {
-  var d = document.createElement('div');
-  d.textContent = str;
-  return d.innerHTML;
-}
-
-checkHealth();
-setInterval(checkHealth, 30000);
-
-// ---- Stats ----
 function loadStats() {
   fetch('/stats')
     .then(function(r) { return r.json(); })
     .then(function(d) {
       $('st-total').textContent = d.requests.total;
       $('st-errors').textContent = d.requests.errors;
-      $('st-safe').textContent = d.classifications.safe;
-      $('st-caution').textContent = d.classifications.caution;
-      $('st-dangerous').textContent = d.classifications.dangerous;
-      $('st-malicious').textContent = d.classifications.malicious;
+      $('st-ep-eval').textContent = d.endpoints.evaluate;
+      $('st-ep-name').textContent = d.endpoints.evaluate_by_name;
       $('st-allow').textContent = d.decisions.allow;
       $('st-deny').textContent = d.decisions.deny;
       $('st-flag').textContent = d.decisions.flag;
-      $('st-ep-eval').textContent = d.endpoints.evaluate;
-      $('st-ep-name').textContent = d.endpoints.evaluate_by_name;
-      $('st-ep-stats').textContent = d.endpoints.stats;
+
+      var cls = d.classifications;
+      var total = cls.safe + cls.caution + cls.dangerous + cls.malicious;
+      var max = Math.max(cls.safe, cls.caution, cls.dangerous, cls.malicious, 1);
+
+      $('ct-safe').textContent = cls.safe;
+      $('ct-caution').textContent = cls.caution;
+      $('ct-dangerous').textContent = cls.dangerous;
+      $('ct-malicious').textContent = cls.malicious;
+
+      $('bar-safe').style.width = (cls.safe / max * 100) + '%';
+      $('bar-caution').style.width = (cls.caution / max * 100) + '%';
+      $('bar-dangerous').style.width = (cls.dangerous / max * 100) + '%';
+      $('bar-malicious').style.width = (cls.malicious / max * 100) + '%';
     })
     .catch(function() {});
 }
+
+checkHealth();
 loadStats();
-setInterval(loadStats, 30000);
-
-// ---- Evaluate (paste) ----
-function evaluatePaste() {
-  hideError();
-  var raw = $('skill-input').value.trim();
-  if (!raw) { showError('Please paste a SKILL.md or JSON payload.'); return; }
-
-  var payload;
-  try {
-    var parsed = JSON.parse(raw);
-    if (parsed.skill) {
-      payload = parsed;
-    } else if (parsed.name && parsed.skill_md) {
-      payload = { skill: parsed };
-    } else {
-      payload = { skill: parsed };
-    }
-  } catch (e) {
-    // Treat as plain SKILL.md text
-    payload = {
-      skill: {
-        name: 'pasted-skill',
-        version: '0.0.0',
-        author: 'unknown',
-        description: '',
-        skill_md: raw,
-        scripts: [],
-        metadata: {},
-        files: []
-      }
-    };
-  }
-
-  submitEvaluate('/api/v1/evaluate', payload);
-}
-
-// ---- Evaluate (by name) ----
-function evaluateByName() {
-  hideError();
-  var name = $('skill-name').value.trim();
-  if (!name) { showError('Please enter a skill name.'); return; }
-
-  var payload = { skill: name };
-  var ver = $('skill-version').value.trim();
-  if (ver) payload.version = ver;
-
-  submitEvaluate('/api/v1/evaluate/name', payload);
-}
-
-// ---- Submit ----
-function submitEvaluate(url, body) {
-  var btn = url.indexOf('/name') > -1 ? $('btn-lookup') : $('btn-evaluate');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Evaluating...';
-
-  fetch(url, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(body)
-  })
-    .then(function(r) { return r.json().then(function(d) { return { status: r.status, data: d }; }); })
-    .then(function(res) {
-      btn.disabled = false;
-      btn.textContent = url.indexOf('/name') > -1 ? 'Lookup & Evaluate' : 'Evaluate';
-      if (res.status === 401) {
-        showError(res.data.error || 'Unauthorized. Check your API key.');
-        return;
-      }
-      if (!res.data.success) {
-        showError(res.data.error || 'Evaluation failed.');
-        return;
-      }
-      showResults(res.data);
-      loadStats();
-    })
-    .catch(function(err) {
-      btn.disabled = false;
-      btn.textContent = url.indexOf('/name') > -1 ? 'Lookup & Evaluate' : 'Evaluate';
-      showError('Request failed: ' + err.message);
-    });
-}
-
-// ---- Display results ----
-function showResults(data) {
-  var ev = data.evaluation;
-  var panel = $('result-panel');
-  panel.classList.add('visible');
-
-  // Classification badge
-  var cls = ev.classification.toUpperCase();
-  var clsBadge = $('res-classification');
-  clsBadge.textContent = cls;
-  clsBadge.className = 'badge badge-' + cls.toLowerCase();
-
-  // Decision badge
-  var dec = ev.decision.toUpperCase();
-  var decBadge = $('res-decision');
-  decBadge.textContent = dec;
-  decBadge.className = 'badge badge-' + dec.toLowerCase();
-
-  // Skill name
-  $('res-skill-name').textContent = ev.skill_name;
-
-  // Confidence
-  var confPct = (ev.confidence * 100).toFixed(1);
-  $('res-confidence-val').textContent = confPct + '%';
-  $('res-confidence-bar').style.width = confPct + '%';
-
-  // Score bars
-  var scores = ev.scores;
-  setScore('safe', scores.safe);
-  setScore('caution', scores.caution);
-  setScore('dangerous', scores.dangerous);
-  setScore('malicious', scores.malicious);
-
-  // Reasoning
-  $('res-reasoning').textContent = ev.reasoning;
-
-  // Processing time
-  $('res-time').textContent = 'Processed in ' + data.processing_time_ms + 'ms';
-}
-
-function setScore(name, value) {
-  var pct = (value * 100).toFixed(1);
-  $('score-' + name).textContent = pct + '%';
-  $('bar-' + name).style.width = pct + '%';
-}
+setInterval(checkHealth, 30000);
+setInterval(loadStats, 10000);
 </script>
 </body>
 </html>

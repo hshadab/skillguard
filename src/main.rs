@@ -114,6 +114,8 @@ fn cmd_serve(
     access_log: String,
     max_log_bytes: u64,
     api_key: Option<String>,
+    pay_to: Option<String>,
+    facilitator_url: String,
 ) -> Result<()> {
     use skillguard::server::{run_server, ServerConfig};
 
@@ -127,6 +129,8 @@ fn cmd_serve(
         access_log_path: access_log,
         max_access_log_bytes: max_log_bytes,
         api_key: api_key.clone(),
+        pay_to: pay_to.clone(),
+        facilitator_url,
     };
 
     info!("Starting SkillGuard classifier service");
@@ -134,6 +138,9 @@ fn cmd_serve(
     info!(model_hash = %skillguard::model_hash());
     if api_key.is_some() {
         info!("API key authentication enabled on /api/v1/* endpoints");
+    }
+    if let Some(ref addr) = pay_to {
+        info!(pay_to = %addr, "x402 payment enabled ($0.001 USDC per evaluation on Base)");
     }
 
     let rt = tokio::runtime::Runtime::new()?;
@@ -305,6 +312,9 @@ fn main() {
     let cli = Cli::parse();
 
     let api_key = std::env::var("SKILLGUARD_API_KEY").ok();
+    let pay_to = std::env::var("SKILLGUARD_PAY_TO").ok();
+    let facilitator_url = std::env::var("SKILLGUARD_FACILITATOR_URL")
+        .unwrap_or_else(|_| "https://api.cdp.coinbase.com/platform/v2/x402".to_string());
 
     let result = match cli.command {
         Commands::Serve {
@@ -312,7 +322,15 @@ fn main() {
             rate_limit,
             access_log,
             max_log_bytes,
-        } => cmd_serve(bind, rate_limit, access_log, max_log_bytes, api_key),
+        } => cmd_serve(
+            bind,
+            rate_limit,
+            access_log,
+            max_log_bytes,
+            api_key,
+            pay_to,
+            facilitator_url,
+        ),
         Commands::Check {
             input,
             vt_report,

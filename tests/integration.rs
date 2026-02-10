@@ -21,12 +21,21 @@ async fn spawn_test_server() -> (SocketAddr, Arc<ServerState>) {
 }
 
 async fn spawn_test_server_with_config(api_key: Option<String>) -> (SocketAddr, Arc<ServerState>) {
+    spawn_test_server_full(api_key, None).await
+}
+
+async fn spawn_test_server_full(
+    api_key: Option<String>,
+    pay_to: Option<String>,
+) -> (SocketAddr, Arc<ServerState>) {
     let config = ServerConfig {
         bind_addr: "127.0.0.1:0".parse().unwrap(),
         rate_limit_rpm: 0, // no rate limiting in tests
         access_log_path: "/dev/null".to_string(),
         max_access_log_bytes: 0,
         api_key,
+        pay_to,
+        facilitator_url: "https://api.cdp.coinbase.com/platform/v2/x402".to_string(),
     };
     let state = Arc::new(ServerState::new(config));
 
@@ -83,12 +92,34 @@ async fn health_handler(
 async fn evaluate_handler(
     axum::extract::State(_state): axum::extract::State<Arc<ServerState>>,
     axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<SocketAddr>,
-    axum::Json(request): axum::Json<EvaluateRequest>,
+    request: axum::extract::Request,
 ) -> impl axum::response::IntoResponse {
+    use skillguard::server::AuthMethod;
+
     let start = std::time::Instant::now();
     let _client_ip = addr.ip();
+    let auth_method = request
+        .extensions()
+        .get::<AuthMethod>()
+        .copied()
+        .unwrap_or(AuthMethod::Open);
 
-    let features = SkillFeatures::extract(&request.skill, request.vt_report.as_ref());
+    let body = request.into_body();
+    let bytes = axum::body::to_bytes(body, 1024 * 1024).await.unwrap();
+    let eval_request: EvaluateRequest = match serde_json::from_slice(&bytes) {
+        Ok(r) => r,
+        Err(e) => {
+            return axum::Json(EvaluateResponse {
+                success: false,
+                error: Some(format!("Invalid JSON: {}", e)),
+                evaluation: None,
+                basic_evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            });
+        }
+    };
+
+    let features = SkillFeatures::extract(&eval_request.skill, eval_request.vt_report.as_ref());
     let feature_vec = features.to_normalized_vec();
 
     let result = match skillguard::classify(&feature_vec) {
@@ -98,6 +129,7 @@ async fn evaluate_handler(
                 success: false,
                 error: Some(format!("Classification failed: {}", e)),
                 evaluation: None,
+                basic_evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
             });
         }
@@ -108,19 +140,33 @@ async fn evaluate_handler(
     let (decision, reasoning) =
         skillguard::skill::derive_decision(classification, &scores.to_array());
 
-    axum::Json(EvaluateResponse {
-        success: true,
-        error: None,
-        evaluation: Some(EvaluationResult {
-            skill_name: request.skill.name.clone(),
-            classification: classification.as_str().to_string(),
-            decision: decision.as_str().to_string(),
-            confidence,
-            scores,
-            reasoning,
+    match auth_method {
+        AuthMethod::X402 => axum::Json(EvaluateResponse {
+            success: true,
+            error: None,
+            evaluation: None,
+            basic_evaluation: Some(BasicEvaluationResult {
+                skill_name: eval_request.skill.name.clone(),
+                classification: classification.as_str().to_string(),
+                decision: decision.as_str().to_string(),
+            }),
+            processing_time_ms: start.elapsed().as_millis() as u64,
         }),
-        processing_time_ms: start.elapsed().as_millis() as u64,
-    })
+        _ => axum::Json(EvaluateResponse {
+            success: true,
+            error: None,
+            evaluation: Some(EvaluationResult {
+                skill_name: eval_request.skill.name.clone(),
+                classification: classification.as_str().to_string(),
+                decision: decision.as_str().to_string(),
+                confidence,
+                scores,
+                reasoning,
+            }),
+            basic_evaluation: None,
+            processing_time_ms: start.elapsed().as_millis() as u64,
+        }),
+    }
 }
 
 async fn stats_handler(
@@ -284,8 +330,11 @@ async fn test_evaluate_invalid_json_returns_error() {
         .await
         .unwrap();
 
-    // Axum returns 400 for JSON parse errors
-    assert_eq!(resp.status(), 400);
+    // Handler returns 200 with success=false for invalid JSON
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["success"], false);
+    assert!(body["error"].as_str().unwrap().contains("Invalid JSON"));
 }
 
 // ---------------------------------------------------------------------------
@@ -508,4 +557,104 @@ async fn test_no_api_key_all_endpoints_open() {
     let client = reqwest::Client::new();
     let resp = client.post(&url).json(&skill).send().await.unwrap();
     assert_eq!(resp.status(), 200);
+}
+
+// ---------------------------------------------------------------------------
+// x402 tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_x402_health_and_stats_remain_free() {
+    // With both api_key and pay_to set, health and stats should still be free
+    let (addr, _state) = spawn_test_server_full(
+        Some("secret-key-123".to_string()),
+        Some("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07".to_string()),
+    )
+    .await;
+
+    let health_url = format!("http://{}/health", addr);
+    let resp = reqwest::get(&health_url).await.unwrap();
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["status"], "ok");
+
+    let stats_url = format!("http://{}/stats", addr);
+    let resp = reqwest::get(&stats_url).await.unwrap();
+    assert_eq!(resp.status(), 200);
+}
+
+#[tokio::test]
+async fn test_x402_api_key_bypasses_payment() {
+    // When pay_to is set AND a valid API key is provided, the request should
+    // go through with a full response (evaluation field present)
+    let (addr, _state) = spawn_test_server_full(
+        Some("secret-key-123".to_string()),
+        Some("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07".to_string()),
+    )
+    .await;
+    let url = format!("http://{}/api/v1/evaluate", addr);
+
+    let skill = serde_json::json!({
+        "skill": {
+            "name": "hello-world",
+            "version": "1.0.0",
+            "author": "trusted",
+            "description": "test",
+            "skill_md": "# Hello",
+            "scripts": [],
+            "files": []
+        }
+    });
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&url)
+        .header("Authorization", "Bearer secret-key-123")
+        .json(&skill)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["success"], true);
+    // Full response should have evaluation (not basic_evaluation)
+    assert!(body["evaluation"].is_object(), "expected full evaluation");
+    assert!(
+        body["basic_evaluation"].is_null(),
+        "should not have basic_evaluation for API key auth"
+    );
+}
+
+#[tokio::test]
+async fn test_x402_invalid_api_key_returns_401() {
+    // Even with x402 enabled, an invalid API key should return 401
+    let (addr, _state) = spawn_test_server_full(
+        Some("secret-key-123".to_string()),
+        Some("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07".to_string()),
+    )
+    .await;
+    let url = format!("http://{}/api/v1/evaluate", addr);
+
+    let skill = serde_json::json!({
+        "skill": {
+            "name": "test",
+            "version": "1.0.0",
+            "author": "test",
+            "description": "test",
+            "skill_md": "# Test",
+            "scripts": [],
+            "files": []
+        }
+    });
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&url)
+        .header("Authorization", "Bearer wrong-key")
+        .json(&skill)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 401);
 }

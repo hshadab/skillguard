@@ -47,6 +47,11 @@ pub struct ServerConfig {
     /// Optional API key for bearer token authentication on /api/v1/* endpoints.
     /// If None, auth is disabled (backward compatible).
     pub api_key: Option<String>,
+    /// Wallet address to receive x402 USDC payments on Base.
+    /// If None, x402 payment is disabled (API key only).
+    pub pay_to: Option<String>,
+    /// x402 facilitator URL (defaults to CDP mainnet facilitator).
+    pub facilitator_url: String,
 }
 
 impl Default for ServerConfig {
@@ -59,8 +64,21 @@ impl Default for ServerConfig {
             access_log_path: "skillguard-access.jsonl".to_string(),
             max_access_log_bytes: 50 * 1024 * 1024, // 50 MB
             api_key: None,
+            pay_to: None,
+            facilitator_url: "https://api.cdp.coinbase.com/platform/v2/x402".to_string(),
         }
     }
+}
+
+/// How the request was authenticated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthMethod {
+    /// Authenticated via API key — full response.
+    ApiKey,
+    /// Authenticated via x402 payment — basic response only.
+    X402,
+    /// No authentication configured (server has no api_key and no pay_to).
+    Open,
 }
 
 // ---------------------------------------------------------------------------
@@ -98,6 +116,14 @@ pub struct EvaluationResult {
     pub reasoning: String,
 }
 
+/// Stripped-down evaluation result for x402 payers.
+#[derive(Debug, Serialize)]
+pub struct BasicEvaluationResult {
+    pub skill_name: String,
+    pub classification: String,
+    pub decision: String,
+}
+
 /// Top-level response
 #[derive(Debug, Serialize)]
 pub struct EvaluateResponse {
@@ -106,6 +132,8 @@ pub struct EvaluateResponse {
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub evaluation: Option<EvaluationResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub basic_evaluation: Option<BasicEvaluationResult>,
     pub processing_time_ms: u64,
 }
 
@@ -372,6 +400,7 @@ fn classify_and_respond(
     skill_name: String,
     start: Instant,
     endpoint: &str,
+    auth_method: AuthMethod,
 ) -> EvaluateResponse {
     let feature_vec = features.to_normalized_vec();
 
@@ -383,6 +412,7 @@ fn classify_and_respond(
                 success: false,
                 error: Some(format!("Classification failed: {}", e)),
                 evaluation: None,
+                basic_evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
             };
         }
@@ -403,18 +433,32 @@ fn classify_and_respond(
         processing_time_ms,
     );
 
-    EvaluateResponse {
-        success: true,
-        error: None,
-        evaluation: Some(EvaluationResult {
-            skill_name,
-            classification: classification.as_str().to_string(),
-            decision: decision.as_str().to_string(),
-            confidence,
-            scores,
-            reasoning,
-        }),
-        processing_time_ms,
+    match auth_method {
+        AuthMethod::X402 => EvaluateResponse {
+            success: true,
+            error: None,
+            evaluation: None,
+            basic_evaluation: Some(BasicEvaluationResult {
+                skill_name,
+                classification: classification.as_str().to_string(),
+                decision: decision.as_str().to_string(),
+            }),
+            processing_time_ms,
+        },
+        _ => EvaluateResponse {
+            success: true,
+            error: None,
+            evaluation: Some(EvaluationResult {
+                skill_name,
+                classification: classification.as_str().to_string(),
+                decision: decision.as_str().to_string(),
+                confidence,
+                scores,
+                reasoning,
+            }),
+            basic_evaluation: None,
+            processing_time_ms,
+        },
     }
 }
 
@@ -433,9 +477,10 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
     let rate_limit_rpm = config.rate_limit_rpm;
     let bind_addr = config.bind_addr;
     let access_log = config.access_log_path.clone();
+    let x402_enabled = config.pay_to.is_some();
     let state = Arc::new(ServerState::new(config));
 
-    // API routes that require authentication (when api_key is set)
+    // Build API routes with auth middleware, optionally wrapped in x402 layer
     let api_routes = Router::new()
         .route("/api/v1/evaluate", post(evaluate_handler))
         .route("/api/v1/evaluate/name", post(evaluate_by_name_handler))
@@ -443,6 +488,52 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
             state.clone(),
             auth_middleware,
         ));
+
+    // Wrap API routes in x402 payment layer if pay_to is configured
+    let api_routes = if let Some(ref pay_to_addr) = state.config.pay_to {
+        use alloy_primitives::Address;
+        use x402_axum::X402Middleware;
+        use x402_chain_eip155::{KnownNetworkEip155, V2Eip155Exact};
+        use x402_types::networks::USDC;
+
+        let x402 = X402Middleware::try_from(state.config.facilitator_url.as_str())
+            .expect("Failed to init x402 middleware");
+
+        let pay_to: Address = pay_to_addr
+            .parse()
+            .expect("Invalid SKILLGUARD_PAY_TO address");
+
+        // Use dynamic pricing: bypass payment (empty vec) when a valid API key is present,
+        // otherwise require $0.001 USDC on Base mainnet.
+        let api_key_for_closure = state.config.api_key.clone();
+        api_routes.layer(x402.with_dynamic_price(move |headers, _uri, _base_url| {
+            let has_valid_api_key = if let Some(ref expected_key) = api_key_for_closure {
+                headers
+                    .get("authorization")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|h| h.strip_prefix("Bearer "))
+                    .map(|t| t.trim() == expected_key)
+                    .unwrap_or(false)
+            } else {
+                false
+            };
+
+            async move {
+                if has_valid_api_key {
+                    // API key user: bypass x402 payment
+                    vec![]
+                } else {
+                    // No API key: require x402 payment ($0.001 USDC = 1000 base units, 6 decimals)
+                    vec![V2Eip155Exact::price_tag(
+                        pay_to,
+                        USDC::base().amount(1000u64),
+                    )]
+                }
+            }
+        }))
+    } else {
+        api_routes
+    };
 
     // Public routes (no auth required)
     let app = Router::new()
@@ -460,6 +551,9 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
     } else {
         info!("rate limiting disabled");
     }
+    if x402_enabled {
+        info!("x402 payment enabled on /api/v1/* endpoints ($0.001 USDC per evaluation)");
+    }
     info!(access_log = %access_log);
 
     axum::serve(
@@ -471,29 +565,43 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
 }
 
 /// Bearer token authentication middleware.
-/// If `api_key` is set in config, requires `Authorization: Bearer <token>` header.
-/// If `api_key` is None, all requests pass through (backward compatible).
+///
+/// When both `api_key` and `pay_to` are configured:
+/// - Valid API key → sets `AuthMethod::ApiKey`, passes through (full response)
+/// - Invalid API key → 401
+/// - No API key → sets `AuthMethod::X402`, passes through (x402 layer handles payment)
+///
+/// When only `api_key` is configured (no x402):
+/// - Valid API key → sets `AuthMethod::ApiKey`, passes through
+/// - Invalid or missing API key → 401
+///
+/// When neither is configured:
+/// - All requests pass through with `AuthMethod::Open`
 pub async fn auth_middleware(
     axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
-    request: axum::extract::Request,
+    mut request: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
 
+    let x402_enabled = state.config.pay_to.is_some();
+
     if let Some(ref expected_key) = state.config.api_key {
         let auth_header = request
             .headers()
             .get("authorization")
-            .and_then(|v| v.to_str().ok());
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
 
         let provided_token = auth_header
+            .as_deref()
             .and_then(|h| h.strip_prefix("Bearer "))
-            .map(|t| t.trim());
+            .map(|t| t.trim().to_string());
 
         match provided_token {
-            Some(token) if token == expected_key => {
-                // Token matches, proceed
+            Some(ref token) if token == expected_key => {
+                request.extensions_mut().insert(AuthMethod::ApiKey);
             }
             Some(_) => {
                 return (
@@ -506,16 +614,24 @@ pub async fn auth_middleware(
                     .into_response();
             }
             None => {
-                return (
-                    StatusCode::UNAUTHORIZED,
-                    axum::Json(serde_json::json!({
-                        "success": false,
-                        "error": "Missing Authorization header. Use: Authorization: Bearer <api_key>"
-                    })),
-                )
-                    .into_response();
+                if x402_enabled {
+                    // No API key but x402 is enabled — let x402 middleware handle payment.
+                    // The x402 layer (outer) already verified payment before reaching here.
+                    request.extensions_mut().insert(AuthMethod::X402);
+                } else {
+                    return (
+                        StatusCode::UNAUTHORIZED,
+                        axum::Json(serde_json::json!({
+                            "success": false,
+                            "error": "Missing Authorization header. Use: Authorization: Bearer <api_key>"
+                        })),
+                    )
+                        .into_response();
+                }
             }
         }
+    } else {
+        request.extensions_mut().insert(AuthMethod::Open);
     }
 
     next.run(request).await
@@ -540,10 +656,41 @@ async fn health_handler(
 async fn evaluate_handler(
     axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
     axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<SocketAddr>,
-    axum::Json(request): axum::Json<EvaluateRequest>,
+    request: axum::extract::Request,
 ) -> impl axum::response::IntoResponse {
     let start = Instant::now();
     let client_ip = addr.ip();
+    let auth_method = request
+        .extensions()
+        .get::<AuthMethod>()
+        .copied()
+        .unwrap_or(AuthMethod::Open);
+
+    let body = request.into_body();
+    let bytes = match axum::body::to_bytes(body, 1024 * 1024).await {
+        Ok(b) => b,
+        Err(e) => {
+            return axum::Json(EvaluateResponse {
+                success: false,
+                error: Some(format!("Failed to read request body: {}", e)),
+                evaluation: None,
+                basic_evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            });
+        }
+    };
+    let eval_request: EvaluateRequest = match serde_json::from_slice(&bytes) {
+        Ok(r) => r,
+        Err(e) => {
+            return axum::Json(EvaluateResponse {
+                success: false,
+                error: Some(format!("Invalid JSON: {}", e)),
+                evaluation: None,
+                basic_evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            });
+        }
+    };
 
     state.usage.ep_evaluate.fetch_add(1, Ordering::Relaxed);
 
@@ -557,15 +704,17 @@ async fn evaluate_handler(
                     state.config.rate_limit_rpm
                 )),
                 evaluation: None,
+                basic_evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
             });
         }
     }
 
-    let features = SkillFeatures::extract(&request.skill, request.vt_report.as_ref());
-    let skill_name = request.skill.name.clone();
+    let features = SkillFeatures::extract(&eval_request.skill, eval_request.vt_report.as_ref());
+    let skill_name = eval_request.skill.name.clone();
 
-    let response = classify_and_respond(&state, features, skill_name, start, "evaluate");
+    let response =
+        classify_and_respond(&state, features, skill_name, start, "evaluate", auth_method);
 
     axum::Json(response)
 }
@@ -573,10 +722,41 @@ async fn evaluate_handler(
 async fn evaluate_by_name_handler(
     axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
     axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<SocketAddr>,
-    axum::Json(request): axum::Json<EvaluateByNameRequest>,
+    request: axum::extract::Request,
 ) -> impl axum::response::IntoResponse {
     let start = Instant::now();
     let client_ip = addr.ip();
+    let auth_method = request
+        .extensions()
+        .get::<AuthMethod>()
+        .copied()
+        .unwrap_or(AuthMethod::Open);
+
+    let body = request.into_body();
+    let bytes = match axum::body::to_bytes(body, 1024 * 1024).await {
+        Ok(b) => b,
+        Err(e) => {
+            return axum::Json(EvaluateResponse {
+                success: false,
+                error: Some(format!("Failed to read request body: {}", e)),
+                evaluation: None,
+                basic_evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            });
+        }
+    };
+    let eval_request: EvaluateByNameRequest = match serde_json::from_slice(&bytes) {
+        Ok(r) => r,
+        Err(e) => {
+            return axum::Json(EvaluateResponse {
+                success: false,
+                error: Some(format!("Invalid JSON: {}", e)),
+                evaluation: None,
+                basic_evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            });
+        }
+    };
 
     state
         .usage
@@ -593,6 +773,7 @@ async fn evaluate_by_name_handler(
                     state.config.rate_limit_rpm
                 )),
                 evaluation: None,
+                basic_evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
             });
         }
@@ -600,7 +781,7 @@ async fn evaluate_by_name_handler(
 
     let skill = match state
         .clawhub_client
-        .fetch_skill(&request.skill, request.version.as_deref())
+        .fetch_skill(&eval_request.skill, eval_request.version.as_deref())
         .await
     {
         Ok(s) => s,
@@ -608,8 +789,12 @@ async fn evaluate_by_name_handler(
             state.usage.record_error();
             return axum::Json(EvaluateResponse {
                 success: false,
-                error: Some(format!("Failed to fetch skill '{}': {}", request.skill, e)),
+                error: Some(format!(
+                    "Failed to fetch skill '{}': {}",
+                    eval_request.skill, e
+                )),
                 evaluation: None,
+                basic_evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
             });
         }
@@ -618,7 +803,14 @@ async fn evaluate_by_name_handler(
     let features = SkillFeatures::extract(&skill, None);
     let skill_name = skill.name;
 
-    let response = classify_and_respond(&state, features, skill_name, start, "evaluate_by_name");
+    let response = classify_and_respond(
+        &state,
+        features,
+        skill_name,
+        start,
+        "evaluate_by_name",
+        auth_method,
+    );
 
     axum::Json(response)
 }
@@ -745,6 +937,7 @@ mod tests {
     fn test_server_config_default_has_no_api_key() {
         let config = ServerConfig::default();
         assert!(config.api_key.is_none());
+        assert!(config.pay_to.is_none());
     }
 
     #[test]
@@ -754,5 +947,18 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(config.api_key.as_deref(), Some("test-key-123"));
+    }
+
+    #[test]
+    fn test_server_config_with_x402() {
+        let config = ServerConfig {
+            pay_to: Some("0xBAc675C310721717Cd4A37F6cbeA1F081b1C2a07".to_string()),
+            ..Default::default()
+        };
+        assert!(config.pay_to.is_some());
+        assert_eq!(
+            config.facilitator_url,
+            "https://api.cdp.coinbase.com/platform/v2/x402"
+        );
     }
 }
