@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 description = "Standalone skill safety classifier for OpenClaw/ClawHub skills."
 license = "MIT"
+repository = "https://github.com/hshadab/skillguard"
+homepage = "https://github.com/hshadab/skillguard"
+readme = "README.md"
+keywords = ["safety", "classifier", "openclaw", "skills", "security"]
+categories = ["command-line-utilities", "web-programming"]
 
 [lib]
 name = "skillguard"
@@ -23,6 +28,10 @@ hex = "0.4"
 eyre = "0.6"
 regex = "1.10"
 
+# Structured logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
 # HTTP server
 axum = "0.8"
 tokio = { version = "1.43", features = ["full"] }
@@ -41,6 +50,9 @@ ark-serialize = { version = "0.5.0", default-features = false, features = ["deri
 
 [patch.crates-io]
 ark-serialize = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+
+[dev-dependencies]
+tempfile = "3"
 
 [profile.test]
 opt-level = 3

@@ -2,7 +2,7 @@
   "models": [
     {
       "name": "skill-safety",
-      "hash": "placeholder-run-cargo-test-to-get-hash",
+      "hash": "sha256:af562e8112d49e879d3a1364f344d8651833254204e2ae72efc60723a1d1f1f8",
       "version": "0.1.0",
       "params": 1924,
       "architecture": "22x32x32x4 MLP",

@@ -1,7 +1,9 @@
 //! ClawHub API client for fetching skill metadata and content.
 //!
 //! Communicates with the ClawHub registry API to retrieve skill information
-//! for safety scanning.
+//! for safety scanning. The [`ClawHubClient`] defaults to the production
+//! ClawHub API at `https://clawhub.ai/api/v1` and can be customized via
+//! [`ClawHubClient::with_base_url`].
 
 use eyre::{Result, WrapErr};
 use serde::Deserialize;
@@ -21,8 +23,6 @@ pub struct SkillListEntry {
     pub summary: String,
     #[serde(default)]
     pub stats: SkillStats,
-    #[serde(default)]
-    pub latest_version: Option<VersionInfo>,
     #[serde(default)]
     pub created_at: Option<String>,
     #[serde(default)]
@@ -56,25 +56,25 @@ struct SkillListResponse {
 }
 
 /// Detail response from `GET /skills/{slug}`.
+///
+/// All fields are used during deserialization and mapped into the `Skill` struct
+/// in `fetch_skill()`.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
 struct SkillDetailResponse {
-    pub slug: String,
+    slug: String,
     #[serde(default)]
-    pub display_name: String,
+    summary: String,
     #[serde(default)]
-    pub summary: String,
+    stats: SkillStats,
     #[serde(default)]
-    pub stats: SkillStats,
+    latest_version: Option<VersionInfo>,
     #[serde(default)]
-    pub latest_version: Option<VersionInfo>,
+    owner: Option<OwnerInfo>,
     #[serde(default)]
-    pub owner: Option<OwnerInfo>,
+    created_at: Option<String>,
     #[serde(default)]
-    pub created_at: Option<String>,
-    #[serde(default)]
-    pub updated_at: Option<String>,
+    updated_at: Option<String>,
 }
 
 /// Owner/author info from the detail endpoint.
@@ -97,13 +97,19 @@ pub struct ClawHubClient {
     client: reqwest::Client,
 }
 
-impl ClawHubClient {
-    /// Create a new client with the default base URL.
-    pub fn new() -> Self {
+impl Default for ClawHubClient {
+    fn default() -> Self {
         Self {
             base_url: DEFAULT_BASE_URL.to_string(),
             client: reqwest::Client::new(),
         }
+    }
+}
+
+impl ClawHubClient {
+    /// Create a new client with the default base URL.
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Create a new client with a custom base URL.
@@ -182,10 +188,7 @@ impl ClawHubClient {
         cursor: Option<&str>,
         limit: u32,
     ) -> Result<(Vec<SkillListEntry>, Option<String>)> {
-        let mut url = format!(
-            "{}/skills?limit={}&sort=updated",
-            self.base_url, limit
-        );
+        let mut url = format!("{}/skills?limit={}&sort=updated", self.base_url, limit);
         if let Some(c) = cursor {
             url.push_str(&format!("&cursor={}", c));
         }
@@ -233,10 +236,6 @@ mod tests {
         assert_eq!(resp.items[0].display_name, "Test Skill");
         assert_eq!(resp.items[0].stats.stars, 10);
         assert_eq!(resp.items[0].stats.downloads, 500);
-        assert_eq!(
-            resp.items[0].latest_version.as_ref().unwrap().version,
-            "1.2.3"
-        );
         assert_eq!(resp.next_cursor, Some("abc123".to_string()));
     }
 

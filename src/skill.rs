@@ -2,15 +2,21 @@
 //!
 //! This module defines the types for representing skills from ClawHub
 //! and extracting safety-relevant features for the skill safety classifier.
+//!
+//! Feature extraction produces a 22-element vector. Each feature is normalized
+//! to [0, 128] using empirically chosen thresholds (documented inline in
+//! [`SkillFeatures::to_normalized_vec`]). VirusTotal integration combines both
+//! `malicious_count` and `suspicious_count` (weighted at 0.5) into a single
+//! signal for feature #18.
 
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 
 use crate::patterns::{
-    count_matches, ARCHIVE_RE, CARGO_ADD_RE, CREDENTIAL_RE, CURL_DOWNLOAD_RE,
-    ENV_ACCESS_RE, EXFILTRATION_RE, EXTERNAL_DOWNLOAD_RE, FS_WRITE_RE, IMPORT_RE,
-    LLM_SECRET_EXPOSURE_RE, NETWORK_CALL_RE, NPM_INSTALL_RE, OBFUSCATION_RE,
-    PERSISTENCE_RE, PIP_INSTALL_RE, PRIV_ESC_RE, REQUIRE_RE, REVERSE_SHELL_RE,
-    SHELL_EXEC_RE,
+    count_matches, ARCHIVE_RE, CARGO_ADD_RE, CREDENTIAL_RE, CURL_DOWNLOAD_RE, ENV_ACCESS_RE,
+    EXFILTRATION_RE, EXTERNAL_DOWNLOAD_RE, FS_WRITE_RE, IMPORT_RE, LLM_SECRET_EXPOSURE_RE,
+    NETWORK_CALL_RE, NPM_INSTALL_RE, OBFUSCATION_RE, PERSISTENCE_RE, PIP_INSTALL_RE, PRIV_ESC_RE,
+    REQUIRE_RE, REVERSE_SHELL_RE, SHELL_EXEC_RE,
 };
 
 // ---------------------------------------------------------------------------
@@ -139,21 +145,26 @@ pub fn derive_decision(
     let top_score = scores.iter().cloned().fold(0.0f64, f64::max);
 
     match classification {
-        SafetyClassification::Malicious if scores[3] > 0.7 => {
-            (SafetyDecision::Deny, "Active malware indicators detected".into())
-        }
-        SafetyClassification::Dangerous if scores[2] > 0.6 => {
-            (SafetyDecision::Deny, "Significant risk patterns detected".into())
-        }
-        SafetyClassification::Dangerous | SafetyClassification::Malicious if top_score < 0.6 => {
-            (SafetyDecision::Flag, "Risk patterns detected but confidence below threshold".into())
-        }
-        SafetyClassification::Caution => {
-            (SafetyDecision::Allow, "Minor concerns noted; functional skill".into())
-        }
-        _ => {
-            (SafetyDecision::Allow, "No concerning patterns detected".into())
-        }
+        SafetyClassification::Malicious if scores[3] > 0.7 => (
+            SafetyDecision::Deny,
+            "Active malware indicators detected".into(),
+        ),
+        SafetyClassification::Dangerous if scores[2] > 0.6 => (
+            SafetyDecision::Deny,
+            "Significant risk patterns detected".into(),
+        ),
+        SafetyClassification::Dangerous | SafetyClassification::Malicious if top_score < 0.6 => (
+            SafetyDecision::Flag,
+            "Risk patterns detected but confidence below threshold".into(),
+        ),
+        SafetyClassification::Caution => (
+            SafetyDecision::Allow,
+            "Minor concerns noted; functional skill".into(),
+        ),
+        _ => (
+            SafetyDecision::Allow,
+            "No concerning patterns detected".into(),
+        ),
     }
 }
 
@@ -194,22 +205,38 @@ impl SkillFeatures {
         let all_text = format!(
             "{}\n{}",
             skill.skill_md,
-            skill.scripts.iter().map(|s| s.content.as_str()).collect::<Vec<_>>().join("\n")
+            skill
+                .scripts
+                .iter()
+                .map(|s| s.content.as_str())
+                .collect::<Vec<_>>()
+                .join("\n")
         );
-        let script_text: String = skill.scripts.iter().map(|s| s.content.as_str()).collect::<Vec<_>>().join("\n");
+        let script_text: String = skill
+            .scripts
+            .iter()
+            .map(|s| s.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
 
-        // Calculate author account age in days
+        // Calculate author account age in days.
+        // Returns 0 for missing or unparseable dates (treated as unknown/new author).
         let author_age_days = if skill.metadata.author_account_created.is_empty() {
             0
         } else {
-            chrono::Utc::now()
-                .signed_duration_since(
-                    chrono::DateTime::parse_from_rfc3339(&skill.metadata.author_account_created)
-                        .map(|dt| dt.with_timezone(&chrono::Utc))
-                        .unwrap_or_else(|_| chrono::Utc::now()),
-                )
-                .num_days()
-                .max(0) as u32
+            match chrono::DateTime::parse_from_rfc3339(&skill.metadata.author_account_created) {
+                Ok(dt) => chrono::Utc::now()
+                    .signed_duration_since(dt.with_timezone(&chrono::Utc))
+                    .num_days()
+                    .max(0) as u32,
+                Err(_) => {
+                    warn!(
+                        date = %skill.metadata.author_account_created,
+                        "invalid author_account_created, treating as new account"
+                    );
+                    0
+                }
+            }
         };
 
         // Check for password-protected archives
@@ -236,10 +263,16 @@ impl SkillFeatures {
             stars: skill.metadata.stars,
             downloads: skill.metadata.downloads,
             has_virustotal_report: vt_report.is_some(),
-            vt_malicious_flags: vt_report.map(|r| r.malicious_count).unwrap_or(0),
+            // Combine malicious and suspicious counts (suspicious weighted at 0.5)
+            // to capture a broader signal from VirusTotal scanners.
+            vt_malicious_flags: vt_report
+                .map(|r| r.malicious_count + r.suspicious_count / 2)
+                .unwrap_or(0),
             password_protected_archives: has_archive && password_in_md,
             reverse_shell_patterns: count_matches(&all_text, &REVERSE_SHELL_RE),
-            llm_secret_exposure: LLM_SECRET_EXPOSURE_RE.iter().any(|re| re.is_match(&skill.skill_md)),
+            llm_secret_exposure: LLM_SECRET_EXPOSURE_RE
+                .iter()
+                .any(|re| re.is_match(&skill.skill_md)),
         }
     }
 
@@ -254,6 +287,13 @@ impl SkillFeatures {
 
     /// Convert to normalized feature vector for the classifier.
     /// All values normalized to [0, 1] and then scaled by 128 for fixed-point.
+    ///
+    /// Normalization thresholds below are empirically chosen from training data
+    /// distributions. `clip_scale(val, max)` linearly maps [0, max] → [0, 128]
+    /// and clips at max. `log_scale(val, max_log)` applies log10(val+1) first,
+    /// useful for heavy-tailed distributions (stars, downloads).
+    /// These thresholds should be updated alongside the model weights if the
+    /// skill ecosystem changes significantly.
     pub fn to_normalized_vec(&self) -> Vec<i32> {
         const SCALE: i32 = 128;
 
@@ -267,32 +307,36 @@ impl SkillFeatures {
         };
 
         let bool_scale = |val: bool| -> i32 {
-            if val { SCALE } else { 0 }
+            if val {
+                SCALE
+            } else {
+                0
+            }
         };
 
         vec![
-            clip_scale(self.shell_exec_count, 20),           // 0
-            clip_scale(self.network_call_count, 50),         // 1
-            clip_scale(self.fs_write_count, 30),             // 2
-            clip_scale(self.env_access_count, 20),           // 3
-            clip_scale(self.credential_patterns, 10),        // 4
-            bool_scale(self.external_download),              // 5
-            clip_scale(self.obfuscation_score as u32, 15),   // 6
-            bool_scale(self.privilege_escalation),           // 7
-            clip_scale(self.persistence_mechanisms, 5),      // 8
-            clip_scale(self.data_exfiltration_patterns, 5),  // 9
-            clip_scale(self.skill_md_line_count, 500),       // 10
-            clip_scale(self.script_file_count, 10),          // 11
-            clip_scale(self.dependency_count, 30),           // 12
-            clip_scale(self.author_account_age_days, 365),   // 13
-            clip_scale(self.author_skill_count, 100),        // 14
-            log_scale(self.stars, 4.0),                      // 15
-            log_scale(self.downloads, 6.0),                  // 16
-            bool_scale(self.has_virustotal_report),          // 17
-            clip_scale(self.vt_malicious_flags, 20),         // 18
-            bool_scale(self.password_protected_archives),    // 19
-            clip_scale(self.reverse_shell_patterns, 5),      // 20
-            bool_scale(self.llm_secret_exposure),            // 21
+            clip_scale(self.shell_exec_count, 20), // 0  — 95th pctile in training set
+            clip_scale(self.network_call_count, 50), // 1  — legitimate API skills can have many calls
+            clip_scale(self.fs_write_count, 30), // 2  — generator/template skills write many files
+            clip_scale(self.env_access_count, 20), // 3  — config-heavy skills read ~15-20 vars
+            clip_scale(self.credential_patterns, 10), // 4  — auth skills legitimately mention ~5-10
+            bool_scale(self.external_download),  // 5  — binary: present or not
+            clip_scale(self.obfuscation_score as u32, 15), // 6  — rare above 10 even in malicious samples
+            bool_scale(self.privilege_escalation),         // 7  — binary: present or not
+            clip_scale(self.persistence_mechanisms, 5),    // 8  — >5 is extremely suspicious
+            clip_scale(self.data_exfiltration_patterns, 5), // 9  — >5 is extremely suspicious
+            clip_scale(self.skill_md_line_count, 500), // 10 — most skill docs are under 500 lines
+            clip_scale(self.script_file_count, 10),    // 11 — skills rarely bundle >10 scripts
+            clip_scale(self.dependency_count, 30),     // 12 — large projects can have ~30 imports
+            clip_scale(self.author_account_age_days, 365), // 13 — saturates at 1 year (established author)
+            clip_scale(self.author_skill_count, 100),      // 14 — prolific authors cap at ~100
+            log_scale(self.stars, 4.0), // 15 — log10(10001) ≈ 4.0 → 10k stars saturates
+            log_scale(self.downloads, 6.0), // 16 — log10(1000001) ≈ 6.0 → 1M downloads saturates
+            bool_scale(self.has_virustotal_report), // 17 — binary: report provided or not
+            clip_scale(self.vt_malicious_flags, 20), // 18 — 20+ VT engines flagging is extreme
+            bool_scale(self.password_protected_archives), // 19 — binary: archive + password mention
+            clip_scale(self.reverse_shell_patterns, 5), // 20 — any match is suspicious; >5 is definitive
+            bool_scale(self.llm_secret_exposure), // 21 — binary: instructions leak secrets or not
         ]
     }
 }
@@ -302,26 +346,67 @@ pub fn parse_skill_from_json(json: &str) -> eyre::Result<Skill> {
     serde_json::from_str(json).map_err(|e| eyre::eyre!("Failed to parse skill JSON: {}", e))
 }
 
-/// Create a skill from a SKILL.md file path (for local testing)
+/// Create a skill from a SKILL.md file path (for local testing).
+///
+/// If the file contains YAML frontmatter (between `---` markers),
+/// the `name` and `description` fields are extracted from it.
 pub fn skill_from_skill_md(path: &std::path::Path) -> eyre::Result<Skill> {
     let skill_md = std::fs::read_to_string(path)?;
-    let name = path
-        .parent()
-        .and_then(|p| p.file_name())
-        .and_then(|n| n.to_str())
-        .unwrap_or("unknown")
-        .to_string();
+
+    // Try to extract name/description from YAML frontmatter
+    let (fm_name, fm_desc) = parse_yaml_frontmatter(&skill_md);
+
+    let name = fm_name.unwrap_or_else(|| {
+        path.parent()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string()
+    });
+
+    let description = fm_desc.unwrap_or_default();
 
     Ok(Skill {
         name,
         version: "1.0.0".into(),
         author: "unknown".into(),
-        description: String::new(),
+        description,
         skill_md,
         scripts: Vec::new(),
         metadata: SkillMetadata::default(),
         files: Vec::new(),
     })
+}
+
+/// Parse YAML frontmatter from a SKILL.md file.
+/// Returns (name, description) if found.
+fn parse_yaml_frontmatter(content: &str) -> (Option<String>, Option<String>) {
+    let trimmed = content.trim_start();
+    if !trimmed.starts_with("---") {
+        return (None, None);
+    }
+
+    // Find the closing ---
+    let after_open = &trimmed[3..];
+    let close_pos = after_open.find("\n---");
+    let frontmatter = match close_pos {
+        Some(pos) => &after_open[..pos],
+        None => return (None, None),
+    };
+
+    let mut name = None;
+    let mut description = None;
+
+    for line in frontmatter.lines() {
+        let line = line.trim();
+        if let Some(val) = line.strip_prefix("name:") {
+            name = Some(val.trim().trim_matches('"').trim_matches('\'').to_string());
+        } else if let Some(val) = line.strip_prefix("description:") {
+            description = Some(val.trim().trim_matches('"').trim_matches('\'').to_string());
+        }
+    }
+
+    (name, description)
 }
 
 #[cfg(test)]
@@ -377,8 +462,47 @@ mod tests {
         };
 
         let features = SkillFeatures::extract(&skill, None);
-        assert!(features.reverse_shell_patterns > 0, "Should detect reverse shell patterns");
-        assert!(features.llm_secret_exposure, "Should detect LLM secret exposure");
+        assert!(
+            features.reverse_shell_patterns > 0,
+            "Should detect reverse shell patterns"
+        );
+        assert!(
+            features.llm_secret_exposure,
+            "Should detect LLM secret exposure"
+        );
+    }
+
+    #[test]
+    fn test_yaml_frontmatter_parsing() {
+        let content = r#"---
+name: my-cool-skill
+description: A skill that does cool things
+version: 2.0.0
+---
+
+# My Cool Skill
+
+Instructions here.
+"#;
+        let (name, desc) = parse_yaml_frontmatter(content);
+        assert_eq!(name.as_deref(), Some("my-cool-skill"));
+        assert_eq!(desc.as_deref(), Some("A skill that does cool things"));
+    }
+
+    #[test]
+    fn test_yaml_frontmatter_quoted() {
+        let content = "---\nname: \"quoted-name\"\ndescription: 'single quoted'\n---\n# Skill";
+        let (name, desc) = parse_yaml_frontmatter(content);
+        assert_eq!(name.as_deref(), Some("quoted-name"));
+        assert_eq!(desc.as_deref(), Some("single quoted"));
+    }
+
+    #[test]
+    fn test_no_frontmatter() {
+        let content = "# Just a regular markdown file\n\nNo frontmatter here.";
+        let (name, desc) = parse_yaml_frontmatter(content);
+        assert!(name.is_none());
+        assert!(desc.is_none());
     }
 
     #[test]
@@ -399,7 +523,7 @@ mod tests {
 
         assert_eq!(normalized.len(), 22);
         for &val in &normalized {
-            assert!(val >= 0 && val <= 128, "Value {} out of range", val);
+            assert!((0..=128).contains(&val), "Value {} out of range", val);
         }
     }
 }

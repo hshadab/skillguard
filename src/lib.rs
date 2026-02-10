@@ -5,8 +5,13 @@
 //! - **CAUTION**: Minor concerns, likely functional
 //! - **DANGEROUS**: Significant risk (credential exposure, excessive permissions)
 //! - **MALICIOUS**: Active malware indicators (reverse shells, obfuscation)
+//!
+//! Uses structured logging via [`tracing`]. Set the `RUST_LOG` environment
+//! variable to control log verbosity (e.g., `RUST_LOG=skillguard=debug`).
 
+pub mod batch;
 pub mod clawhub;
+pub mod crawler;
 pub mod model;
 pub mod patterns;
 pub mod scores;
@@ -29,8 +34,8 @@ const MODEL_HASH_VERSION: &str = "v1";
 /// Returns (classification, raw_scores, confidence).
 pub fn classify(features: &[i32]) -> Result<(SafetyClassification, [i32; 4], f64)> {
     let model = skill_safety_model();
-    let input = Tensor::new(Some(features), &[1, 22])
-        .map_err(|e| eyre::eyre!("Tensor error: {:?}", e))?;
+    let input =
+        Tensor::new(Some(features), &[1, 22]).map_err(|e| eyre::eyre!("Tensor error: {:?}", e))?;
 
     let result = model
         .forward(std::slice::from_ref(&input))
@@ -48,7 +53,7 @@ pub fn classify(features: &[i32]) -> Result<(SafetyClassification, [i32; 4], f64
         .iter()
         .enumerate()
         .max_by_key(|(_, v)| *v)
-        .unwrap();
+        .ok_or_else(|| eyre::eyre!("Empty classifier output"))?;
 
     // Calculate confidence as margin over runner-up
     let runner_up = data
@@ -76,8 +81,8 @@ pub fn model_hash() -> String {
 pub fn hash_model_fn(model_fn: fn() -> Model) -> String {
     let model = model_fn();
     let bytecode = onnx_tracer::decode_model(model);
-    let serialized = serde_json::to_vec(&bytecode)
-        .unwrap_or_else(|_| format!("{:?}", bytecode).into_bytes());
+    let serialized =
+        serde_json::to_vec(&bytecode).unwrap_or_else(|_| format!("{:?}", bytecode).into_bytes());
     let mut hasher = Sha256::new();
     hasher.update(MODEL_HASH_VERSION.as_bytes());
     hasher.update(&serialized);
@@ -96,17 +101,20 @@ mod tests {
 
         let (classification, _scores, confidence) = classify(&features).unwrap();
         assert!(confidence >= 0.0);
-        println!("Classification: {:?}, confidence: {}", classification, confidence);
+        println!(
+            "Classification: {:?}, confidence: {}",
+            classification, confidence
+        );
     }
 
     #[test]
     fn test_classify_malicious_skill() {
         let mut features = vec![0i32; 22];
-        features[0] = 80;   // shell_exec_count
-        features[5] = 128;  // external_download
-        features[6] = 100;  // obfuscation_score
-        features[7] = 128;  // privilege_escalation
-        features[8] = 80;   // persistence_mechanisms
+        features[0] = 80; // shell_exec_count
+        features[5] = 128; // external_download
+        features[6] = 100; // obfuscation_score
+        features[7] = 128; // privilege_escalation
+        features[8] = 80; // persistence_mechanisms
         features[19] = 128; // password_protected_archives
         features[20] = 128; // reverse_shell_patterns
 

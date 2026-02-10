@@ -1,0 +1,32 @@
+[Unit]
+Description=SkillGuard skill safety classifier service
+After=network.target
+
+[Service]
+Type=simple
+User=skillguard
+Group=skillguard
+WorkingDirectory=/opt/skillguard
+ExecStart=/opt/skillguard/skillguard serve --bind 127.0.0.1:8080 --rate-limit 60
+Restart=on-failure
+RestartSec=5
+
+# Environment
+Environment=RUST_LOG=info
+# Uncomment to enable API key authentication:
+# Environment=SKILLGUARD_API_KEY=your-secret-key-here
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/skillguard
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=skillguard
+
+[Install]
+WantedBy=multi-user.target

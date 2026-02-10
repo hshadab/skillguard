@@ -2,6 +2,11 @@
 //!
 //! Provides REST API endpoints for skill safety evaluation.
 //! No ZK proofs, no receipts — just classification with a flat JSON response.
+//!
+//! Features:
+//! - Per-IP rate limiting with automatic eviction when the map exceeds 10k entries
+//! - JSONL access logging with size-based rotation (configurable via `max_access_log_bytes`)
+//! - Structured logging via [`tracing`]
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -16,6 +21,7 @@ use eyre::Result;
 use governor::{Quota, RateLimiter};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
+use tracing::{info, warn};
 
 use crate::clawhub::ClawHubClient;
 use crate::scores::ClassScores;
@@ -30,20 +36,29 @@ use crate::skill::{
 /// Server configuration
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
-    /// Address to bind to
+    /// Address to bind to (defaults to 127.0.0.1:8080; use 0.0.0.0 to expose externally)
     pub bind_addr: SocketAddr,
     /// Rate limit in requests per minute per IP (0 = no limit)
     pub rate_limit_rpm: u32,
     /// Path for JSONL access log
     pub access_log_path: String,
+    /// Maximum access log file size in bytes before rotation (0 = no limit)
+    pub max_access_log_bytes: u64,
+    /// Optional API key for bearer token authentication on /api/v1/* endpoints.
+    /// If None, auth is disabled (backward compatible).
+    pub api_key: Option<String>,
 }
 
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            bind_addr: "0.0.0.0:8080".parse().unwrap(),
+            bind_addr: "127.0.0.1:8080"
+                .parse()
+                .expect("valid default bind address"),
             rate_limit_rpm: 60,
             access_log_path: "skillguard-access.jsonl".to_string(),
+            max_access_log_bytes: 50 * 1024 * 1024, // 50 MB
+            api_key: None,
         }
     }
 }
@@ -164,18 +179,24 @@ pub struct UsageMetrics {
     pub ep_stats: AtomicU64,
 
     pub access_log: std::sync::Mutex<Option<File>>,
+    access_log_path: String,
+    access_log_bytes: AtomicU64,
+    max_access_log_bytes: u64,
 }
 
 impl UsageMetrics {
-    fn new(access_log_path: &str) -> Self {
+    fn new(access_log_path: &str, max_access_log_bytes: u64) -> Self {
         let file = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(access_log_path)
             .ok();
         if file.is_none() {
-            eprintln!("WARNING: could not open access log: {}", access_log_path);
+            warn!(path = access_log_path, "could not open access log");
         }
+        let current_size = std::fs::metadata(access_log_path)
+            .map(|m| m.len())
+            .unwrap_or(0);
         Self {
             total_requests: AtomicU64::new(0),
             total_errors: AtomicU64::new(0),
@@ -190,6 +211,9 @@ impl UsageMetrics {
             ep_evaluate_by_name: AtomicU64::new(0),
             ep_stats: AtomicU64::new(0),
             access_log: std::sync::Mutex::new(file),
+            access_log_path: access_log_path.to_string(),
+            access_log_bytes: AtomicU64::new(current_size),
+            max_access_log_bytes,
         }
     }
 
@@ -205,16 +229,30 @@ impl UsageMetrics {
         self.total_requests.fetch_add(1, Ordering::Relaxed);
 
         match classification {
-            SafetyClassification::Safe => { self.safe.fetch_add(1, Ordering::Relaxed); }
-            SafetyClassification::Caution => { self.caution.fetch_add(1, Ordering::Relaxed); }
-            SafetyClassification::Dangerous => { self.dangerous.fetch_add(1, Ordering::Relaxed); }
-            SafetyClassification::Malicious => { self.malicious.fetch_add(1, Ordering::Relaxed); }
+            SafetyClassification::Safe => {
+                self.safe.fetch_add(1, Ordering::Relaxed);
+            }
+            SafetyClassification::Caution => {
+                self.caution.fetch_add(1, Ordering::Relaxed);
+            }
+            SafetyClassification::Dangerous => {
+                self.dangerous.fetch_add(1, Ordering::Relaxed);
+            }
+            SafetyClassification::Malicious => {
+                self.malicious.fetch_add(1, Ordering::Relaxed);
+            }
         }
 
         match decision {
-            SafetyDecision::Allow => { self.allow.fetch_add(1, Ordering::Relaxed); }
-            SafetyDecision::Deny => { self.deny.fetch_add(1, Ordering::Relaxed); }
-            SafetyDecision::Flag => { self.flag.fetch_add(1, Ordering::Relaxed); }
+            SafetyDecision::Allow => {
+                self.allow.fetch_add(1, Ordering::Relaxed);
+            }
+            SafetyDecision::Deny => {
+                self.deny.fetch_add(1, Ordering::Relaxed);
+            }
+            SafetyDecision::Flag => {
+                self.flag.fetch_add(1, Ordering::Relaxed);
+            }
         }
 
         if let Ok(mut guard) = self.access_log.try_lock() {
@@ -230,7 +268,24 @@ impl UsageMetrics {
                 });
                 let mut line = entry.to_string();
                 line.push('\n');
+                let line_len = line.len() as u64;
                 let _ = file.write_all(line.as_bytes());
+                let new_size =
+                    self.access_log_bytes.fetch_add(line_len, Ordering::Relaxed) + line_len;
+
+                // Rotate if over size limit (0 = no limit)
+                if self.max_access_log_bytes > 0 && new_size >= self.max_access_log_bytes {
+                    let rotated = format!("{}.1", self.access_log_path);
+                    let _ = std::fs::rename(&self.access_log_path, &rotated);
+                    if let Ok(new_file) = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&self.access_log_path)
+                    {
+                        *file = new_file;
+                        self.access_log_bytes.store(0, Ordering::Relaxed);
+                    }
+                }
             }
         }
     }
@@ -263,7 +318,7 @@ pub struct ServerState {
 impl ServerState {
     pub fn new(config: ServerConfig) -> Self {
         let model_hash = crate::model_hash();
-        let usage = UsageMetrics::new(&config.access_log_path);
+        let usage = UsageMetrics::new(&config.access_log_path, config.max_access_log_bytes);
         Self {
             config,
             model_hash,
@@ -275,9 +330,7 @@ impl ServerState {
     }
 
     pub async fn get_rate_limiter(&self, ip: std::net::IpAddr) -> Option<Arc<IpRateLimiter>> {
-        if self.config.rate_limit_rpm == 0 {
-            return None;
-        }
+        let rpm = NonZeroU32::new(self.config.rate_limit_rpm)?;
 
         let mut limiters = self.rate_limiters.lock().await;
 
@@ -285,14 +338,24 @@ impl ServerState {
             return Some(Arc::clone(limiter));
         }
 
-        let quota = Quota::per_minute(NonZeroU32::new(self.config.rate_limit_rpm).unwrap());
+        let quota = Quota::per_minute(rpm);
         let limiter = Arc::new(RateLimiter::direct(quota));
         limiters.insert(ip, Arc::clone(&limiter));
 
-        if limiters.len() > 10000 {
-            eprintln!("WARNING: rate limiter map exceeded 10000 entries, clearing");
-            limiters.clear();
-            limiters.insert(ip, Arc::clone(&limiter));
+        // Evict oldest entries when the map grows too large (LRU-style trim)
+        const MAX_ENTRIES: usize = 10_000;
+        if limiters.len() > MAX_ENTRIES {
+            // Remove a batch of the oldest entries to avoid frequent evictions
+            let to_remove = limiters.len() - MAX_ENTRIES / 2;
+            let keys_to_remove: Vec<_> = limiters
+                .keys()
+                .filter(|k| **k != ip)
+                .take(to_remove)
+                .cloned()
+                .collect();
+            for key in keys_to_remove {
+                limiters.remove(&key);
+            }
         }
 
         Some(limiter)
@@ -362,6 +425,7 @@ fn classify_and_respond(
 /// Run the HTTP server (blocking)
 pub async fn run_server(config: ServerConfig) -> Result<()> {
     use axum::{
+        middleware,
         routing::{get, post},
         Router,
     };
@@ -371,26 +435,31 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
     let access_log = config.access_log_path.clone();
     let state = Arc::new(ServerState::new(config));
 
-    let app = Router::new()
-        .route("/health", get(health_handler))
+    // API routes that require authentication (when api_key is set)
+    let api_routes = Router::new()
         .route("/api/v1/evaluate", post(evaluate_handler))
         .route("/api/v1/evaluate/name", post(evaluate_by_name_handler))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth_middleware,
+        ));
+
+    // Public routes (no auth required)
+    let app = Router::new()
+        .route("/health", get(health_handler))
         .route("/stats", get(stats_handler))
+        .merge(api_routes)
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
-    eprintln!("SkillGuard server listening on {}", bind_addr);
-    eprintln!("Endpoints:");
-    eprintln!("  GET  /health                  - Health check");
-    eprintln!("  POST /api/v1/evaluate         - Evaluate skill safety (full skill data)");
-    eprintln!("  POST /api/v1/evaluate/name    - Evaluate skill by ClawHub name");
-    eprintln!("  GET  /stats                   - Usage statistics");
+    info!(bind = %bind_addr, "SkillGuard server listening");
+    info!("Endpoints: GET /health, POST /api/v1/evaluate, POST /api/v1/evaluate/name, GET /stats");
     if rate_limit_rpm > 0 {
-        eprintln!("Rate limit: {} requests/minute per IP", rate_limit_rpm);
+        info!(rate_limit_rpm, "rate limiting enabled");
     } else {
-        eprintln!("Rate limit: disabled");
+        info!("rate limiting disabled");
     }
-    eprintln!("Access log: {}", access_log);
+    info!(access_log = %access_log);
 
     axum::serve(
         listener,
@@ -398,6 +467,57 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
     )
     .await?;
     Ok(())
+}
+
+/// Bearer token authentication middleware.
+/// If `api_key` is set in config, requires `Authorization: Bearer <token>` header.
+/// If `api_key` is None, all requests pass through (backward compatible).
+pub async fn auth_middleware(
+    axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+
+    if let Some(ref expected_key) = state.config.api_key {
+        let auth_header = request
+            .headers()
+            .get("authorization")
+            .and_then(|v| v.to_str().ok());
+
+        let provided_token = auth_header
+            .and_then(|h| h.strip_prefix("Bearer "))
+            .map(|t| t.trim());
+
+        match provided_token {
+            Some(token) if token == expected_key => {
+                // Token matches, proceed
+            }
+            Some(_) => {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    axum::Json(serde_json::json!({
+                        "success": false,
+                        "error": "Invalid API key"
+                    })),
+                )
+                    .into_response();
+            }
+            None => {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    axum::Json(serde_json::json!({
+                        "success": false,
+                        "error": "Missing Authorization header. Use: Authorization: Bearer <api_key>"
+                    })),
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    next.run(request).await
 }
 
 // ---------------------------------------------------------------------------
@@ -457,7 +577,10 @@ async fn evaluate_by_name_handler(
     let start = Instant::now();
     let client_ip = addr.ip();
 
-    state.usage.ep_evaluate_by_name.fetch_add(1, Ordering::Relaxed);
+    state
+        .usage
+        .ep_evaluate_by_name
+        .fetch_add(1, Ordering::Relaxed);
 
     if let Some(limiter) = state.get_rate_limiter(client_ip).await {
         if limiter.check().is_err() {
@@ -553,7 +676,10 @@ mod tests {
         let response = StatsResponse {
             uptime_seconds: 3600,
             model_hash: "sha256:abc".to_string(),
-            requests: RequestStats { total: 100, errors: 2 },
+            requests: RequestStats {
+                total: 100,
+                errors: 2,
+            },
             classifications: ClassificationStats {
                 safe: 80,
                 caution: 10,
@@ -595,7 +721,7 @@ mod tests {
 
     #[test]
     fn test_usage_metrics_counters() {
-        let metrics = UsageMetrics::new("/dev/null");
+        let metrics = UsageMetrics::new("/dev/null", 0);
         metrics.record(
             "evaluate",
             "test-skill",
@@ -612,5 +738,20 @@ mod tests {
         metrics.record_error();
         assert_eq!(metrics.total_requests.load(Ordering::Relaxed), 2);
         assert_eq!(metrics.total_errors.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn test_server_config_default_has_no_api_key() {
+        let config = ServerConfig::default();
+        assert!(config.api_key.is_none());
+    }
+
+    #[test]
+    fn test_server_config_with_api_key() {
+        let config = ServerConfig {
+            api_key: Some("test-key-123".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(config.api_key.as_deref(), Some("test-key-123"));
     }
 }

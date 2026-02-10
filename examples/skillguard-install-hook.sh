@@ -26,6 +26,7 @@ SKILL_NAME="${1:?Usage: $0 <skill-name> [version]}"
 SKILL_VERSION="${2:-}"
 
 SKILLGUARD_API_URL="${SKILLGUARD_API_URL:-}"
+SKILLGUARD_API_KEY="${SKILLGUARD_API_KEY:-}"
 
 # ---- Hosted API mode ----
 if [ -n "$SKILLGUARD_API_URL" ]; then
@@ -38,8 +39,13 @@ if [ -n "$SKILLGUARD_API_URL" ]; then
         REQUEST_BODY="{\"skill\":\"${SKILL_NAME}\"}"
     fi
 
-    SCAN_OUTPUT=$(curl -s -X POST \
-        -H "Content-Type: application/json" \
+    # Build curl args, including auth header if API key is set
+    CURL_ARGS=(-s -X POST -H "Content-Type: application/json")
+    if [ -n "$SKILLGUARD_API_KEY" ]; then
+        CURL_ARGS+=(-H "Authorization: Bearer ${SKILLGUARD_API_KEY}")
+    fi
+
+    SCAN_OUTPUT=$(curl "${CURL_ARGS[@]}" \
         -d "$REQUEST_BODY" \
         "${SKILLGUARD_API_URL}/api/v1/evaluate/name") || {
         echo "WARNING: Failed to reach SkillGuard API. Proceeding with caution."

@@ -1,3 +1,16 @@
 /target
 *.srs
 skillguard-access.jsonl
+skillguard-access.jsonl.1
+crawled-skills/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
