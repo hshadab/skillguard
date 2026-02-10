@@ -39,6 +39,7 @@ async fn spawn_test_server_with_config(api_key: Option<String>) -> (SocketAddr, 
         ));
 
     let app = Router::new()
+        .route("/", get(skillguard::ui::index_handler))
         .route("/health", get(health_handler))
         .route("/stats", get(stats_handler))
         .merge(api_routes)
@@ -471,6 +472,19 @@ async fn test_health_accessible_without_auth() {
 
     let body: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(body["status"], "ok");
+}
+
+#[tokio::test]
+async fn test_root_serves_html_ui() {
+    let (addr, _state) = spawn_test_server().await;
+    let url = format!("http://{}/", addr);
+
+    let resp = reqwest::get(&url).await.unwrap();
+    assert_eq!(resp.status(), 200);
+
+    let body = resp.text().await.unwrap();
+    assert!(body.contains("<!DOCTYPE html>"), "expected HTML document");
+    assert!(body.contains("SkillGuard"), "expected SkillGuard title");
 }
 
 #[tokio::test]

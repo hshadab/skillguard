@@ -446,6 +446,7 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
 
     // Public routes (no auth required)
     let app = Router::new()
+        .route("/", get(crate::ui::index_handler))
         .route("/health", get(health_handler))
         .route("/stats", get(stats_handler))
         .merge(api_routes)
@@ -453,7 +454,7 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
 
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
     info!(bind = %bind_addr, "SkillGuard server listening");
-    info!("Endpoints: GET /health, POST /api/v1/evaluate, POST /api/v1/evaluate/name, GET /stats");
+    info!("Endpoints: GET / (UI), GET /health, POST /api/v1/evaluate, POST /api/v1/evaluate/name, GET /stats");
     if rate_limit_rpm > 0 {
         info!(rate_limit_rpm, "rate limiting enabled");
     } else {

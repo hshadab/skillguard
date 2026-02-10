@@ -17,6 +17,7 @@ pub mod patterns;
 pub mod scores;
 pub mod server;
 pub mod skill;
+pub mod ui;
 
 use eyre::Result;
 use onnx_tracer::graph::model::Model;

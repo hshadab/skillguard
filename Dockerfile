@@ -14,8 +14,9 @@ WORKDIR /build
 # Copy manifest first for layer caching
 COPY Cargo.toml Cargo.lock* ./
 
-# Copy source
+# Copy source and static assets
 COPY src/ src/
+COPY static/ static/
 
 # Build in release mode
 RUN cargo build --release --bin skillguard
