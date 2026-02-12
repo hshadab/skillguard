@@ -1,0 +1,509 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SkillGuard ZKML",
+    "version": "0.1.0",
+    "description": "Verifiable AI safety classifier for OpenClaw skills. Evaluates skill metadata and scripts to produce a safety classification (SAFE, CAUTION, DANGEROUS, MALICIOUS) with optional SNARK proof via Jolt/HyperKZG.",
+    "license": {
+      "name": "MIT",
+      "url": "https://github.com/hshadab/skillguard/blob/main/LICENSE"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://skillguard.onrender.com",
+      "description": "Production"
+    }
+  ],
+  "x-x402": {
+    "description": "Paid endpoints accept x402 payment as an alternative to an API key. Send a 402 payment header with USDC on Base to access basic evaluation results without an API key.",
+    "facilitator": "https://api.cdp.coinbase.com/platform/v2/x402",
+    "token": "USDC",
+    "network": "Base (EIP-155 chain 8453)"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "getDashboard",
+        "summary": "HTML dashboard",
+        "description": "Returns the embedded web UI showing service status and usage stats.",
+        "responses": {
+          "200": {
+            "description": "HTML page",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Health check",
+        "description": "Returns service health, version, model hash, uptime, and ZKML prover status.",
+        "responses": {
+          "200": {
+            "description": "Health status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stats": {
+      "get": {
+        "operationId": "getStats",
+        "summary": "Usage statistics",
+        "description": "Returns aggregate usage metrics: request counts, classification breakdowns, endpoint hits, and proof stats.",
+        "responses": {
+          "200": {
+            "description": "Usage statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/evaluate": {
+      "post": {
+        "operationId": "evaluateSkill",
+        "summary": "Evaluate a skill's safety",
+        "description": "Classify a skill by sending its full metadata, scripts, and optional VirusTotal report. Returns a safety classification with confidence scores. API-key holders receive full results; x402 payers receive basic results.",
+        "x-x402-pricing": {
+          "amount": "0.001",
+          "currency": "USDC",
+          "network": "Base"
+        },
+        "security": [
+          { "BearerAuth": [] },
+          { "x402Payment": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Evaluation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key (when x402 is not available)"
+          },
+          "402": {
+            "description": "Payment required (x402)"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        }
+      }
+    },
+    "/api/v1/evaluate/name": {
+      "post": {
+        "operationId": "evaluateSkillByName",
+        "summary": "Evaluate a skill by ClawHub name",
+        "description": "Look up a skill on ClawHub by slug (and optional version), then classify it. Returns the same response shape as /api/v1/evaluate.",
+        "x-x402-pricing": {
+          "amount": "0.001",
+          "currency": "USDC",
+          "network": "Base"
+        },
+        "security": [
+          { "BearerAuth": [] },
+          { "x402Payment": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluateByNameRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Evaluation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key (when x402 is not available)"
+          },
+          "402": {
+            "description": "Payment required (x402)"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        }
+      }
+    },
+    "/api/v1/evaluate/prove": {
+      "post": {
+        "operationId": "evaluateSkillWithProof",
+        "summary": "Evaluate with ZK proof",
+        "description": "Classify a skill and generate a Jolt/HyperKZG SNARK proof of the MLP forward pass. The proof can be independently verified via /api/v1/verify.",
+        "x-x402-pricing": {
+          "amount": "0.005",
+          "currency": "USDC",
+          "network": "Base"
+        },
+        "security": [
+          { "BearerAuth": [] },
+          { "x402Payment": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Evaluation result with proof",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProveEvaluateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key (when x402 is not available)"
+          },
+          "402": {
+            "description": "Payment required (x402)"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        }
+      }
+    },
+    "/api/v1/verify": {
+      "post": {
+        "operationId": "verifyProof",
+        "summary": "Verify a ZK proof",
+        "description": "Verify a previously generated SNARK proof. Free, no authentication required.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Verification result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "API key passed as a Bearer token. Grants full evaluation results."
+      },
+      "x402Payment": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-PAYMENT",
+        "description": "x402 USDC payment header on Base. Grants basic evaluation results (classification + decision only)."
+      }
+    },
+    "schemas": {
+      "Skill": {
+        "type": "object",
+        "required": ["name", "version", "author", "skill_md"],
+        "properties": {
+          "name": { "type": "string" },
+          "version": { "type": "string" },
+          "author": { "type": "string" },
+          "description": { "type": "string", "default": "" },
+          "skill_md": { "type": "string", "description": "Full SKILL.md content" },
+          "scripts": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ScriptFile" },
+            "default": []
+          },
+          "metadata": { "$ref": "#/components/schemas/SkillMetadata" },
+          "files": {
+            "type": "array",
+            "items": { "type": "string" },
+            "default": []
+          }
+        }
+      },
+      "ScriptFile": {
+        "type": "object",
+        "required": ["name", "content"],
+        "properties": {
+          "name": { "type": "string" },
+          "content": { "type": "string" },
+          "extension": { "type": "string", "default": "" }
+        }
+      },
+      "SkillMetadata": {
+        "type": "object",
+        "properties": {
+          "stars": { "type": "integer", "default": 0 },
+          "downloads": { "type": "integer", "default": 0 },
+          "created_at": { "type": "string", "default": "" },
+          "updated_at": { "type": "string", "default": "" },
+          "author_account_created": { "type": "string", "default": "" },
+          "author_total_skills": { "type": "integer", "default": 0 }
+        }
+      },
+      "VTReport": {
+        "type": "object",
+        "required": ["malicious_count", "suspicious_count"],
+        "properties": {
+          "malicious_count": { "type": "integer" },
+          "suspicious_count": { "type": "integer" },
+          "analysis_date": { "type": "string", "default": "" }
+        }
+      },
+      "EvaluateRequest": {
+        "type": "object",
+        "required": ["skill"],
+        "properties": {
+          "skill": { "$ref": "#/components/schemas/Skill" },
+          "vt_report": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/VTReport" },
+              { "type": "null" }
+            ]
+          }
+        }
+      },
+      "EvaluateByNameRequest": {
+        "type": "object",
+        "required": ["skill"],
+        "properties": {
+          "skill": { "type": "string", "description": "Skill name (slug) on ClawHub" },
+          "version": {
+            "type": "string",
+            "description": "Optional version (defaults to latest)"
+          }
+        }
+      },
+      "ClassScores": {
+        "type": "object",
+        "description": "Softmax-normalized confidence scores for each safety class.",
+        "required": ["SAFE", "CAUTION", "DANGEROUS", "MALICIOUS"],
+        "properties": {
+          "SAFE": { "type": "number" },
+          "CAUTION": { "type": "number" },
+          "DANGEROUS": { "type": "number" },
+          "MALICIOUS": { "type": "number" }
+        }
+      },
+      "EvaluationResult": {
+        "type": "object",
+        "required": ["skill_name", "classification", "decision", "confidence", "scores", "reasoning"],
+        "properties": {
+          "skill_name": { "type": "string" },
+          "classification": { "type": "string", "enum": ["SAFE", "CAUTION", "DANGEROUS", "MALICIOUS"] },
+          "decision": { "type": "string", "enum": ["allow", "deny", "flag"] },
+          "confidence": { "type": "number" },
+          "scores": { "$ref": "#/components/schemas/ClassScores" },
+          "reasoning": { "type": "string" }
+        }
+      },
+      "BasicEvaluationResult": {
+        "type": "object",
+        "description": "Stripped-down result returned to x402 payers.",
+        "required": ["skill_name", "classification", "decision"],
+        "properties": {
+          "skill_name": { "type": "string" },
+          "classification": { "type": "string", "enum": ["SAFE", "CAUTION", "DANGEROUS", "MALICIOUS"] },
+          "decision": { "type": "string", "enum": ["allow", "deny", "flag"] }
+        }
+      },
+      "EvaluateResponse": {
+        "type": "object",
+        "required": ["success", "processing_time_ms"],
+        "properties": {
+          "success": { "type": "boolean" },
+          "error": { "type": "string" },
+          "evaluation": { "$ref": "#/components/schemas/EvaluationResult" },
+          "basic_evaluation": { "$ref": "#/components/schemas/BasicEvaluationResult" },
+          "processing_time_ms": { "type": "integer" }
+        }
+      },
+      "ProofBundle": {
+        "type": "object",
+        "required": ["proof_b64", "program_io", "proof_size_bytes", "proving_time_ms"],
+        "properties": {
+          "proof_b64": { "type": "string", "description": "Base64-encoded SNARK proof bytes" },
+          "program_io": { "description": "Program I/O as JSON (inputs/outputs visible to verifier)" },
+          "proof_size_bytes": { "type": "integer" },
+          "proving_time_ms": { "type": "integer" }
+        }
+      },
+      "ProvedEvaluationResult": {
+        "type": "object",
+        "required": ["skill_name", "classification", "decision", "confidence", "scores", "reasoning", "proof"],
+        "properties": {
+          "skill_name": { "type": "string" },
+          "classification": { "type": "string", "enum": ["SAFE", "CAUTION", "DANGEROUS", "MALICIOUS"] },
+          "decision": { "type": "string", "enum": ["allow", "deny", "flag"] },
+          "confidence": { "type": "number" },
+          "scores": { "$ref": "#/components/schemas/ClassScores" },
+          "reasoning": { "type": "string" },
+          "proof": { "$ref": "#/components/schemas/ProofBundle" }
+        }
+      },
+      "ProveEvaluateResponse": {
+        "type": "object",
+        "required": ["success", "processing_time_ms"],
+        "properties": {
+          "success": { "type": "boolean" },
+          "error": { "type": "string" },
+          "evaluation": { "$ref": "#/components/schemas/ProvedEvaluationResult" },
+          "processing_time_ms": { "type": "integer" }
+        }
+      },
+      "VerifyRequest": {
+        "type": "object",
+        "required": ["proof_b64", "program_io"],
+        "properties": {
+          "proof_b64": { "type": "string" },
+          "program_io": { "description": "Program I/O JSON from the original proof" }
+        }
+      },
+      "VerifyResponse": {
+        "type": "object",
+        "required": ["valid", "verification_time_ms"],
+        "properties": {
+          "valid": { "type": "boolean" },
+          "verification_time_ms": { "type": "integer" }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": ["status", "version", "model_hash", "uptime_seconds", "zkml_enabled", "proving_scheme"],
+        "properties": {
+          "status": { "type": "string" },
+          "version": { "type": "string" },
+          "model_hash": { "type": "string" },
+          "uptime_seconds": { "type": "integer" },
+          "zkml_enabled": { "type": "boolean" },
+          "proving_scheme": { "type": "string" }
+        }
+      },
+      "StatsResponse": {
+        "type": "object",
+        "required": ["uptime_seconds", "model_hash", "requests", "classifications", "decisions", "endpoints", "proofs"],
+        "properties": {
+          "uptime_seconds": { "type": "integer" },
+          "model_hash": { "type": "string" },
+          "requests": { "$ref": "#/components/schemas/RequestStats" },
+          "classifications": { "$ref": "#/components/schemas/ClassificationStats" },
+          "decisions": { "$ref": "#/components/schemas/DecisionStats" },
+          "endpoints": { "$ref": "#/components/schemas/EndpointStats" },
+          "proofs": { "$ref": "#/components/schemas/ProofStats" }
+        }
+      },
+      "RequestStats": {
+        "type": "object",
+        "required": ["total", "errors"],
+        "properties": {
+          "total": { "type": "integer" },
+          "errors": { "type": "integer" }
+        }
+      },
+      "ClassificationStats": {
+        "type": "object",
+        "required": ["safe", "caution", "dangerous", "malicious"],
+        "properties": {
+          "safe": { "type": "integer" },
+          "caution": { "type": "integer" },
+          "dangerous": { "type": "integer" },
+          "malicious": { "type": "integer" }
+        }
+      },
+      "DecisionStats": {
+        "type": "object",
+        "required": ["allow", "deny", "flag"],
+        "properties": {
+          "allow": { "type": "integer" },
+          "deny": { "type": "integer" },
+          "flag": { "type": "integer" }
+        }
+      },
+      "EndpointStats": {
+        "type": "object",
+        "required": ["evaluate", "evaluate_by_name", "prove", "verify", "stats"],
+        "properties": {
+          "evaluate": { "type": "integer" },
+          "evaluate_by_name": { "type": "integer" },
+          "prove": { "type": "integer" },
+          "verify": { "type": "integer" },
+          "stats": { "type": "integer" }
+        }
+      },
+      "ProofStats": {
+        "type": "object",
+        "required": ["total_generated", "total_verified"],
+        "properties": {
+          "total_generated": { "type": "integer" },
+          "total_verified": { "type": "integer" }
+        }
+      }
+    }
+  }
+}

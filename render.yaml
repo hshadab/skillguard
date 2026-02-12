@@ -4,9 +4,13 @@ services:
     runtime: docker
     repo: https://github.com/hshadab/skillguard.git
     branch: main
-    plan: standard
+    plan: pro plus
     region: oregon
     healthCheckPath: /health
+    disk:
+      name: skillguard-cache
+      mountPath: /var/data/skillguard-cache
+      sizeGB: 1
     envVars:
       - key: SKILLGUARD_PAY_TO
         sync: false

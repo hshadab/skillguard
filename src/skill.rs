@@ -116,6 +116,17 @@ impl SafetyClassification {
     pub fn is_deny(&self) -> bool {
         matches!(self, Self::Dangerous | Self::Malicious)
     }
+
+    /// Parse from the uppercase string representation (e.g. "SAFE", "MALICIOUS").
+    pub fn parse_str(s: &str) -> Self {
+        match s {
+            "SAFE" => Self::Safe,
+            "CAUTION" => Self::Caution,
+            "DANGEROUS" => Self::Dangerous,
+            "MALICIOUS" => Self::Malicious,
+            _ => Self::Safe,
+        }
+    }
 }
 
 /// Decision derived from safety classification
@@ -133,6 +144,16 @@ impl SafetyDecision {
             Self::Allow => "allow",
             Self::Deny => "deny",
             Self::Flag => "flag",
+        }
+    }
+
+    /// Parse from the lowercase string representation (e.g. "allow", "deny").
+    pub fn parse_str(s: &str) -> Self {
+        match s {
+            "allow" => Self::Allow,
+            "deny" => Self::Deny,
+            "flag" => Self::Flag,
+            _ => Self::Allow,
         }
     }
 }

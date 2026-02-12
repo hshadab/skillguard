@@ -14,6 +14,7 @@
 
 #[cfg(feature = "crawler")]
 pub mod batch;
+pub mod cache;
 pub mod clawhub;
 #[cfg(feature = "crawler")]
 pub mod crawler;

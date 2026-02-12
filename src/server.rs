@@ -108,7 +108,7 @@ pub struct EvaluateByNameRequest {
 }
 
 /// Flat evaluation result (no receipts, no proofs)
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EvaluationResult {
     pub skill_name: String,
     pub classification: String,
@@ -127,7 +127,7 @@ pub struct BasicEvaluationResult {
 }
 
 /// Full evaluation result with ZK proof.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ProvedEvaluationResult {
     pub skill_name: String,
     pub classification: String,
@@ -153,7 +153,7 @@ pub struct VerifyResponse {
 }
 
 /// Response from the prove+evaluate endpoint.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ProveEvaluateResponse {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -401,6 +401,7 @@ pub struct ServerState {
     pub clawhub_client: ClawHubClient,
     pub usage: UsageMetrics,
     pub prover: Option<Arc<crate::prover::ProverState>>,
+    pub proof_cache: crate::cache::ProofCache,
 }
 
 impl ServerState {
@@ -422,6 +423,8 @@ impl ServerState {
             }
         };
 
+        let proof_cache = crate::cache::ProofCache::open(None);
+
         Self {
             config,
             model_hash,
@@ -430,6 +433,7 @@ impl ServerState {
             clawhub_client: ClawHubClient::new(),
             usage,
             prover,
+            proof_cache,
         }
     }
 
@@ -631,13 +635,18 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
         .route("/", get(crate::ui::index_handler))
         .route("/health", get(health_handler))
         .route("/stats", get(stats_handler))
+        .route("/openapi.json", get(crate::ui::openapi_handler))
+        .route(
+            "/.well-known/ai-plugin.json",
+            get(crate::ui::ai_plugin_handler),
+        )
         .route("/api/v1/verify", post(verify_handler))
         .merge(api_routes)
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
     info!(bind = %bind_addr, "SkillGuard ZKML server listening");
-    info!("Endpoints: GET / (UI), GET /health, POST /api/v1/evaluate, POST /api/v1/evaluate/name, POST /api/v1/evaluate/prove, POST /api/v1/verify, GET /stats");
+    info!("Endpoints: GET / (UI), GET /health, GET /stats, GET /openapi.json, GET /.well-known/ai-plugin.json, POST /api/v1/evaluate, POST /api/v1/evaluate/name, POST /api/v1/evaluate/prove, POST /api/v1/verify");
     if rate_limit_rpm > 0 {
         info!(rate_limit_rpm, "rate limiting enabled");
     } else {
@@ -976,6 +985,20 @@ async fn prove_evaluate_handler(
         }
     };
 
+    // Check proof cache before doing expensive proving
+    let cache_key = crate::cache::ProofCache::cache_key(&bytes, &state.model_hash);
+    if let Some(cached) = state.proof_cache.get(&cache_key) {
+        // Still record usage metrics for cached responses
+        if let Some(ref eval) = cached.evaluation {
+            let cls = crate::skill::SafetyClassification::parse_str(&eval.classification);
+            let dec = crate::skill::SafetyDecision::parse_str(&eval.decision);
+            state
+                .usage
+                .record("prove", &eval.skill_name, cls, dec, eval.confidence, 0);
+        }
+        return axum::Json(cached);
+    }
+
     let features = SkillFeatures::extract(&eval_request.skill, eval_request.vt_report.as_ref());
     let feature_vec = features.to_normalized_vec();
     let skill_name = eval_request.skill.name.clone();
@@ -1012,7 +1035,7 @@ async fn prove_evaluate_handler(
         .total_proofs_generated
         .fetch_add(1, Ordering::Relaxed);
 
-    axum::Json(ProveEvaluateResponse {
+    let response = ProveEvaluateResponse {
         success: true,
         error: None,
         evaluation: Some(ProvedEvaluationResult {
@@ -1025,7 +1048,12 @@ async fn prove_evaluate_handler(
             proof: proof_bundle,
         }),
         processing_time_ms,
-    })
+    };
+
+    // Cache the successful proof response
+    state.proof_cache.put(&cache_key, &response);
+
+    axum::Json(response)
 }
 
 async fn verify_handler(

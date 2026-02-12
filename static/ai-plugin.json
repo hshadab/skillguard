@@ -1,0 +1,16 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "SkillGuard ZKML",
+  "name_for_model": "skillguard",
+  "description_for_human": "Verifiable AI safety classifier for OpenClaw skills. Get safety classifications with optional cryptographic SNARK proofs.",
+  "description_for_model": "SkillGuard evaluates the safety of OpenClaw skills using a ZKML classifier. Send a skill's metadata and scripts to get a safety classification (SAFE, CAUTION, DANGEROUS, MALICIOUS) with confidence scores. Optionally request a cryptographic SNARK proof. Use /api/v1/evaluate for full skill data, /api/v1/evaluate/name to look up by name, or /api/v1/evaluate/prove for classification with ZK proof. Payment: Bearer API key for full results, or x402 USDC on Base for basic results.",
+  "auth": {
+    "type": "service_http",
+    "authorization_type": "bearer"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "https://skillguard.onrender.com/openapi.json"
+  },
+  "legal_info_url": "https://github.com/hshadab/skillguard/blob/main/LICENSE"
+}
