@@ -414,7 +414,10 @@ impl ServerState {
                 Some(Arc::new(p))
             }
             Err(e) => {
-                warn!("ZKML prover initialization failed: {}. Prove endpoints disabled.", e);
+                warn!(
+                    "ZKML prover initialization failed: {}. Prove endpoints disabled.",
+                    e
+                );
                 None
             }
         };

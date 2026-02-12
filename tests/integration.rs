@@ -539,12 +539,7 @@ async fn test_verify_endpoint_valid() {
     });
 
     let client = reqwest::Client::new();
-    let prove_resp = client
-        .post(&prove_url)
-        .json(&skill)
-        .send()
-        .await
-        .unwrap();
+    let prove_resp = client.post(&prove_url).json(&skill).send().await.unwrap();
     let prove_body: serde_json::Value = prove_resp.json().await.unwrap();
     assert_eq!(prove_body["success"], true);
 

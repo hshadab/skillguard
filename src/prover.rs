@@ -100,24 +100,19 @@ impl ProverState {
             .map_err(|e| eyre::eyre!("Tensor error: {:?}", e))?;
 
         let start = Instant::now();
-        let (snark, program_io) = <JoltSNARK<F, PCS, Transcript> as zkml_jolt_core::snark::SNARK<
-            F,
-            PCS,
-            Transcript,
-            fn() -> Model,
-        >>::prove(
-            &std::slice::from_ref(&input),
-            &self.prover_preprocessing,
-        );
+        let (snark, program_io) =
+            <JoltSNARK<F, PCS, Transcript> as zkml_jolt_core::snark::SNARK<
+                F,
+                PCS,
+                Transcript,
+                fn() -> Model,
+            >>::prove(&std::slice::from_ref(&input), &self.prover_preprocessing);
         let proving_time_ms = start.elapsed().as_millis() as u64;
 
         // Extract raw output from program IO
         let outputs = &program_io.outputs;
         if outputs.len() < 4 {
-            eyre::bail!(
-                "Expected at least 4 output values, got {}",
-                outputs.len()
-            );
+            eyre::bail!("Expected at least 4 output values, got {}", outputs.len());
         }
         let raw_scores: [i32; 4] = [outputs[0], outputs[1], outputs[2], outputs[3]];
 
@@ -156,10 +151,11 @@ impl ProverState {
             .decode(&bundle.proof_b64)
             .map_err(|e| eyre::eyre!("Base64 decode failed: {}", e))?;
 
-        let snark = <JoltSNARK<F, PCS, Transcript> as CanonicalDeserialize>::deserialize_compressed(
-            &proof_bytes[..],
-        )
-        .map_err(|e| eyre::eyre!("Proof deserialization failed: {}", e))?;
+        let snark =
+            <JoltSNARK<F, PCS, Transcript> as CanonicalDeserialize>::deserialize_compressed(
+                &proof_bytes[..],
+            )
+            .map_err(|e| eyre::eyre!("Proof deserialization failed: {}", e))?;
 
         let program_io: zkml_jolt_core::snark::ProgramIO =
             serde_json::from_value(bundle.program_io.clone())

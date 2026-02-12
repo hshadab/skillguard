@@ -140,7 +140,11 @@ fn cmd_serve(
     };
 
     info!("Starting SkillGuard ZKML classifier service");
-    info!(model = "skill-safety", params = 1924, proving = "Jolt/HyperKZG");
+    info!(
+        model = "skill-safety",
+        params = 1924,
+        proving = "Jolt/HyperKZG"
+    );
     info!(model_hash = %skillguard::model_hash());
     if api_key.is_some() {
         info!("API key authentication enabled on /api/v1/* endpoints");
@@ -265,8 +269,7 @@ fn cmd_check(
 
     let (classification, raw_scores, confidence, proof_bundle) = if prove {
         let prover = skillguard::prover::ProverState::initialize()?;
-        let (cls, scores, conf, bundle) =
-            skillguard::classify_with_proof(&prover, &feature_vec)?;
+        let (cls, scores, conf, bundle) = skillguard::classify_with_proof(&prover, &feature_vec)?;
         (cls, scores, conf, Some(bundle))
     } else {
         let (cls, scores, conf) = skillguard::classify(&feature_vec)?;
