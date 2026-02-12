@@ -7,7 +7,9 @@
 #   docker run -p 8080:8080 skillguard
 
 # --- Builder stage ---
-FROM rust:1.88-bookworm AS builder
+# Nightly required: arkworks-algebra dev/twist-shout branch uses const generics
+# features that need Rust >= 1.95 nightly.
+FROM rustlang/rust:nightly-bookworm AS builder
 
 WORKDIR /build
 
