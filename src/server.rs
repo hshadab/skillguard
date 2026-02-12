@@ -574,7 +574,8 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
         use x402_types::networks::USDC;
 
         let x402 = X402Middleware::try_from(state.config.facilitator_url.as_str())
-            .expect("Failed to init x402 middleware");
+            .expect("Failed to init x402 middleware")
+            .settle_before_execution();
 
         let pay_to: Address = pay_to_addr
             .parse()
@@ -583,39 +584,44 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
         // Use dynamic pricing: bypass payment (empty vec) when a valid API key is present,
         // otherwise require $0.001 USDC for evaluate, $0.005 for prove.
         let api_key_for_closure = state.config.api_key.clone();
-        api_routes.layer(x402.with_dynamic_price(move |headers, uri, _base_url| {
-            let has_valid_api_key = if let Some(ref expected_key) = api_key_for_closure {
-                headers
-                    .get("authorization")
-                    .and_then(|v| v.to_str().ok())
-                    .and_then(|h| h.strip_prefix("Bearer "))
-                    .map(|t| t.trim() == expected_key)
-                    .unwrap_or(false)
-            } else {
-                false
-            };
-
-            let is_prove = uri.path().contains("/prove");
-
-            async move {
-                if has_valid_api_key {
-                    // API key user: bypass x402 payment
-                    vec![]
-                } else if is_prove {
-                    // Prove endpoint: $0.005 USDC = 5000 base units (6 decimals)
-                    vec![V2Eip155Exact::price_tag(
-                        pay_to,
-                        USDC::base().amount(5000u64),
-                    )]
+        api_routes.layer(
+            x402.with_dynamic_price(move |headers, uri, _base_url| {
+                let has_valid_api_key = if let Some(ref expected_key) = api_key_for_closure {
+                    headers
+                        .get("authorization")
+                        .and_then(|v| v.to_str().ok())
+                        .and_then(|h| h.strip_prefix("Bearer "))
+                        .map(|t| t.trim() == expected_key)
+                        .unwrap_or(false)
                 } else {
-                    // Evaluate endpoint: $0.001 USDC = 1000 base units (6 decimals)
-                    vec![V2Eip155Exact::price_tag(
-                        pay_to,
-                        USDC::base().amount(1000u64),
-                    )]
+                    false
+                };
+
+                let is_prove = uri.path().contains("/prove");
+
+                async move {
+                    if has_valid_api_key {
+                        // API key user: bypass x402 payment
+                        vec![]
+                    } else if is_prove {
+                        // Prove endpoint: $0.005 USDC = 5000 base units (6 decimals)
+                        vec![V2Eip155Exact::price_tag(
+                            pay_to,
+                            USDC::base().amount(5000u64),
+                        )]
+                    } else {
+                        // Evaluate endpoint: $0.001 USDC = 1000 base units (6 decimals)
+                        vec![V2Eip155Exact::price_tag(
+                            pay_to,
+                            USDC::base().amount(1000u64),
+                        )]
+                    }
                 }
-            }
-        }))
+            })
+            .with_description(
+                "SkillGuard ZKML — AI skill safety classification and proving".to_string(),
+            ),
+        )
     } else {
         api_routes
     };
@@ -1048,10 +1054,7 @@ async fn verify_handler(
         proving_time_ms: 0,
     };
 
-    let valid = match prover.verify_proof(&bundle) {
-        Ok(v) => v,
-        Err(_) => false,
-    };
+    let valid: bool = prover.verify_proof(&bundle).unwrap_or_default();
 
     state
         .usage

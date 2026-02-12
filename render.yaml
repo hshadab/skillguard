@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: skillguard
+    runtime: docker
+    repo: https://github.com/hshadab/skillguard.git
+    branch: main
+    plan: standard
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: SKILLGUARD_PAY_TO
+        sync: false
+      - key: SKILLGUARD_FACILITATOR_URL
+        value: https://api.cdp.coinbase.com/platform/v2/x402
+      - key: RUST_LOG
+        value: info

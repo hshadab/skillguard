@@ -16,17 +16,19 @@ use eyre::Result;
 use jolt_core::poly::commitment::hyperkzg::HyperKZG;
 use onnx_tracer::graph::model::Model;
 use onnx_tracer::tensor::Tensor;
+use onnx_tracer::ProgramIO;
 use serde::{Deserialize, Serialize};
 use tracing::info;
-use zkml_jolt_core::snark::JoltSNARK;
+use zkml_jolt_core::jolt::{JoltProverPreprocessing, JoltSNARK, JoltVerifierPreprocessing};
 
 use crate::model::skill_safety_model;
 
 /// Maximum trace length for the Jolt prover (2^16 = 65536 steps).
 const MAX_TRACE_LENGTH: usize = 1 << 16;
 
+#[allow(clippy::upper_case_acronyms)]
 type PCS = HyperKZG<ark_bn254::Bn254>;
-type Transcript = jolt_core::utils::transcript::KeccakTranscript;
+type Transcript = jolt_core::transcripts::KeccakTranscript;
 type F = ark_bn254::Fr;
 
 /// Serializable proof bundle returned from proving.
@@ -44,18 +46,8 @@ pub struct ProofBundle {
 
 /// Prover state holding preprocessed keys. Initialize once, share via `Arc`.
 pub struct ProverState {
-    prover_preprocessing: <JoltSNARK<F, PCS, Transcript> as zkml_jolt_core::snark::SNARK<
-        F,
-        PCS,
-        Transcript,
-        fn() -> Model,
-    >>::ProverPreprocessing,
-    verifier_preprocessing: <JoltSNARK<F, PCS, Transcript> as zkml_jolt_core::snark::SNARK<
-        F,
-        PCS,
-        Transcript,
-        fn() -> Model,
-    >>::VerifierPreprocessing,
+    prover_preprocessing: JoltProverPreprocessing<F, PCS>,
+    verifier_preprocessing: JoltVerifierPreprocessing<F, PCS>,
 }
 
 // SAFETY: The preprocessing data is read-only after initialization.
@@ -72,13 +64,9 @@ impl ProverState {
         info!("Initializing ZKML prover (this may take a moment)...");
 
         let model_fn: fn() -> Model = skill_safety_model;
-        let (prover_preprocessing, verifier_preprocessing) =
-            <JoltSNARK<F, PCS, Transcript> as zkml_jolt_core::snark::SNARK<
-                F,
-                PCS,
-                Transcript,
-                fn() -> Model,
-            >>::prover_preprocess(model_fn, MAX_TRACE_LENGTH);
+        let prover_preprocessing =
+            JoltSNARK::<F, PCS, Transcript>::prover_preprocess(model_fn, MAX_TRACE_LENGTH);
+        let verifier_preprocessing = JoltVerifierPreprocessing::from(&prover_preprocessing);
 
         let elapsed = start.elapsed();
         info!(
@@ -100,21 +88,27 @@ impl ProverState {
             .map_err(|e| eyre::eyre!("Tensor error: {:?}", e))?;
 
         let start = Instant::now();
-        let (snark, program_io) =
-            <JoltSNARK<F, PCS, Transcript> as zkml_jolt_core::snark::SNARK<
-                F,
-                PCS,
-                Transcript,
-                fn() -> Model,
-            >>::prove(&std::slice::from_ref(&input), &self.prover_preprocessing);
+        let (snark, program_io, _debug_info) = JoltSNARK::<F, PCS, Transcript>::prove(
+            &self.prover_preprocessing,
+            skill_safety_model,
+            &input,
+        );
         let proving_time_ms = start.elapsed().as_millis() as u64;
 
         // Extract raw output from program IO
-        let outputs = &program_io.outputs;
-        if outputs.len() < 4 {
-            eyre::bail!("Expected at least 4 output values, got {}", outputs.len());
+        let output_data = program_io.output.data();
+        if output_data.len() < 4 {
+            eyre::bail!(
+                "Expected at least 4 output values, got {}",
+                output_data.len()
+            );
         }
-        let raw_scores: [i32; 4] = [outputs[0], outputs[1], outputs[2], outputs[3]];
+        let raw_scores: [i32; 4] = [
+            output_data[0],
+            output_data[1],
+            output_data[2],
+            output_data[3],
+        ];
 
         // Serialize the proof
         let mut proof_bytes = Vec::new();
@@ -157,18 +151,12 @@ impl ProverState {
             )
             .map_err(|e| eyre::eyre!("Proof deserialization failed: {}", e))?;
 
-        let program_io: zkml_jolt_core::snark::ProgramIO =
-            serde_json::from_value(bundle.program_io.clone())
-                .map_err(|e| eyre::eyre!("Program IO deserialization failed: {}", e))?;
+        let program_io: ProgramIO = serde_json::from_value(bundle.program_io.clone())
+            .map_err(|e| eyre::eyre!("Program IO deserialization failed: {}", e))?;
 
         // verify() may panic on invalid proofs, so we catch that
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            <JoltSNARK<F, PCS, Transcript> as zkml_jolt_core::snark::SNARK<
-                F,
-                PCS,
-                Transcript,
-                fn() -> Model,
-            >>::verify(snark, program_io, &self.verifier_preprocessing)
+            snark.verify(&self.verifier_preprocessing, program_io, None)
         }));
 
         match result {

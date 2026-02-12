@@ -150,7 +150,7 @@ fn cmd_serve(
         info!("API key authentication enabled on /api/v1/* endpoints");
     }
     if let Some(ref addr) = pay_to {
-        info!(pay_to = %addr, "x402 payment enabled ($0.001 USDC per evaluation on Base)");
+        info!(pay_to = %addr, "x402 payment enabled ($0.001 evaluate, $0.005 prove on Base)");
     }
 
     let rt = tokio::runtime::Runtime::new()?;

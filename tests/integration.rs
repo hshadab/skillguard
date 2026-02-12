@@ -175,7 +175,7 @@ async fn evaluate_handler(
 
 async fn prove_evaluate_handler(
     axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
-    axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<SocketAddr>,
+    axum::extract::ConnectInfo(_addr): axum::extract::ConnectInfo<SocketAddr>,
     request: axum::extract::Request,
 ) -> impl axum::response::IntoResponse {
     use skillguard::server::AuthMethod;
@@ -273,10 +273,7 @@ async fn verify_handler(
         proving_time_ms: 0,
     };
 
-    let valid = match prover.verify_proof(&bundle) {
-        Ok(v) => v,
-        Err(_) => false,
-    };
+    let valid: bool = prover.verify_proof(&bundle).unwrap_or_default();
 
     axum::Json(serde_json::json!({
         "valid": valid,
@@ -359,7 +356,7 @@ async fn test_health_shows_zkml() {
     assert_eq!(resp.status(), 200);
 
     let body: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(body["zkml_enabled"].as_bool().is_some(), true);
+    assert!(body["zkml_enabled"].as_bool().is_some());
     assert_eq!(body["proving_scheme"], "Jolt/HyperKZG");
 }
 
