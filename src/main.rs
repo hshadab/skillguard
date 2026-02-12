@@ -10,7 +10,7 @@ use skillguard::skill::{derive_decision, skill_from_skill_md, Skill, SkillFeatur
 #[derive(Parser)]
 #[command(
     name = "skillguard",
-    about = "Standalone skill safety classifier for OpenClaw/ClawHub skills."
+    about = "Verifiable AI safety classifier powered by Jolt Atlas ZKML with x402 agentic commerce."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -51,9 +51,14 @@ enum Commands {
         /// Output format: json or summary
         #[arg(long, default_value = "summary")]
         format: String,
+
+        /// Generate a ZKML proof for the classification
+        #[arg(long)]
+        prove: bool,
     },
 
     /// Crawl the awesome-openclaw-skills list and fetch SKILL.md files
+    #[cfg(feature = "crawler")]
     Crawl {
         /// URL of the awesome-openclaw-skills README (raw markdown)
         #[arg(long)]
@@ -77,6 +82,7 @@ enum Commands {
     },
 
     /// Batch scan crawled skills and produce reports
+    #[cfg(feature = "crawler")]
     Scan {
         /// Input directory containing crawled SKILL.md files
         #[arg(long)]
@@ -133,8 +139,8 @@ fn cmd_serve(
         facilitator_url,
     };
 
-    info!("Starting SkillGuard classifier service");
-    info!(model = "skill-safety", params = 1924);
+    info!("Starting SkillGuard ZKML classifier service");
+    info!(model = "skill-safety", params = 1924, proving = "Jolt/HyperKZG");
     info!(model_hash = %skillguard::model_hash());
     if api_key.is_some() {
         info!("API key authentication enabled on /api/v1/* endpoints");
@@ -149,6 +155,7 @@ fn cmd_serve(
     Ok(())
 }
 
+#[cfg(feature = "crawler")]
 fn cmd_crawl(
     awesome_url: Option<String>,
     limit: usize,
@@ -186,6 +193,7 @@ fn cmd_crawl(
     Ok(())
 }
 
+#[cfg(feature = "crawler")]
 fn cmd_scan(
     input_dir: Option<PathBuf>,
     from_awesome: bool,
@@ -228,7 +236,12 @@ fn cmd_scan(
     Ok(())
 }
 
-fn cmd_check(input: PathBuf, vt_report_path: Option<PathBuf>, format: String) -> Result<i32> {
+fn cmd_check(
+    input: PathBuf,
+    vt_report_path: Option<PathBuf>,
+    format: String,
+    prove: bool,
+) -> Result<i32> {
     // Load skill from input
     let skill: Skill = if input.extension().map(|e| e == "json").unwrap_or(false) {
         let content = fs::read_to_string(&input)?;
@@ -248,16 +261,24 @@ fn cmd_check(input: PathBuf, vt_report_path: Option<PathBuf>, format: String) ->
     // Extract features
     let features = SkillFeatures::extract(&skill, vt_report.as_ref());
     let feature_vec = features.to_normalized_vec();
+    let model_hash = skillguard::model_hash();
 
-    // Classify
-    let (classification, raw_scores, confidence) = skillguard::classify(&feature_vec)?;
+    let (classification, raw_scores, confidence, proof_bundle) = if prove {
+        let prover = skillguard::prover::ProverState::initialize()?;
+        let (cls, scores, conf, bundle) =
+            skillguard::classify_with_proof(&prover, &feature_vec)?;
+        (cls, scores, conf, Some(bundle))
+    } else {
+        let (cls, scores, conf) = skillguard::classify(&feature_vec)?;
+        (cls, scores, conf, None)
+    };
+
     let scores = ClassScores::from_raw_scores(&raw_scores);
     let (decision, reasoning) = derive_decision(classification, &scores.to_array());
-    let model_hash = skillguard::model_hash();
 
     match format.as_str() {
         "json" => {
-            let result = serde_json::json!({
+            let mut result = serde_json::json!({
                 "success": true,
                 "evaluation": {
                     "skill_name": skill.name,
@@ -269,6 +290,9 @@ fn cmd_check(input: PathBuf, vt_report_path: Option<PathBuf>, format: String) ->
                 },
                 "model_hash": model_hash,
             });
+            if let Some(ref bundle) = proof_bundle {
+                result["proof"] = serde_json::to_value(bundle)?;
+            }
             println!("{}", serde_json::to_string_pretty(&result)?);
         }
         _ => {
@@ -288,6 +312,21 @@ fn cmd_check(input: PathBuf, vt_report_path: Option<PathBuf>, format: String) ->
             println!("  MALICIOUS:  {:.1}%", scores.malicious * 100.0);
             println!();
             println!("Model Hash: {}", model_hash);
+            if let Some(ref bundle) = proof_bundle {
+                println!();
+                println!("ZK Proof:");
+                println!("  Size:        {} bytes", bundle.proof_size_bytes);
+                println!("  Proving time: {} ms", bundle.proving_time_ms);
+                println!(
+                    "  Proof (b64): {}...{}",
+                    &bundle.proof_b64[..40.min(bundle.proof_b64.len())],
+                    if bundle.proof_b64.len() > 40 {
+                        &bundle.proof_b64[bundle.proof_b64.len().saturating_sub(20)..]
+                    } else {
+                        ""
+                    }
+                );
+            }
         }
     }
 
@@ -335,7 +374,8 @@ fn main() {
             input,
             vt_report,
             format,
-        } => match cmd_check(input, vt_report, format) {
+            prove,
+        } => match cmd_check(input, vt_report, format, prove) {
             Ok(code) => {
                 if code != 0 {
                     std::process::exit(code);
@@ -344,6 +384,7 @@ fn main() {
             }
             Err(e) => Err(e),
         },
+        #[cfg(feature = "crawler")]
         Commands::Crawl {
             awesome_url,
             limit,
@@ -351,6 +392,7 @@ fn main() {
             delay_ms,
             output_dir,
         } => cmd_crawl(awesome_url, limit, concurrency, delay_ms, output_dir),
+        #[cfg(feature = "crawler")]
         Commands::Scan {
             input_dir,
             from_awesome,

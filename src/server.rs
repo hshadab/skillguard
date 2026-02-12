@@ -1,11 +1,13 @@
-//! HTTP server for the SkillGuard classifier service.
+//! HTTP server for the SkillGuard ZKML classifier service.
 //!
-//! Provides REST API endpoints for skill safety evaluation.
-//! No ZK proofs, no receipts — just classification with a flat JSON response.
+//! Provides REST API endpoints for skill safety evaluation with optional
+//! ZKML proof generation via Jolt Atlas.
 //!
 //! Features:
 //! - Per-IP rate limiting with automatic eviction when the map exceeds 10k entries
 //! - JSONL access logging with size-based rotation (configurable via `max_access_log_bytes`)
+//! - ZKML proof generation and verification endpoints
+//! - Tiered x402 pricing ($0.001 for classify, $0.005 for classify+prove)
 //! - Structured logging via [`tracing`]
 
 use std::collections::HashMap;
@@ -124,6 +126,43 @@ pub struct BasicEvaluationResult {
     pub decision: String,
 }
 
+/// Full evaluation result with ZK proof.
+#[derive(Debug, Serialize)]
+pub struct ProvedEvaluationResult {
+    pub skill_name: String,
+    pub classification: String,
+    pub decision: String,
+    pub confidence: f64,
+    pub scores: ClassScores,
+    pub reasoning: String,
+    pub proof: crate::prover::ProofBundle,
+}
+
+/// Request to verify a proof.
+#[derive(Debug, Deserialize)]
+pub struct VerifyRequest {
+    pub proof_b64: String,
+    pub program_io: serde_json::Value,
+}
+
+/// Response from proof verification.
+#[derive(Debug, Serialize)]
+pub struct VerifyResponse {
+    pub valid: bool,
+    pub verification_time_ms: u64,
+}
+
+/// Response from the prove+evaluate endpoint.
+#[derive(Debug, Serialize)]
+pub struct ProveEvaluateResponse {
+    pub success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub evaluation: Option<ProvedEvaluationResult>,
+    pub processing_time_ms: u64,
+}
+
 /// Top-level response
 #[derive(Debug, Serialize)]
 pub struct EvaluateResponse {
@@ -144,6 +183,8 @@ pub struct HealthResponse {
     pub version: String,
     pub model_hash: String,
     pub uptime_seconds: u64,
+    pub zkml_enabled: bool,
+    pub proving_scheme: String,
 }
 
 /// Stats response
@@ -155,6 +196,7 @@ pub struct StatsResponse {
     pub classifications: ClassificationStats,
     pub decisions: DecisionStats,
     pub endpoints: EndpointStats,
+    pub proofs: ProofStats,
 }
 
 #[derive(Debug, Serialize)]
@@ -182,7 +224,15 @@ pub struct DecisionStats {
 pub struct EndpointStats {
     pub evaluate: u64,
     pub evaluate_by_name: u64,
+    pub prove: u64,
+    pub verify: u64,
     pub stats: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ProofStats {
+    pub total_generated: u64,
+    pub total_verified: u64,
 }
 
 // ---------------------------------------------------------------------------
@@ -204,7 +254,12 @@ pub struct UsageMetrics {
 
     pub ep_evaluate: AtomicU64,
     pub ep_evaluate_by_name: AtomicU64,
+    pub ep_prove: AtomicU64,
+    pub ep_verify: AtomicU64,
     pub ep_stats: AtomicU64,
+
+    pub total_proofs_generated: AtomicU64,
+    pub total_proofs_verified: AtomicU64,
 
     pub access_log: std::sync::Mutex<Option<File>>,
     access_log_path: String,
@@ -237,7 +292,11 @@ impl UsageMetrics {
             flag: AtomicU64::new(0),
             ep_evaluate: AtomicU64::new(0),
             ep_evaluate_by_name: AtomicU64::new(0),
+            ep_prove: AtomicU64::new(0),
+            ep_verify: AtomicU64::new(0),
             ep_stats: AtomicU64::new(0),
+            total_proofs_generated: AtomicU64::new(0),
+            total_proofs_verified: AtomicU64::new(0),
             access_log: std::sync::Mutex::new(file),
             access_log_path: access_log_path.to_string(),
             access_log_bytes: AtomicU64::new(current_size),
@@ -341,12 +400,25 @@ pub struct ServerState {
     pub rate_limiters: Mutex<HashMap<std::net::IpAddr, Arc<IpRateLimiter>>>,
     pub clawhub_client: ClawHubClient,
     pub usage: UsageMetrics,
+    pub prover: Option<Arc<crate::prover::ProverState>>,
 }
 
 impl ServerState {
     pub fn new(config: ServerConfig) -> Self {
         let model_hash = crate::model_hash();
         let usage = UsageMetrics::new(&config.access_log_path, config.max_access_log_bytes);
+
+        let prover = match crate::prover::ProverState::initialize() {
+            Ok(p) => {
+                info!("ZKML prover ready (Jolt/HyperKZG)");
+                Some(Arc::new(p))
+            }
+            Err(e) => {
+                warn!("ZKML prover initialization failed: {}. Prove endpoints disabled.", e);
+                None
+            }
+        };
+
         Self {
             config,
             model_hash,
@@ -354,6 +426,7 @@ impl ServerState {
             rate_limiters: Mutex::new(HashMap::new()),
             clawhub_client: ClawHubClient::new(),
             usage,
+            prover,
         }
     }
 
@@ -484,6 +557,7 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
     let api_routes = Router::new()
         .route("/api/v1/evaluate", post(evaluate_handler))
         .route("/api/v1/evaluate/name", post(evaluate_by_name_handler))
+        .route("/api/v1/evaluate/prove", post(prove_evaluate_handler))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
@@ -504,9 +578,9 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
             .expect("Invalid SKILLGUARD_PAY_TO address");
 
         // Use dynamic pricing: bypass payment (empty vec) when a valid API key is present,
-        // otherwise require $0.001 USDC on Base mainnet.
+        // otherwise require $0.001 USDC for evaluate, $0.005 for prove.
         let api_key_for_closure = state.config.api_key.clone();
-        api_routes.layer(x402.with_dynamic_price(move |headers, _uri, _base_url| {
+        api_routes.layer(x402.with_dynamic_price(move |headers, uri, _base_url| {
             let has_valid_api_key = if let Some(ref expected_key) = api_key_for_closure {
                 headers
                     .get("authorization")
@@ -518,12 +592,20 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
                 false
             };
 
+            let is_prove = uri.path().contains("/prove");
+
             async move {
                 if has_valid_api_key {
                     // API key user: bypass x402 payment
                     vec![]
+                } else if is_prove {
+                    // Prove endpoint: $0.005 USDC = 5000 base units (6 decimals)
+                    vec![V2Eip155Exact::price_tag(
+                        pay_to,
+                        USDC::base().amount(5000u64),
+                    )]
                 } else {
-                    // No API key: require x402 payment ($0.001 USDC = 1000 base units, 6 decimals)
+                    // Evaluate endpoint: $0.001 USDC = 1000 base units (6 decimals)
                     vec![V2Eip155Exact::price_tag(
                         pay_to,
                         USDC::base().amount(1000u64),
@@ -540,19 +622,20 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
         .route("/", get(crate::ui::index_handler))
         .route("/health", get(health_handler))
         .route("/stats", get(stats_handler))
+        .route("/api/v1/verify", post(verify_handler))
         .merge(api_routes)
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
-    info!(bind = %bind_addr, "SkillGuard server listening");
-    info!("Endpoints: GET / (UI), GET /health, POST /api/v1/evaluate, POST /api/v1/evaluate/name, GET /stats");
+    info!(bind = %bind_addr, "SkillGuard ZKML server listening");
+    info!("Endpoints: GET / (UI), GET /health, POST /api/v1/evaluate, POST /api/v1/evaluate/name, POST /api/v1/evaluate/prove, POST /api/v1/verify, GET /stats");
     if rate_limit_rpm > 0 {
         info!(rate_limit_rpm, "rate limiting enabled");
     } else {
         info!("rate limiting disabled");
     }
     if x402_enabled {
-        info!("x402 payment enabled on /api/v1/* endpoints ($0.001 USDC per evaluation)");
+        info!("x402 payment enabled ($0.001 USDC per evaluation, $0.005 per proof on Base)");
     }
     info!(access_log = %access_log);
 
@@ -649,6 +732,8 @@ async fn health_handler(
         version: env!("CARGO_PKG_VERSION").to_string(),
         model_hash: state.model_hash.clone(),
         uptime_seconds: state.start_time.elapsed().as_secs(),
+        zkml_enabled: state.prover.is_some(),
+        proving_scheme: "Jolt/HyperKZG".to_string(),
     };
     axum::Json(response)
 }
@@ -815,6 +900,169 @@ async fn evaluate_by_name_handler(
     axum::Json(response)
 }
 
+async fn prove_evaluate_handler(
+    axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
+    axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<SocketAddr>,
+    request: axum::extract::Request,
+) -> impl axum::response::IntoResponse {
+    let start = Instant::now();
+    let client_ip = addr.ip();
+    let _auth_method = request
+        .extensions()
+        .get::<AuthMethod>()
+        .copied()
+        .unwrap_or(AuthMethod::Open);
+
+    let body = request.into_body();
+    let bytes = match axum::body::to_bytes(body, 1024 * 1024).await {
+        Ok(b) => b,
+        Err(e) => {
+            return axum::Json(ProveEvaluateResponse {
+                success: false,
+                error: Some(format!("Failed to read request body: {}", e)),
+                evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            });
+        }
+    };
+    let eval_request: EvaluateRequest = match serde_json::from_slice(&bytes) {
+        Ok(r) => r,
+        Err(e) => {
+            return axum::Json(ProveEvaluateResponse {
+                success: false,
+                error: Some(format!("Invalid JSON: {}", e)),
+                evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            });
+        }
+    };
+
+    state.usage.ep_prove.fetch_add(1, Ordering::Relaxed);
+
+    if let Some(limiter) = state.get_rate_limiter(client_ip).await {
+        if limiter.check().is_err() {
+            state.usage.record_error();
+            return axum::Json(ProveEvaluateResponse {
+                success: false,
+                error: Some(format!(
+                    "Rate limit exceeded. Maximum {} requests per minute.",
+                    state.config.rate_limit_rpm
+                )),
+                evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            });
+        }
+    }
+
+    let prover = match &state.prover {
+        Some(p) => p.clone(),
+        None => {
+            state.usage.record_error();
+            return axum::Json(ProveEvaluateResponse {
+                success: false,
+                error: Some("ZKML prover not available".to_string()),
+                evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            });
+        }
+    };
+
+    let features = SkillFeatures::extract(&eval_request.skill, eval_request.vt_report.as_ref());
+    let feature_vec = features.to_normalized_vec();
+    let skill_name = eval_request.skill.name.clone();
+
+    let result = match crate::classify_with_proof(&prover, &feature_vec) {
+        Ok(r) => r,
+        Err(e) => {
+            state.usage.record_error();
+            return axum::Json(ProveEvaluateResponse {
+                success: false,
+                error: Some(format!("Classification with proof failed: {}", e)),
+                evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            });
+        }
+    };
+
+    let (classification, raw_scores, confidence, proof_bundle) = result;
+    let scores = ClassScores::from_raw_scores(&raw_scores);
+    let (decision, reasoning) = derive_decision(classification, &scores.to_array());
+
+    let processing_time_ms = start.elapsed().as_millis() as u64;
+
+    state.usage.record(
+        "prove",
+        &skill_name,
+        classification,
+        decision,
+        confidence,
+        processing_time_ms,
+    );
+    state
+        .usage
+        .total_proofs_generated
+        .fetch_add(1, Ordering::Relaxed);
+
+    axum::Json(ProveEvaluateResponse {
+        success: true,
+        error: None,
+        evaluation: Some(ProvedEvaluationResult {
+            skill_name,
+            classification: classification.as_str().to_string(),
+            decision: decision.as_str().to_string(),
+            confidence,
+            scores,
+            reasoning,
+            proof: proof_bundle,
+        }),
+        processing_time_ms,
+    })
+}
+
+async fn verify_handler(
+    axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
+    axum::Json(req): axum::Json<VerifyRequest>,
+) -> impl axum::response::IntoResponse {
+    let start = Instant::now();
+
+    state.usage.ep_verify.fetch_add(1, Ordering::Relaxed);
+
+    let prover = match &state.prover {
+        Some(p) => p.clone(),
+        None => {
+            return axum::Json(serde_json::json!({
+                "error": "ZKML prover not available",
+                "valid": false,
+                "verification_time_ms": start.elapsed().as_millis() as u64,
+            }));
+        }
+    };
+
+    let bundle = crate::prover::ProofBundle {
+        proof_b64: req.proof_b64,
+        program_io: req.program_io,
+        proof_size_bytes: 0,
+        proving_time_ms: 0,
+    };
+
+    let valid = match prover.verify_proof(&bundle) {
+        Ok(v) => v,
+        Err(_) => false,
+    };
+
+    state
+        .usage
+        .total_proofs_verified
+        .fetch_add(1, Ordering::Relaxed);
+
+    let verification_time_ms = start.elapsed().as_millis() as u64;
+
+    axum::Json(serde_json::json!({
+        "valid": valid,
+        "verification_time_ms": verification_time_ms,
+    }))
+}
+
 async fn stats_handler(
     axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
 ) -> impl axum::response::IntoResponse {
@@ -841,7 +1089,13 @@ async fn stats_handler(
         endpoints: EndpointStats {
             evaluate: state.usage.ep_evaluate.load(Ordering::Relaxed),
             evaluate_by_name: state.usage.ep_evaluate_by_name.load(Ordering::Relaxed),
+            prove: state.usage.ep_prove.load(Ordering::Relaxed),
+            verify: state.usage.ep_verify.load(Ordering::Relaxed),
             stats: state.usage.ep_stats.load(Ordering::Relaxed),
+        },
+        proofs: ProofStats {
+            total_generated: state.usage.total_proofs_generated.load(Ordering::Relaxed),
+            total_verified: state.usage.total_proofs_verified.load(Ordering::Relaxed),
         },
     };
     axum::Json(response)
@@ -858,10 +1112,13 @@ mod tests {
             version: "0.1.0".to_string(),
             model_hash: "sha256:abc".to_string(),
             uptime_seconds: 100,
+            zkml_enabled: true,
+            proving_scheme: "Jolt/HyperKZG".to_string(),
         };
 
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("\"status\":\"ok\""));
+        assert!(json.contains("\"zkml_enabled\":true"));
     }
 
     #[test]
@@ -887,13 +1144,20 @@ mod tests {
             endpoints: EndpointStats {
                 evaluate: 60,
                 evaluate_by_name: 35,
+                prove: 10,
+                verify: 5,
                 stats: 5,
+            },
+            proofs: ProofStats {
+                total_generated: 10,
+                total_verified: 5,
             },
         };
 
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("\"total\":100"));
         assert!(json.contains("\"evaluate_by_name\":35"));
+        assert!(json.contains("\"total_generated\":10"));
     }
 
     #[test]

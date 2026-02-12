@@ -1,4 +1,4 @@
-//! Integration tests for SkillGuard HTTP server and CLI classification pipeline.
+//! Integration tests for SkillGuard ZKML HTTP server and CLI classification pipeline.
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -42,6 +42,7 @@ async fn spawn_test_server_full(
     // Mirror production layout: API routes behind auth middleware
     let api_routes = Router::new()
         .route("/api/v1/evaluate", post(evaluate_handler))
+        .route("/api/v1/evaluate/prove", post(prove_evaluate_handler))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             skillguard::server::auth_middleware,
@@ -51,6 +52,7 @@ async fn spawn_test_server_full(
         .route("/", get(skillguard::ui::index_handler))
         .route("/health", get(health_handler))
         .route("/stats", get(stats_handler))
+        .route("/api/v1/verify", post(verify_handler))
         .merge(api_routes)
         .with_state(state.clone());
 
@@ -85,6 +87,8 @@ async fn health_handler(
         version: env!("CARGO_PKG_VERSION").to_string(),
         model_hash: state.model_hash.clone(),
         uptime_seconds: state.start_time.elapsed().as_secs(),
+        zkml_enabled: state.prover.is_some(),
+        proving_scheme: "Jolt/HyperKZG".to_string(),
     };
     axum::Json(response)
 }
@@ -169,6 +173,117 @@ async fn evaluate_handler(
     }
 }
 
+async fn prove_evaluate_handler(
+    axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
+    axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<SocketAddr>,
+    request: axum::extract::Request,
+) -> impl axum::response::IntoResponse {
+    use skillguard::server::AuthMethod;
+
+    let start = std::time::Instant::now();
+    let _auth_method = request
+        .extensions()
+        .get::<AuthMethod>()
+        .copied()
+        .unwrap_or(AuthMethod::Open);
+
+    let body = request.into_body();
+    let bytes = axum::body::to_bytes(body, 1024 * 1024).await.unwrap();
+    let eval_request: EvaluateRequest = match serde_json::from_slice(&bytes) {
+        Ok(r) => r,
+        Err(e) => {
+            return axum::Json(ProveEvaluateResponse {
+                success: false,
+                error: Some(format!("Invalid JSON: {}", e)),
+                evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            });
+        }
+    };
+
+    let prover = match &state.prover {
+        Some(p) => p.clone(),
+        None => {
+            return axum::Json(ProveEvaluateResponse {
+                success: false,
+                error: Some("ZKML prover not available".to_string()),
+                evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            });
+        }
+    };
+
+    let features = SkillFeatures::extract(&eval_request.skill, eval_request.vt_report.as_ref());
+    let feature_vec = features.to_normalized_vec();
+
+    let result = match skillguard::classify_with_proof(&prover, &feature_vec) {
+        Ok(r) => r,
+        Err(e) => {
+            return axum::Json(ProveEvaluateResponse {
+                success: false,
+                error: Some(format!("Classification with proof failed: {}", e)),
+                evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            });
+        }
+    };
+
+    let (classification, raw_scores, confidence, proof_bundle) = result;
+    let scores = ClassScores::from_raw_scores(&raw_scores);
+    let (decision, reasoning) =
+        skillguard::skill::derive_decision(classification, &scores.to_array());
+
+    axum::Json(ProveEvaluateResponse {
+        success: true,
+        error: None,
+        evaluation: Some(ProvedEvaluationResult {
+            skill_name: eval_request.skill.name.clone(),
+            classification: classification.as_str().to_string(),
+            decision: decision.as_str().to_string(),
+            confidence,
+            scores,
+            reasoning,
+            proof: proof_bundle,
+        }),
+        processing_time_ms: start.elapsed().as_millis() as u64,
+    })
+}
+
+async fn verify_handler(
+    axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
+    axum::Json(req): axum::Json<VerifyRequest>,
+) -> impl axum::response::IntoResponse {
+    let start = std::time::Instant::now();
+
+    let prover = match &state.prover {
+        Some(p) => p.clone(),
+        None => {
+            return axum::Json(serde_json::json!({
+                "error": "ZKML prover not available",
+                "valid": false,
+                "verification_time_ms": start.elapsed().as_millis() as u64,
+            }));
+        }
+    };
+
+    let bundle = skillguard::prover::ProofBundle {
+        proof_b64: req.proof_b64,
+        program_io: req.program_io,
+        proof_size_bytes: 0,
+        proving_time_ms: 0,
+    };
+
+    let valid = match prover.verify_proof(&bundle) {
+        Ok(v) => v,
+        Err(_) => false,
+    };
+
+    axum::Json(serde_json::json!({
+        "valid": valid,
+        "verification_time_ms": start.elapsed().as_millis() as u64,
+    }))
+}
+
 async fn stats_handler(
     axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
 ) -> impl axum::response::IntoResponse {
@@ -199,7 +314,19 @@ async fn stats_handler(
         endpoints: EndpointStats {
             evaluate: 0,
             evaluate_by_name: 0,
+            prove: 0,
+            verify: 0,
             stats: 0,
+        },
+        proofs: ProofStats {
+            total_generated: state
+                .usage
+                .total_proofs_generated
+                .load(std::sync::atomic::Ordering::Relaxed),
+            total_verified: state
+                .usage
+                .total_proofs_verified
+                .load(std::sync::atomic::Ordering::Relaxed),
         },
     };
     axum::Json(response)
@@ -221,6 +348,19 @@ async fn test_health_endpoint() {
     assert_eq!(body["status"], "ok");
     assert!(body["model_hash"].as_str().unwrap().starts_with("sha256:"));
     assert!(body["version"].as_str().is_some());
+}
+
+#[tokio::test]
+async fn test_health_shows_zkml() {
+    let (addr, _state) = spawn_test_server().await;
+    let url = format!("http://{}/health", addr);
+
+    let resp = reqwest::get(&url).await.unwrap();
+    assert_eq!(resp.status(), 200);
+
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["zkml_enabled"].as_bool().is_some(), true);
+    assert_eq!(body["proving_scheme"], "Jolt/HyperKZG");
 }
 
 #[tokio::test]
@@ -314,6 +454,7 @@ async fn test_stats_endpoint() {
     assert!(body["model_hash"].as_str().unwrap().starts_with("sha256:"));
     assert!(body["uptime_seconds"].as_u64().is_some());
     assert!(body["requests"]["total"].as_u64().is_some());
+    assert!(body["proofs"]["total_generated"].as_u64().is_some());
 }
 
 #[tokio::test]
@@ -335,6 +476,125 @@ async fn test_evaluate_invalid_json_returns_error() {
     let body: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(body["success"], false);
     assert!(body["error"].as_str().unwrap().contains("Invalid JSON"));
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests: prove + verify endpoints
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_prove_evaluate_endpoint() {
+    let (addr, state) = spawn_test_server().await;
+    if state.prover.is_none() {
+        // Skip test if prover didn't initialize
+        return;
+    }
+
+    let url = format!("http://{}/api/v1/evaluate/prove", addr);
+
+    let skill = serde_json::json!({
+        "skill": {
+            "name": "test-prove",
+            "version": "1.0.0",
+            "author": "tester",
+            "description": "Test skill for proving",
+            "skill_md": "# Test\n\nSimple test skill.",
+            "scripts": [],
+            "files": []
+        }
+    });
+
+    let client = reqwest::Client::new();
+    let resp = client.post(&url).json(&skill).send().await.unwrap();
+    assert_eq!(resp.status(), 200);
+
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["success"], true);
+
+    let eval = &body["evaluation"];
+    assert!(eval["proof"]["proof_b64"].as_str().is_some());
+    assert!(eval["proof"]["proof_size_bytes"].as_u64().unwrap() > 0);
+    assert!(eval["proof"]["proving_time_ms"].as_u64().is_some());
+}
+
+#[tokio::test]
+async fn test_verify_endpoint_valid() {
+    let (addr, state) = spawn_test_server().await;
+    if state.prover.is_none() {
+        return;
+    }
+
+    // First, generate a proof
+    let prove_url = format!("http://{}/api/v1/evaluate/prove", addr);
+    let skill = serde_json::json!({
+        "skill": {
+            "name": "verify-test",
+            "version": "1.0.0",
+            "author": "tester",
+            "description": "Test",
+            "skill_md": "# Test",
+            "scripts": [],
+            "files": []
+        }
+    });
+
+    let client = reqwest::Client::new();
+    let prove_resp = client
+        .post(&prove_url)
+        .json(&skill)
+        .send()
+        .await
+        .unwrap();
+    let prove_body: serde_json::Value = prove_resp.json().await.unwrap();
+    assert_eq!(prove_body["success"], true);
+
+    let proof = &prove_body["evaluation"]["proof"];
+    let proof_b64 = proof["proof_b64"].as_str().unwrap();
+    let program_io = &proof["program_io"];
+
+    // Now verify it
+    let verify_url = format!("http://{}/api/v1/verify", addr);
+    let verify_req = serde_json::json!({
+        "proof_b64": proof_b64,
+        "program_io": program_io,
+    });
+
+    let verify_resp = client
+        .post(&verify_url)
+        .json(&verify_req)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(verify_resp.status(), 200);
+
+    let verify_body: serde_json::Value = verify_resp.json().await.unwrap();
+    assert_eq!(verify_body["valid"], true);
+}
+
+#[tokio::test]
+async fn test_verify_endpoint_invalid() {
+    let (addr, state) = spawn_test_server().await;
+    if state.prover.is_none() {
+        return;
+    }
+
+    let verify_url = format!("http://{}/api/v1/verify", addr);
+    let verify_req = serde_json::json!({
+        "proof_b64": "AAAA",
+        "program_io": {"inputs": [], "outputs": []},
+    });
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&verify_url)
+        .json(&verify_req)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["valid"], false);
 }
 
 // ---------------------------------------------------------------------------
@@ -657,4 +917,30 @@ async fn test_x402_invalid_api_key_returns_401() {
         .await
         .unwrap();
     assert_eq!(resp.status(), 401);
+}
+
+// ---------------------------------------------------------------------------
+// Verify endpoint is public (no auth)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_verify_endpoint_accessible_without_auth() {
+    let (addr, _state) = spawn_test_server_with_config(Some("secret-key-123".to_string())).await;
+    let verify_url = format!("http://{}/api/v1/verify", addr);
+
+    // Even with auth configured, verify endpoint should be accessible
+    let verify_req = serde_json::json!({
+        "proof_b64": "AAAA",
+        "program_io": {"inputs": [], "outputs": []},
+    });
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&verify_url)
+        .json(&verify_req)
+        .send()
+        .await
+        .unwrap();
+    // Should not return 401 -- verify is public
+    assert_eq!(resp.status(), 200);
 }

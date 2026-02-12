@@ -1,4 +1,4 @@
-# SkillGuard Docker build
+# SkillGuard ZKML Docker build
 #
 # Build:
 #   docker build -t skillguard .
@@ -10,6 +10,9 @@
 FROM rust:1.88-bookworm AS builder
 
 WORKDIR /build
+
+# Limit parallel jobs to avoid OOM with ZKML deps
+ENV CARGO_BUILD_JOBS=2
 
 # Copy manifest first for layer caching
 COPY Cargo.toml Cargo.lock* ./

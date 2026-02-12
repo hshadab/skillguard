@@ -1,4 +1,4 @@
-//! SkillGuard — standalone skill safety classifier for OpenClaw/ClawHub skills.
+//! SkillGuard ZKML — Provably correct AI safety classifications with agentic commerce.
 //!
 //! Classifies skills into four categories:
 //! - **SAFE**: No concerning patterns detected
@@ -6,14 +6,20 @@
 //! - **DANGEROUS**: Significant risk (credential exposure, excessive permissions)
 //! - **MALICIOUS**: Active malware indicators (reverse shells, obfuscation)
 //!
+//! Every classification can produce a cryptographic SNARK proof via Jolt Atlas,
+//! and agents pay per request via x402 on Base.
+//!
 //! Uses structured logging via [`tracing`]. Set the `RUST_LOG` environment
 //! variable to control log verbosity (e.g., `RUST_LOG=skillguard=debug`).
 
+#[cfg(feature = "crawler")]
 pub mod batch;
 pub mod clawhub;
+#[cfg(feature = "crawler")]
 pub mod crawler;
 pub mod model;
 pub mod patterns;
+pub mod prover;
 pub mod scores;
 pub mod server;
 pub mod skill;
@@ -71,6 +77,42 @@ pub fn classify(features: &[i32]) -> Result<(SafetyClassification, [i32; 4], f64
     let classification = SafetyClassification::from_index(best_idx);
 
     Ok((classification, raw_scores, confidence))
+}
+
+/// Run the classifier with ZK proof generation.
+///
+/// Returns (classification, raw_scores, confidence, proof_bundle).
+pub fn classify_with_proof(
+    prover: &prover::ProverState,
+    features: &[i32],
+) -> Result<(SafetyClassification, [i32; 4], f64, prover::ProofBundle)> {
+    let (bundle, raw_scores) = prover.prove_inference(features)?;
+
+    if raw_scores.len() < 4 {
+        eyre::bail!("Expected 4 output classes, got {}", raw_scores.len());
+    }
+
+    let data = &raw_scores;
+    let (best_idx, &best_val) = data
+        .iter()
+        .enumerate()
+        .max_by_key(|(_, v)| *v)
+        .ok_or_else(|| eyre::eyre!("Empty classifier output"))?;
+
+    let runner_up = data
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i != best_idx)
+        .map(|(_, v)| *v)
+        .max()
+        .unwrap_or(0);
+
+    let margin = (best_val - runner_up).abs();
+    let confidence = (margin as f64 / 128.0).min(1.0);
+
+    let classification = SafetyClassification::from_index(best_idx);
+
+    Ok((classification, raw_scores, confidence, bundle))
 }
 
 /// Compute the SHA-256 hash of the model's serialized bytecode.

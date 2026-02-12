@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SkillGuard — Agent Dashboard</title>
+<title>SkillGuard ZKML — Agent Dashboard</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -122,8 +122,8 @@ footer a:hover { text-decoration: underline; }
 <div class="container">
 
   <header>
-    <h1><span>Skill</span>Guard</h1>
-    <p>Agent safety classifier &mdash; pay-per-request via x402 on Base</p>
+    <h1><span>Skill</span>Guard <span>ZKML</span></h1>
+    <p>Provably correct AI safety &mdash; pay-per-proof via x402 on Base</p>
   </header>
 
   <!-- Server Status -->
@@ -135,6 +135,29 @@ footer a:hover { text-decoration: underline; }
     <div class="status-meta" id="status-meta" style="margin-top:10px"></div>
   </div>
 
+  <!-- ZKML Proving -->
+  <div class="card">
+    <div class="card-title">ZKML Proving</div>
+    <div class="x402-grid">
+      <div class="x402-item">
+        <div class="x402-label">Proving Scheme</div>
+        <div class="x402-value">Jolt / HyperKZG</div>
+      </div>
+      <div class="x402-item">
+        <div class="x402-label">Model Size</div>
+        <div class="x402-value">1,924 params (22-32-32-4)</div>
+      </div>
+      <div class="x402-item">
+        <div class="x402-label">Proofs Generated</div>
+        <div class="x402-value" id="st-proofs-gen">-</div>
+      </div>
+      <div class="x402-item">
+        <div class="x402-label">Proofs Verified</div>
+        <div class="x402-value" id="st-proofs-ver">-</div>
+      </div>
+    </div>
+  </div>
+
   <!-- x402 Payment Info -->
   <div class="card">
     <div class="card-title">x402 Payment</div>
@@ -144,16 +167,16 @@ footer a:hover { text-decoration: underline; }
         <div class="x402-value highlight">$0.001 USDC</div>
       </div>
       <div class="x402-item">
+        <div class="x402-label">Price per proof</div>
+        <div class="x402-value highlight">$0.005 USDC</div>
+      </div>
+      <div class="x402-item">
         <div class="x402-label">Network</div>
         <div class="x402-value">Base (eip155:8453)</div>
       </div>
       <div class="x402-item">
         <div class="x402-label">Protocol</div>
         <div class="x402-value">HTTP 402 / x402 v2</div>
-      </div>
-      <div class="x402-item">
-        <div class="x402-label">Facilitator</div>
-        <div class="x402-value">CDP Mainnet</div>
       </div>
     </div>
   </div>
@@ -168,6 +191,8 @@ footer a:hover { text-decoration: underline; }
       <tbody>
         <tr><td>POST</td><td><code>/api/v1/evaluate</code></td><td>API key or x402</td><td class="price">$0.001</td></tr>
         <tr><td>POST</td><td><code>/api/v1/evaluate/name</code></td><td>API key or x402</td><td class="price">$0.001</td></tr>
+        <tr><td>POST</td><td><code>/api/v1/evaluate/prove</code></td><td>API key or x402</td><td class="price">$0.005</td></tr>
+        <tr><td>POST</td><td><code>/api/v1/verify</code></td><td>None</td><td class="free">Free</td></tr>
         <tr><td>GET</td><td><code>/health</code></td><td>None</td><td class="free">Free</td></tr>
         <tr><td>GET</td><td><code>/stats</code></td><td>None</td><td class="free">Free</td></tr>
       </tbody>
@@ -182,6 +207,8 @@ footer a:hover { text-decoration: underline; }
       <div class="stat-card"><div class="stat-value" id="st-errors">-</div><div class="stat-label">Errors</div></div>
       <div class="stat-card"><div class="stat-value" id="st-ep-eval">-</div><div class="stat-label">Evaluate</div></div>
       <div class="stat-card"><div class="stat-value" id="st-ep-name">-</div><div class="stat-label">By Name</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-ep-prove">-</div><div class="stat-label">Prove</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-ep-verify">-</div><div class="stat-label">Verify</div></div>
     </div>
   </div>
 
@@ -223,8 +250,9 @@ footer a:hover { text-decoration: underline; }
   </div>
 
   <footer>
-    <span id="footer-version">SkillGuard</span> &middot;
+    <span id="footer-version">SkillGuard ZKML</span> &middot;
     <a href="https://github.com/hshadab/skillguard" target="_blank" rel="noopener">GitHub</a> &middot;
+    <a href="https://github.com/ICME-Lab/jolt-atlas" target="_blank" rel="noopener">Jolt Atlas</a> &middot;
     <a href="https://www.x402.org/" target="_blank" rel="noopener">x402 Protocol</a>
   </footer>
 
@@ -257,11 +285,13 @@ function checkHealth() {
       $('status-text').textContent = 'Online';
       var uptime = formatUptime(d.uptime_seconds);
       var hash = d.model_hash.length > 20 ? d.model_hash.slice(0, 20) + '...' : d.model_hash;
+      var zkml = d.zkml_enabled ? 'ZKML: On' : 'ZKML: Off';
       $('status-meta').innerHTML =
         '<span>Version: <code>' + escHtml(d.version) + '</code></span>' +
         '<span>Model: <code>' + escHtml(hash) + '</code></span>' +
+        '<span><code>' + escHtml(zkml) + '</code></span>' +
         '<span>Uptime: <code>' + escHtml(uptime) + '</code></span>';
-      $('footer-version').textContent = 'SkillGuard v' + d.version;
+      $('footer-version').textContent = 'SkillGuard ZKML v' + d.version;
     })
     .catch(function() {
       $('status-badge').className = 'status-badge offline';
@@ -278,9 +308,14 @@ function loadStats() {
       $('st-errors').textContent = d.requests.errors;
       $('st-ep-eval').textContent = d.endpoints.evaluate;
       $('st-ep-name').textContent = d.endpoints.evaluate_by_name;
+      $('st-ep-prove').textContent = d.endpoints.prove;
+      $('st-ep-verify').textContent = d.endpoints.verify;
       $('st-allow').textContent = d.decisions.allow;
       $('st-deny').textContent = d.decisions.deny;
       $('st-flag').textContent = d.decisions.flag;
+
+      $('st-proofs-gen').textContent = d.proofs.total_generated;
+      $('st-proofs-ver').textContent = d.proofs.total_verified;
 
       var cls = d.classifications;
       var total = cls.safe + cls.caution + cls.dangerous + cls.malicious;
