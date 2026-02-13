@@ -1134,8 +1134,16 @@ function signX402Payment(requirements) {
     return html;
   }
 
+  function safeJson(r) {
+    return r.text().then(function(text) {
+      if (!text || !text.trim()) return null;
+      try { return JSON.parse(text); } catch (e) { return null; }
+    });
+  }
+
   function handleResponse(r, paidViaX402) {
-    return r.json().then(function(d) {
+    return safeJson(r).then(function(d) {
+      if (!d) throw new Error('Server returned empty response (HTTP ' + r.status + ').');
       if (!r.ok || !d.success) throw new Error(d.error || 'Request failed (HTTP ' + r.status + ')');
       var html;
       if (d.evaluation) {
@@ -1205,7 +1213,7 @@ function signX402Payment(requirements) {
             return fetch(url, { method: 'POST', headers: headers, body: reqBody });
           }).then(function(r2) {
             if (!r2.ok && r2.status !== 200) {
-              return r2.json().then(function(d) { throw new Error(d.error || 'Payment failed (HTTP ' + r2.status + ')'); });
+              return safeJson(r2).then(function(d) { throw new Error((d && d.error) || 'Payment failed (HTTP ' + r2.status + ')'); });
             }
             return handleResponse(r2, true);
           });
