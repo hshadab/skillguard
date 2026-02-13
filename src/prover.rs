@@ -145,13 +145,13 @@ impl ProverState {
             Err(_) => return Ok(false),
         };
 
-        let snark = match
-            <JoltSNARK<F, PCS, Transcript> as CanonicalDeserialize>::deserialize_compressed(
+        let snark =
+            match <JoltSNARK<F, PCS, Transcript> as CanonicalDeserialize>::deserialize_compressed(
                 &proof_bytes[..],
             ) {
-            Ok(s) => s,
-            Err(_) => return Ok(false), // corrupted proof bytes = invalid
-        };
+                Ok(s) => s,
+                Err(_) => return Ok(false), // corrupted proof bytes = invalid
+            };
 
         let program_io: ProgramIO = match serde_json::from_value(bundle.program_io.clone()) {
             Ok(io) => io,

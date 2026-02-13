@@ -639,11 +639,7 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
                         .get("authorization")
                         .and_then(|v| v.to_str().ok())
                         .and_then(|h| h.strip_prefix("Bearer "))
-                        .map(|t| {
-                            bool::from(
-                                t.trim().as_bytes().ct_eq(expected_key.as_bytes()),
-                            )
-                        })
+                        .map(|t| bool::from(t.trim().as_bytes().ct_eq(expected_key.as_bytes())))
                         .unwrap_or(false)
                 } else {
                     false
@@ -740,9 +736,8 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
     .with_graceful_shutdown(async move {
         let ctrl_c = tokio::signal::ctrl_c();
         #[cfg(unix)]
-        let mut sigterm =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                .expect("failed to install SIGTERM handler");
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler");
         #[cfg(unix)]
         let sigterm_recv = sigterm.recv();
         #[cfg(not(unix))]
@@ -796,9 +791,7 @@ pub async fn auth_middleware(
             .map(|t| t.trim().to_string());
 
         match provided_token {
-            Some(ref token)
-                if token.as_bytes().ct_eq(expected_key.as_bytes()).into() =>
-            {
+            Some(ref token) if token.as_bytes().ct_eq(expected_key.as_bytes()).into() => {
                 request.extensions_mut().insert(AuthMethod::ApiKey);
             }
             Some(_) => {
@@ -1106,10 +1099,9 @@ async fn prove_evaluate_handler(
     let skill_name = eval_request.skill.name.clone();
 
     // Run the CPU-bound prover in a blocking thread to avoid starving the async runtime
-    let prove_result = tokio::task::spawn_blocking(move || {
-        crate::classify_with_proof(&prover, &feature_vec)
-    })
-    .await;
+    let prove_result =
+        tokio::task::spawn_blocking(move || crate::classify_with_proof(&prover, &feature_vec))
+            .await;
 
     let result = match prove_result {
         Ok(Ok(r)) => r,

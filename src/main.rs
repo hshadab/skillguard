@@ -140,11 +140,7 @@ fn cmd_serve(
     };
 
     info!("Starting SkillGuard ZKML classifier service");
-    info!(
-        model = "skill-safety",
-        params = 1924,
-        proving = "Jolt/Dory"
-    );
+    info!(model = "skill-safety", params = 1924, proving = "Jolt/Dory");
     info!(model_hash = %skillguard::model_hash());
     if api_key.is_some() {
         info!("API key authentication enabled on /api/v1/* endpoints");
