@@ -204,7 +204,7 @@ footer a:hover { text-decoration: underline; }
   padding: 12px 14px; background: var(--bg-input); border-radius: var(--radius);
   border: 1px solid var(--border);
 }
-.wallet-section.hidden { display: none; }
+/* .wallet-section.hidden removed — wallet sections always visible */
 .wallet-info-text {
   font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;
 }
@@ -395,7 +395,7 @@ footer a:hover { text-decoration: underline; }
         <div id="url-detect-preview" style="font-size:0.8rem;color:var(--text-secondary);word-break:break-all;margin-bottom:6px"></div>
         <button class="btn-fetch-classify" id="btn-fetch-classify" type="button">Fetch &amp; Classify</button>
       </div>
-      <div class="wallet-section hidden" id="wallet-section">
+      <div class="wallet-section" id="wallet-section">
         <div class="wallet-info-text" id="wallet-info">Connect a MetaMask wallet to pay with USDC on Base.</div>
         <div class="wallet-row">
           <button class="btn-wallet btn-connect" id="btn-connect-wallet" type="button">Connect Wallet</button>
@@ -436,7 +436,7 @@ This skill fetches current weather data from a public API and returns a friendly
           <label for="try-apikey">API Key</label>
           <input type="text" id="try-apikey" placeholder="Bearer token (if auth is enabled)">
         </div>
-        <div class="wallet-section hidden" id="wallet-section-custom">
+        <div class="wallet-section" id="wallet-section-custom">
           <div class="wallet-info-text" id="wallet-info-custom">Connect a MetaMask wallet to pay with USDC on Base.</div>
           <div class="wallet-row">
             <button class="btn-wallet btn-connect" id="btn-connect-wallet-custom" type="button">Connect Wallet</button>
@@ -706,8 +706,7 @@ function updateWalletUI() {
 }
 
 function showWalletSection() {
-  $('wallet-section').classList.remove('hidden');
-  $('wallet-section-custom').classList.remove('hidden');
+  // Wallet sections are always visible now; kept for 402 flow compatibility
 }
 
 function connectWallet() {
@@ -763,9 +762,8 @@ function disconnectWallet() {
   updateWalletUI();
 }
 
-// Auto-detect MetaMask and show wallet section
+// Auto-detect MetaMask events
 if (window.ethereum) {
-  showWalletSection();
   window.ethereum.on('accountsChanged', function(accounts) {
     if (accounts.length === 0) {
       disconnectWallet();
@@ -897,9 +895,13 @@ function signX402Payment(requirements) {
   });
 
   /* ── Wallet buttons (both sections) ── */
-  $('btn-connect-wallet').addEventListener('click', function() { connectWallet(); });
+  $('btn-connect-wallet').addEventListener('click', function() {
+    connectWallet().catch(function() {});
+  });
   $('btn-disconnect-wallet').addEventListener('click', function() { disconnectWallet(); });
-  $('btn-connect-wallet-custom').addEventListener('click', function() { connectWallet(); });
+  $('btn-connect-wallet-custom').addEventListener('click', function() {
+    connectWallet().catch(function() {});
+  });
   $('btn-disconnect-wallet-custom').addEventListener('click', function() { disconnectWallet(); });
 
   /* ── Shared helpers ── */
