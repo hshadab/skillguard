@@ -709,14 +709,36 @@ function showWalletSection() {
   // Wallet sections are always visible now; kept for 402 flow compatibility
 }
 
+function withTimeout(promise, ms, msg) {
+  return new Promise(function(resolve, reject) {
+    var timer = setTimeout(function() {
+      reject(new Error(msg || 'Timed out after ' + ms + 'ms'));
+    }, ms);
+    promise.then(function(val) {
+      clearTimeout(timer);
+      resolve(val);
+    }, function(err) {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
 function connectWallet() {
   if (!window.ethereum) {
-    alert('MetaMask not detected. Install MetaMask to pay with USDC.');
-    return Promise.reject(new Error('No MetaMask'));
+    return Promise.reject(new Error('MetaMask not detected. Install the MetaMask browser extension to pay with USDC on Base.'));
   }
-  showWalletSection();
-  return window.ethereum.request({ method: 'eth_requestAccounts' })
+  // Update button text while connecting
+  var btns = document.querySelectorAll('.btn-connect');
+  for (var i = 0; i < btns.length; i++) btns[i].textContent = 'Connecting...';
+
+  return withTimeout(
+    window.ethereum.request({ method: 'eth_requestAccounts' }),
+    30000,
+    'MetaMask did not respond. Open your MetaMask extension and approve the connection request.'
+  )
     .then(function(accounts) {
+      if (!accounts || !accounts.length) throw new Error('No accounts returned by MetaMask.');
       walletState.address = accounts[0];
       walletState.connected = true;
       return window.ethereum.request({ method: 'eth_chainId' });
@@ -733,6 +755,12 @@ function connectWallet() {
     })
     .then(function() {
       updateWalletUI();
+    })
+    .catch(function(err) {
+      // Reset button text on failure
+      var btns2 = document.querySelectorAll('.btn-connect');
+      for (var j = 0; j < btns2.length; j++) btns2[j].textContent = 'Connect Wallet';
+      throw err; // Re-throw so callers can handle
     });
 }
 
@@ -1090,29 +1118,26 @@ function signX402Payment(requirements) {
           if (!requirements || !requirements.accepts || !requirements.accepts.length) {
             throw new Error('Payment required but server sent no payment details.');
           }
-          showWalletSection();
-          if (!walletState.connected) {
-            showLoading('Connecting wallet...');
-            return connectWallet().then(function() {
-              showLoading('Signing USDC payment...');
-              return signX402Payment(requirements);
-            }).then(function(paymentHeader) {
-              var headers = getHeaders();
-              headers['Payment-Signature'] = paymentHeader;
-              showLoading('Classifying with payment...');
-              return fetch(url, { method: 'POST', headers: headers, body: reqBody });
-            }).then(function(r2) {
-              if (!r2.ok && r2.status !== 200) {
-                return r2.json().then(function(d) { throw new Error(d.error || 'Payment failed (HTTP ' + r2.status + ')'); });
-              }
-              return handleResponse(r2, true);
-            });
+          if (!window.ethereum) {
+            throw new Error('Payment required. Install the MetaMask browser extension to pay with USDC on Base.');
           }
-          showLoading('Signing USDC payment...');
-          return signX402Payment(requirements).then(function(paymentHeader) {
+
+          // Connect wallet if needed
+          var walletReady;
+          if (!walletState.connected) {
+            showLoading('Connecting wallet \u2014 check your MetaMask popup...');
+            walletReady = connectWallet();
+          } else {
+            walletReady = Promise.resolve();
+          }
+
+          return walletReady.then(function() {
+            showLoading('Signing USDC payment...');
+            return signX402Payment(requirements);
+          }).then(function(paymentHeader) {
             var headers = getHeaders();
             headers['Payment-Signature'] = paymentHeader;
-            showLoading('Classifying with payment...');
+            showLoading(isProve ? 'Classifying with payment...' : 'Classifying with payment...');
             return fetch(url, { method: 'POST', headers: headers, body: reqBody });
           }).then(function(r2) {
             if (!r2.ok && r2.status !== 200) {
