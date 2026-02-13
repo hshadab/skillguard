@@ -234,11 +234,120 @@ footer a:hover { text-decoration: underline; }
   background: rgba(59,130,246,0.15); color: var(--accent); margin-left: 4px;
 }
 
+/* Mode tabs */
+.mode-tabs {
+  display: flex; gap: 0; margin-bottom: 14px;
+  border-bottom: 2px solid var(--border);
+}
+.mode-tab {
+  padding: 8px 18px; font-size: 0.85rem; font-weight: 600;
+  color: var(--text-muted); background: none; border: none;
+  cursor: pointer; border-bottom: 2px solid transparent;
+  margin-bottom: -2px; transition: color 0.2s, border-color 0.2s;
+}
+.mode-tab:hover { color: var(--text-secondary); }
+.mode-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Search input */
+.search-input-wrap {
+  position: relative; margin-bottom: 10px;
+}
+.search-input {
+  width: 100%; background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 12px 10px 36px; color: var(--text-primary);
+  font-family: inherit; font-size: 0.88rem; outline: none; transition: border-color 0.2s;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-icon {
+  position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+  color: var(--text-muted); font-size: 0.95rem; pointer-events: none;
+}
+
+/* Search filters */
+.search-filters {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+  font-size: 0.82rem; color: var(--text-secondary);
+}
+.filter-select {
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 5px 10px; color: var(--text-primary);
+  font-size: 0.82rem; outline: none; cursor: pointer;
+}
+.filter-select:focus { border-color: var(--accent); }
+
+/* Skill results */
+.skill-results {
+  max-height: 360px; overflow-y: auto; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--bg-input);
+}
+.skill-result-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  cursor: default; transition: background 0.15s;
+}
+.skill-result-item:last-child { border-bottom: none; }
+.skill-result-item:hover { background: rgba(59,130,246,0.06); }
+.skill-result-info { flex: 1; min-width: 0; }
+.skill-result-name {
+  font-size: 0.88rem; font-weight: 600; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.skill-result-name .author {
+  font-weight: 400; color: var(--text-muted); font-size: 0.8rem; margin-left: 6px;
+}
+.skill-result-desc {
+  font-size: 0.78rem; color: var(--text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;
+}
+.skill-result-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.category-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 0.68rem; font-weight: 600; background: rgba(59,130,246,0.12);
+  color: var(--accent); white-space: nowrap;
+}
+.btn-quick-classify {
+  padding: 5px 12px; border: none; border-radius: var(--radius);
+  background: var(--accent); color: #fff; font-size: 0.78rem; font-weight: 600;
+  cursor: pointer; white-space: nowrap; transition: opacity 0.2s;
+}
+.btn-quick-classify:hover { opacity: 0.85; }
+.btn-quick-classify:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Search status */
+.search-status {
+  padding: 24px 14px; text-align: center; color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.search-status .spinner {
+  display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px;
+}
+
+/* URL detect banner */
+.url-detect {
+  display: none; padding: 12px 14px; margin-bottom: 10px;
+  background: rgba(59,130,246,0.1); border: 1px solid var(--accent);
+  border-radius: var(--radius); font-size: 0.85rem; color: var(--text-primary);
+}
+.url-detect .url-detect-label {
+  font-weight: 600; margin-bottom: 6px;
+}
+.btn-fetch-classify {
+  padding: 7px 16px; border: none; border-radius: var(--radius);
+  background: var(--accent); color: #fff; font-size: 0.82rem; font-weight: 600;
+  cursor: pointer; transition: opacity 0.2s; margin-top: 4px;
+}
+.btn-fetch-classify:hover { opacity: 0.85; }
+.btn-fetch-classify:disabled { opacity: 0.5; cursor: not-allowed; }
+
 @media (max-width: 600px) {
   .x402-grid { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .try-form .row { flex-direction: column; gap: 12px; }
   .try-buttons { flex-direction: column; }
+  .skill-result-item { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .skill-result-meta { width: 100%; justify-content: space-between; }
 }
 </style>
 </head>
@@ -262,33 +371,29 @@ footer a:hover { text-decoration: underline; }
   <!-- Try It -->
   <div class="card">
     <div class="card-title">Try It</div>
-    <div class="try-form" id="try-form">
-      <div class="row">
-        <div class="field">
-          <label for="try-name">Skill Name</label>
-          <input type="text" id="try-name" placeholder="e.g. my-weather-skill" required>
-        </div>
-        <div class="field">
-          <label for="try-author">Author</label>
-          <input type="text" id="try-author" placeholder="e.g. alice" required>
-        </div>
-      </div>
-      <div class="field">
-        <label for="try-skillmd">SKILL.md Content</label>
-        <textarea id="try-skillmd" rows="5" placeholder="Paste SKILL.md content...">## Weather Lookup
-This skill fetches current weather data from a public API and returns a friendly summary.
 
-### Permissions
-- network: api.open-meteo.com</textarea>
+    <div class="mode-tabs">
+      <button class="mode-tab active" id="tab-search" type="button">Search Skills</button>
+      <button class="mode-tab" id="tab-custom" type="button">Custom Skill</button>
+    </div>
+
+    <!-- Search Mode -->
+    <div id="search-mode">
+      <div class="search-input-wrap">
+        <span class="search-icon">&#128269;</span>
+        <input type="text" class="search-input" id="search-input" placeholder="Search 3,000+ OpenClaw skills..." autocomplete="off">
       </div>
-      <div class="field">
-        <label for="try-scripts">Scripts <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
-        <textarea id="try-scripts" rows="3" placeholder="Paste script content if any..."></textarea>
+      <div class="search-filters">
+        <select class="filter-select" id="filter-category"><option value="">All Categories</option></select>
+        <span id="results-count" style="margin-left:auto"></span>
       </div>
-      <button class="advanced-toggle" type="button" id="try-adv-toggle">&#9654; Advanced</button>
-      <div class="field" id="try-adv-section" style="display:none">
-        <label for="try-apikey">API Key</label>
-        <input type="text" id="try-apikey" placeholder="Bearer token (if auth is enabled)">
+      <div class="skill-results" id="skill-results">
+        <div class="search-status" id="search-status"><span class="spinner"></span>Loading skill directory...</div>
+      </div>
+      <div class="url-detect" id="url-detect">
+        <div class="url-detect-label">GitHub URL detected</div>
+        <div id="url-detect-preview" style="font-size:0.8rem;color:var(--text-secondary);word-break:break-all;margin-bottom:6px"></div>
+        <button class="btn-fetch-classify" id="btn-fetch-classify" type="button">Fetch &amp; Classify</button>
       </div>
       <div class="wallet-section hidden" id="wallet-section">
         <div class="wallet-info-text" id="wallet-info">Connect a MetaMask wallet to pay with USDC on Base.</div>
@@ -299,11 +404,54 @@ This skill fetches current weather data from a public API and returns a friendly
           <button class="btn-wallet btn-disconnect" id="btn-disconnect-wallet" type="button" style="display:none">Disconnect</button>
         </div>
       </div>
-      <div class="try-buttons">
-        <button class="btn-classify" id="btn-classify" type="button">Classify</button>
-        <button class="btn-prove" id="btn-prove" type="button">Classify + Prove</button>
+    </div>
+
+    <!-- Custom Mode -->
+    <div id="custom-mode" style="display:none">
+      <div class="try-form" id="try-form">
+        <div class="row">
+          <div class="field">
+            <label for="try-name">Skill Name</label>
+            <input type="text" id="try-name" placeholder="e.g. my-weather-skill" required>
+          </div>
+          <div class="field">
+            <label for="try-author">Author</label>
+            <input type="text" id="try-author" placeholder="e.g. alice" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="try-skillmd">SKILL.md Content</label>
+          <textarea id="try-skillmd" rows="5" placeholder="Paste SKILL.md content...">## Weather Lookup
+This skill fetches current weather data from a public API and returns a friendly summary.
+
+### Permissions
+- network: api.open-meteo.com</textarea>
+        </div>
+        <div class="field">
+          <label for="try-scripts">Scripts <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+          <textarea id="try-scripts" rows="3" placeholder="Paste script content if any..."></textarea>
+        </div>
+        <button class="advanced-toggle" type="button" id="try-adv-toggle">&#9654; Advanced</button>
+        <div class="field" id="try-adv-section" style="display:none">
+          <label for="try-apikey">API Key</label>
+          <input type="text" id="try-apikey" placeholder="Bearer token (if auth is enabled)">
+        </div>
+        <div class="wallet-section hidden" id="wallet-section-custom">
+          <div class="wallet-info-text" id="wallet-info-custom">Connect a MetaMask wallet to pay with USDC on Base.</div>
+          <div class="wallet-row">
+            <button class="btn-wallet btn-connect" id="btn-connect-wallet-custom" type="button">Connect Wallet</button>
+            <span class="wallet-addr" id="wallet-addr-custom" style="display:none"></span>
+            <span class="wallet-network" id="wallet-network-custom" style="display:none"></span>
+            <button class="btn-wallet btn-disconnect" id="btn-disconnect-wallet-custom" type="button" style="display:none">Disconnect</button>
+          </div>
+        </div>
+        <div class="try-buttons">
+          <button class="btn-classify" id="btn-classify" type="button">Classify</button>
+          <button class="btn-prove" id="btn-prove" type="button">Classify + Prove</button>
+        </div>
       </div>
     </div>
+
     <div id="try-output"></div>
   </div>
 
@@ -515,42 +663,51 @@ function truncateAddr(addr) {
 }
 
 function updateWalletUI() {
-  var section = $('wallet-section');
-  var btnConnect = $('btn-connect-wallet');
-  var addrEl = $('wallet-addr');
-  var netEl = $('wallet-network');
-  var btnDisconnect = $('btn-disconnect-wallet');
-  var infoEl = $('wallet-info');
+  // Update both wallet sections (search mode + custom mode)
+  var ids = [
+    { section: 'wallet-section', btn: 'btn-connect-wallet', addr: 'wallet-addr', net: 'wallet-network', disc: 'btn-disconnect-wallet', info: 'wallet-info' },
+    { section: 'wallet-section-custom', btn: 'btn-connect-wallet-custom', addr: 'wallet-addr-custom', net: 'wallet-network-custom', disc: 'btn-disconnect-wallet-custom', info: 'wallet-info-custom' }
+  ];
+  for (var i = 0; i < ids.length; i++) {
+    var els = ids[i];
+    var btnConnect = $(els.btn);
+    var addrEl = $(els.addr);
+    var netEl = $(els.net);
+    var btnDisconnect = $(els.disc);
+    var infoEl = $(els.info);
+    if (!btnConnect) continue;
 
-  if (walletState.connected) {
-    btnConnect.style.display = 'none';
-    addrEl.textContent = truncateAddr(walletState.address);
-    addrEl.style.display = '';
-    btnDisconnect.style.display = '';
+    if (walletState.connected) {
+      btnConnect.style.display = 'none';
+      addrEl.textContent = truncateAddr(walletState.address);
+      addrEl.style.display = '';
+      btnDisconnect.style.display = '';
 
-    var isBase = walletState.chainId === BASE_CHAIN_ID ||
-                 walletState.chainId === '0x2105' ||
-                 parseInt(walletState.chainId, 16) === 8453;
-    netEl.style.display = '';
-    if (isBase) {
-      netEl.className = 'wallet-network base';
-      netEl.textContent = 'Base';
+      var isBase = walletState.chainId === BASE_CHAIN_ID ||
+                   walletState.chainId === '0x2105' ||
+                   parseInt(walletState.chainId, 16) === 8453;
+      netEl.style.display = '';
+      if (isBase) {
+        netEl.className = 'wallet-network base';
+        netEl.textContent = 'Base';
+      } else {
+        netEl.className = 'wallet-network wrong';
+        netEl.textContent = 'Wrong Network';
+      }
+      infoEl.textContent = 'Wallet connected. Payments use USDC on Base.';
     } else {
-      netEl.className = 'wallet-network wrong';
-      netEl.textContent = 'Wrong Network';
+      btnConnect.style.display = '';
+      addrEl.style.display = 'none';
+      netEl.style.display = 'none';
+      btnDisconnect.style.display = 'none';
+      infoEl.textContent = 'Connect a MetaMask wallet to pay with USDC on Base.';
     }
-    infoEl.textContent = 'Wallet connected. Payments use USDC on Base.';
-  } else {
-    btnConnect.style.display = '';
-    addrEl.style.display = 'none';
-    netEl.style.display = 'none';
-    btnDisconnect.style.display = 'none';
-    infoEl.textContent = 'Connect a MetaMask wallet to pay with USDC on Base.';
   }
 }
 
 function showWalletSection() {
   $('wallet-section').classList.remove('hidden');
+  $('wallet-section-custom').classList.remove('hidden');
 }
 
 function connectWallet() {
@@ -711,6 +868,26 @@ function signX402Payment(requirements) {
 
 // Try It form logic
 (function() {
+  /* ── Tab switching ── */
+  var tabSearch = $('tab-search');
+  var tabCustom = $('tab-custom');
+  var searchMode = $('search-mode');
+  var customMode = $('custom-mode');
+
+  tabSearch.addEventListener('click', function() {
+    tabSearch.classList.add('active');
+    tabCustom.classList.remove('active');
+    searchMode.style.display = '';
+    customMode.style.display = 'none';
+  });
+  tabCustom.addEventListener('click', function() {
+    tabCustom.classList.add('active');
+    tabSearch.classList.remove('active');
+    customMode.style.display = '';
+    searchMode.style.display = 'none';
+  });
+
+  /* ── Advanced toggle (custom mode) ── */
   var advToggle = $('try-adv-toggle');
   var advSection = $('try-adv-section');
   advToggle.addEventListener('click', function() {
@@ -719,9 +896,13 @@ function signX402Payment(requirements) {
     advToggle.innerHTML = (open ? '&#9654;' : '&#9660;') + ' Advanced';
   });
 
+  /* ── Wallet buttons (both sections) ── */
   $('btn-connect-wallet').addEventListener('click', function() { connectWallet(); });
   $('btn-disconnect-wallet').addEventListener('click', function() { disconnectWallet(); });
+  $('btn-connect-wallet-custom').addEventListener('click', function() { connectWallet(); });
+  $('btn-disconnect-wallet-custom').addEventListener('click', function() { disconnectWallet(); });
 
+  /* ── Shared helpers ── */
   function getFormData() {
     var name = $('try-name').value.trim();
     var author = $('try-author').value.trim();
@@ -748,7 +929,8 @@ function signX402Payment(requirements) {
 
   function getHeaders() {
     var h = { 'Content-Type': 'application/json' };
-    var key = $('try-apikey').value.trim();
+    var apiKeyEl = $('try-apikey');
+    var key = apiKeyEl ? apiKeyEl.value.trim() : '';
     if (key) h['Authorization'] = 'Bearer ' + key;
     return h;
   }
@@ -861,32 +1043,39 @@ function signX402Payment(requirements) {
     });
   }
 
-  function doRequest(url) {
-    var data = getFormData();
-    if (!data) {
-      showError('Please fill in Skill Name, Author, and SKILL.md Content.');
-      return;
+  /* ── doRequest(url, bodyObj) — refactored ── */
+  function doRequest(url, bodyObj) {
+    var data;
+    if (bodyObj) {
+      data = bodyObj;
+    } else {
+      data = getFormData();
+      if (!data) {
+        showError('Please fill in Skill Name, Author, and SKILL.md Content.');
+        return;
+      }
     }
     var isProve = url.indexOf('/prove') !== -1;
     showLoading(isProve ? 'Classifying and generating ZK proof...' : 'Classifying...');
-    $('btn-classify').disabled = true;
-    $('btn-prove').disabled = true;
+    var btnC = $('btn-classify');
+    var btnP = $('btn-prove');
+    if (btnC) btnC.disabled = true;
+    if (btnP) btnP.disabled = true;
+    // Disable all quick classify buttons
+    var qcBtns = document.querySelectorAll('.btn-quick-classify');
+    for (var i = 0; i < qcBtns.length; i++) qcBtns[i].disabled = true;
+
     var reqBody = JSON.stringify(data);
 
     fetch(url, { method: 'POST', headers: getHeaders(), body: reqBody })
       .then(function(r) {
         if (r.status === 401) throw new Error('API key required. Provide a valid key under Advanced.');
         if (r.status === 402) {
-          // Parse x402 payment requirements
           var requirements = parse402Headers(r);
           if (!requirements || !requirements.accepts || !requirements.accepts.length) {
             throw new Error('Payment required but server sent no payment details.');
           }
-
-          // Show wallet section if hidden
           showWalletSection();
-
-          // If wallet not connected, prompt connection first
           if (!walletState.connected) {
             showLoading('Connecting wallet...');
             return connectWallet().then(function() {
@@ -895,7 +1084,7 @@ function signX402Payment(requirements) {
             }).then(function(paymentHeader) {
               var headers = getHeaders();
               headers['Payment-Signature'] = paymentHeader;
-              showLoading(isProve ? 'Classifying with payment...' : 'Classifying with payment...');
+              showLoading('Classifying with payment...');
               return fetch(url, { method: 'POST', headers: headers, body: reqBody });
             }).then(function(r2) {
               if (!r2.ok && r2.status !== 200) {
@@ -904,13 +1093,11 @@ function signX402Payment(requirements) {
               return handleResponse(r2, true);
             });
           }
-
-          // Wallet already connected — sign and retry
           showLoading('Signing USDC payment...');
           return signX402Payment(requirements).then(function(paymentHeader) {
             var headers = getHeaders();
             headers['Payment-Signature'] = paymentHeader;
-            showLoading(isProve ? 'Classifying with payment...' : 'Classifying with payment...');
+            showLoading('Classifying with payment...');
             return fetch(url, { method: 'POST', headers: headers, body: reqBody });
           }).then(function(r2) {
             if (!r2.ok && r2.status !== 200) {
@@ -919,7 +1106,6 @@ function signX402Payment(requirements) {
             return handleResponse(r2, true);
           });
         }
-        // Non-402 success path
         return handleResponse(r, false);
       })
       .catch(function(err) {
@@ -930,13 +1116,255 @@ function signX402Payment(requirements) {
         }
       })
       .finally(function() {
-        $('btn-classify').disabled = false;
-        $('btn-prove').disabled = false;
+        if (btnC) btnC.disabled = false;
+        if (btnP) btnP.disabled = false;
+        var qcBtns2 = document.querySelectorAll('.btn-quick-classify');
+        for (var j = 0; j < qcBtns2.length; j++) qcBtns2[j].disabled = false;
       });
   }
 
+  /* ── Custom mode buttons ── */
   $('btn-classify').addEventListener('click', function() { doRequest('/api/v1/evaluate'); });
   $('btn-prove').addEventListener('click', function() { doRequest('/api/v1/evaluate/prove'); });
+
+  /* ── Skill Index ── */
+  var skillIndex = [];
+  var ENTRY_RE = /^[\s*-]*\[([^\]]+)\]\((https:\/\/github\.com\/[^)]+)\)\s*[-\u2013\u2014:]?\s*(.*?)$/;
+  var CATEGORY_RE = /(?:^#{2,3}\s+(.+?)$|<summary>(?:<[^>]*>)?\s*(.+?)\s*(?:<[^>]*>)?<\/summary>)/;
+
+  function extractAuthor(url) {
+    var stripped = url.replace(/^https?:\/\/github\.com\//, '');
+    return stripped.split('/')[0] || 'unknown';
+  }
+
+  function githubUrlToRaw(url) {
+    var stripped = url.replace(/^https?:\/\/github\.com\//, '');
+    var parts = stripped.split('/');
+    // OWNER/REPO/tree/BRANCH/path... or OWNER/REPO/blob/BRANCH/path...
+    if (parts.length >= 5 && (parts[2] === 'tree' || parts[2] === 'blob')) {
+      return 'https://raw.githubusercontent.com/' + parts[0] + '/' + parts[1] + '/' + parts[3] + '/' + parts.slice(4).join('/');
+    }
+    return 'https://raw.githubusercontent.com/' + stripped;
+  }
+
+  function loadSkillIndex() {
+    var statusEl = $('search-status');
+    statusEl.innerHTML = '<span class="spinner"></span>Loading skill directory...';
+
+    fetch('https://raw.githubusercontent.com/VoltAgent/awesome-openclaw-skills/main/README.md')
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+      .then(function(md) {
+        var currentCategory = 'Uncategorized';
+        var lines = md.split('\n');
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i];
+          var catMatch = line.match(CATEGORY_RE);
+          if (catMatch) {
+            var cat = (catMatch[1] || catMatch[2] || '').trim();
+            if (cat) currentCategory = cat;
+            continue;
+          }
+          var entryMatch = line.match(ENTRY_RE);
+          if (entryMatch) {
+            var name = entryMatch[1].trim();
+            var url = entryMatch[2].trim();
+            var desc = entryMatch[3].trim();
+            if (!name || !url) continue;
+            skillIndex.push({
+              name: name,
+              url: url,
+              description: desc,
+              author: extractAuthor(url),
+              category: currentCategory
+            });
+          }
+        }
+        // Populate category dropdown
+        var cats = {};
+        for (var j = 0; j < skillIndex.length; j++) {
+          cats[skillIndex[j].category] = true;
+        }
+        var catSelect = $('filter-category');
+        var sortedCats = Object.keys(cats).sort();
+        for (var k = 0; k < sortedCats.length; k++) {
+          var opt = document.createElement('option');
+          opt.value = sortedCats[k];
+          opt.textContent = sortedCats[k];
+          catSelect.appendChild(opt);
+        }
+        renderSearchResults('');
+      })
+      .catch(function() {
+        statusEl.innerHTML = 'Could not load skill directory. <a href="#" id="link-switch-custom" style="color:var(--accent)">Use Custom Skill tab</a>';
+        var link = document.getElementById('link-switch-custom');
+        if (link) {
+          link.addEventListener('click', function(e) {
+            e.preventDefault();
+            tabCustom.click();
+          });
+        }
+      });
+  }
+
+  /* ── Search + Render ── */
+  var searchTimer = null;
+
+  function renderSearchResults(query) {
+    var cat = $('filter-category').value;
+    var q = query.toLowerCase();
+    var filtered = [];
+    for (var i = 0; i < skillIndex.length; i++) {
+      var s = skillIndex[i];
+      if (cat && s.category !== cat) continue;
+      if (q) {
+        var haystack = (s.name + ' ' + s.description + ' ' + s.author + ' ' + s.category).toLowerCase();
+        if (haystack.indexOf(q) === -1) continue;
+      }
+      filtered.push(s);
+      if (filtered.length >= 50) break;
+    }
+
+    var countEl = $('results-count');
+    var totalMatch = 0;
+    if (q || cat) {
+      for (var j = 0; j < skillIndex.length; j++) {
+        var s2 = skillIndex[j];
+        if (cat && s2.category !== cat) continue;
+        if (q) {
+          var h2 = (s2.name + ' ' + s2.description + ' ' + s2.author + ' ' + s2.category).toLowerCase();
+          if (h2.indexOf(q) === -1) continue;
+        }
+        totalMatch++;
+      }
+      countEl.textContent = totalMatch + ' skill' + (totalMatch !== 1 ? 's' : '') + ' found';
+    } else {
+      countEl.textContent = skillIndex.length + ' skills';
+    }
+
+    var container = $('skill-results');
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="search-status">No skills match your search.</div>';
+      return;
+    }
+
+    var html = '';
+    for (var k = 0; k < filtered.length; k++) {
+      var sk = filtered[k];
+      html += '<div class="skill-result-item">' +
+        '<div class="skill-result-info">' +
+          '<div class="skill-result-name">' + escHtml(sk.name) + '<span class="author">' + escHtml(sk.author) + '</span></div>' +
+          (sk.description ? '<div class="skill-result-desc">' + escHtml(sk.description) + '</div>' : '') +
+        '</div>' +
+        '<div class="skill-result-meta">' +
+          '<span class="category-badge">' + escHtml(sk.category) + '</span>' +
+          '<button class="btn-quick-classify" data-slug="' + escHtml(sk.author + '/' + sk.name) + '">Classify</button>' +
+        '</div>' +
+      '</div>';
+    }
+    container.innerHTML = html;
+
+    // Attach click handlers to classify buttons
+    var btns = container.querySelectorAll('.btn-quick-classify');
+    for (var m = 0; m < btns.length; m++) {
+      btns[m].addEventListener('click', function() {
+        var slug = this.getAttribute('data-slug');
+        doRequest('/api/v1/evaluate/name', { skill: slug });
+      });
+    }
+  }
+
+  $('search-input').addEventListener('input', function() {
+    var val = this.value.trim();
+    var urlDetect = $('url-detect');
+    var resultsEl = $('skill-results');
+
+    // URL detection
+    if (/^https?:\/\/github\.com\//i.test(val)) {
+      urlDetect.style.display = 'block';
+      resultsEl.style.display = 'none';
+      $('url-detect-preview').textContent = val;
+      return;
+    }
+    urlDetect.style.display = 'none';
+    resultsEl.style.display = '';
+
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function() {
+      renderSearchResults(val);
+    }, 250);
+  });
+
+  $('filter-category').addEventListener('change', function() {
+    var val = $('search-input').value.trim();
+    if (!/^https?:\/\/github\.com\//i.test(val)) {
+      renderSearchResults(val);
+    }
+  });
+
+  /* ── URL mode: Fetch & Classify ── */
+  $('btn-fetch-classify').addEventListener('click', function() {
+    var url = $('search-input').value.trim();
+    if (!url) return;
+    var btn = $('btn-fetch-classify');
+    btn.disabled = true;
+    showLoading('Fetching SKILL.md from GitHub...');
+
+    // Ensure URL points to SKILL.md
+    var fetchUrl = url;
+    if (fetchUrl.indexOf('SKILL.md') === -1) {
+      // Append SKILL.md if it looks like a directory
+      if (fetchUrl.charAt(fetchUrl.length - 1) !== '/') fetchUrl += '/';
+      fetchUrl += 'SKILL.md';
+    }
+
+    var rawUrl = githubUrlToRaw(fetchUrl);
+
+    // Extract name and author from URL
+    var stripped = url.replace(/^https?:\/\/github\.com\//, '');
+    var parts = stripped.split('/');
+    var author = parts[0] || 'unknown';
+    // Name: last meaningful directory segment before SKILL.md
+    var name = 'unknown';
+    for (var i = parts.length - 1; i >= 0; i--) {
+      var seg = parts[i].replace(/SKILL\.md$/i, '').replace(/\/$/, '');
+      if (seg && seg !== 'tree' && seg !== 'blob' && seg !== 'main' && seg !== 'master' && seg !== parts[0] && seg !== parts[1]) {
+        name = seg;
+        break;
+      }
+    }
+
+    fetch(rawUrl)
+      .then(function(r) {
+        if (!r.ok) throw new Error('Could not fetch SKILL.md (HTTP ' + r.status + ')');
+        return r.text();
+      })
+      .then(function(skillMd) {
+        doRequest('/api/v1/evaluate', {
+          skill: {
+            name: name,
+            version: '1.0.0',
+            author: author,
+            description: '',
+            skill_md: skillMd,
+            scripts: [],
+            metadata: {},
+            files: []
+          }
+        });
+      })
+      .catch(function(err) {
+        showError(err.message || 'Failed to fetch SKILL.md');
+      })
+      .finally(function() {
+        btn.disabled = false;
+      });
+  });
+
+  /* ── Init ── */
+  loadSkillIndex();
 })();
 
 checkHealth();
