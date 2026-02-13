@@ -459,16 +459,21 @@ impl ServerState {
             info!("ZKML prover disabled (SKILLGUARD_SKIP_PROVER=1). Prove endpoints unavailable.");
             None
         } else {
-            match crate::prover::ProverState::initialize() {
-                Ok(p) => {
+            // catch_unwind guards against Dory global state panics (GLOBAL_T, SRS generation)
+            match std::panic::catch_unwind(crate::prover::ProverState::initialize) {
+                Ok(Ok(p)) => {
                     info!("ZKML prover ready (Jolt/Dory)");
                     Some(Arc::new(p))
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     warn!(
                         "ZKML prover initialization failed: {}. Prove endpoints disabled.",
                         e
                     );
+                    None
+                }
+                Err(_) => {
+                    warn!("ZKML prover initialization panicked. Prove endpoints disabled.");
                     None
                 }
             }

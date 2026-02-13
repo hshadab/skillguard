@@ -1,6 +1,7 @@
 target/
 .git/
 *.srs
+!dory_srs_24_variables.srs
 skillguard-access.jsonl
 skillguard-access.jsonl.*
 .env

@@ -49,6 +49,9 @@ COPY --from=builder /build/target/release/skillguard /app/skillguard
 # Copy data directory (registry)
 COPY data/ /app/data/
 
+# Pre-generated Dory SRS file (avoids runtime generation which can OOM)
+COPY dory_srs_24_variables.srs /app/dory_srs_24_variables.srs
+
 # Render sets PORT=10000 for web services
 ENV PORT=10000
 EXPOSE 10000
