@@ -204,6 +204,12 @@ footer a:hover { text-decoration: underline; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Wallet connection */
+.wallet-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
+  padding: 8px 12px; background: var(--bg-input); border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
 .wallet-section {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
@@ -217,8 +223,6 @@ footer a:hover { text-decoration: underline; }
 }
 .pay-to-row {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-  margin-bottom: 12px; padding: 8px 12px;
-  background: var(--bg-input); border-radius: var(--radius); border: 1px solid var(--border);
 }
 .pay-to-label {
   font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;
@@ -423,8 +427,8 @@ footer a:hover { text-decoration: underline; }
 
   <!-- Try It -->
   <div class="card">
-    <div class="card-header">
-      <div class="card-title">Try It</div>
+    <div class="card-title">Try It</div>
+    <div class="wallet-bar">
       <div class="wallet-section" id="wallet-section">
         <div class="wallet-info-text" id="wallet-info"></div>
         <div class="wallet-row">
@@ -437,11 +441,10 @@ footer a:hover { text-decoration: underline; }
           <button class="btn-wallet btn-disconnect" id="btn-disconnect-wallet" type="button" style="display:none">Disconnect</button>
         </div>
       </div>
-    </div>
-
-    <div class="pay-to-row" id="pay-to-row" style="display:none">
-      <span class="pay-to-label">SkillGuard Earnings</span>
-      <span class="pay-to-addr" id="pay-to-balance"></span>
+      <div class="pay-to-row" id="pay-to-row" style="display:none">
+        <span class="pay-to-label">SkillGuard Earnings</span>
+        <span class="pay-to-addr" id="pay-to-balance"></span>
+      </div>
     </div>
 
     <div class="mode-tabs">
@@ -944,8 +947,8 @@ function signX402Payment(requirements) {
           from: walletState.address,
           to: accept.payTo,
           value: String(accept.amount),
-          validAfter: 0,
-          validBefore: validBeforeNum,
+          validAfter: '0',
+          validBefore: String(validBeforeNum),
           nonce: nonce
         }
       }
@@ -1297,17 +1300,20 @@ function signX402Payment(requirements) {
             });
           }
         }
-        // Populate category dropdown
-        var cats = {};
+        // Populate category dropdown (only categories with 5+ skills)
+        var catCounts = {};
         for (var j = 0; j < skillIndex.length; j++) {
-          cats[skillIndex[j].category] = true;
+          var c = skillIndex[j].category;
+          catCounts[c] = (catCounts[c] || 0) + 1;
         }
         var catSelect = $('filter-category');
-        var sortedCats = Object.keys(cats).sort();
+        var sortedCats = Object.keys(catCounts).filter(function(c) {
+          return catCounts[c] >= 5;
+        }).sort();
         for (var k = 0; k < sortedCats.length; k++) {
           var opt = document.createElement('option');
           opt.value = sortedCats[k];
-          opt.textContent = sortedCats[k];
+          opt.textContent = sortedCats[k] + ' (' + catCounts[sortedCats[k]] + ')';
           catSelect.appendChild(opt);
         }
         renderSearchResults('');
@@ -1331,15 +1337,35 @@ function signX402Payment(requirements) {
     var cat = $('filter-category').value;
     var q = query.toLowerCase();
     var filtered = [];
-    for (var i = 0; i < skillIndex.length; i++) {
-      var s = skillIndex[i];
-      if (cat && s.category !== cat) continue;
-      if (q) {
-        var haystack = (s.name + ' ' + s.description + ' ' + s.author + ' ' + s.category).toLowerCase();
-        if (haystack.indexOf(q) === -1) continue;
+
+    if (!q && !cat) {
+      // No query and no category filter: show a diverse sample across categories
+      var byCat = {};
+      for (var ci = 0; ci < skillIndex.length; ci++) {
+        var sc = skillIndex[ci];
+        if (!byCat[sc.category]) byCat[sc.category] = [];
+        byCat[sc.category].push(sc);
       }
-      filtered.push(s);
-      if (filtered.length >= 50) break;
+      var catNames = Object.keys(byCat).sort();
+      var round = 0;
+      while (filtered.length < 50 && round < 20) {
+        for (var ck = 0; ck < catNames.length && filtered.length < 50; ck++) {
+          var arr = byCat[catNames[ck]];
+          if (round < arr.length) filtered.push(arr[round]);
+        }
+        round++;
+      }
+    } else {
+      for (var i = 0; i < skillIndex.length; i++) {
+        var s = skillIndex[i];
+        if (cat && s.category !== cat) continue;
+        if (q) {
+          var haystack = (s.name + ' ' + s.description + ' ' + s.author + ' ' + s.category).toLowerCase();
+          if (haystack.indexOf(q) === -1) continue;
+        }
+        filtered.push(s);
+        if (filtered.length >= 50) break;
+      }
     }
 
     var countEl = $('results-count');
