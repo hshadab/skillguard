@@ -435,14 +435,15 @@
       },
       "HealthResponse": {
         "type": "object",
-        "required": ["status", "version", "model_hash", "uptime_seconds", "zkml_enabled", "proving_scheme"],
+        "required": ["status", "version", "model_hash", "uptime_seconds", "zkml_enabled", "proving_scheme", "cache_writable"],
         "properties": {
           "status": { "type": "string" },
           "version": { "type": "string" },
-          "model_hash": { "type": "string" },
+          "model_hash": { "type": "string", "description": "SHA-256 hash of the model bytecode" },
           "uptime_seconds": { "type": "integer" },
-          "zkml_enabled": { "type": "boolean" },
-          "proving_scheme": { "type": "string" }
+          "zkml_enabled": { "type": "boolean", "description": "Whether the ZKML prover is initialized and available" },
+          "proving_scheme": { "type": "string", "description": "Polynomial commitment scheme (e.g. Jolt/Dory)" },
+          "cache_writable": { "type": "boolean", "description": "Whether the proof cache directory is writable" }
         }
       },
       "StatsResponse": {
