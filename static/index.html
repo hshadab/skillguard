@@ -211,6 +211,10 @@ footer a:hover { text-decoration: underline; }
 .wallet-row {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
+.wallet-label {
+  font-size: 0.72rem; color: var(--text-muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
 .pay-to-row {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
   margin-bottom: 12px; padding: 8px 12px;
@@ -425,6 +429,7 @@ footer a:hover { text-decoration: underline; }
         <div class="wallet-info-text" id="wallet-info"></div>
         <div class="wallet-row">
           <button class="btn-wallet btn-connect" id="btn-connect-wallet" type="button">Connect Wallet</button>
+          <span class="wallet-label" id="wallet-label" style="display:none">Your wallet</span>
           <span class="wallet-addr" id="wallet-addr" style="display:none"></span>
           <span class="wallet-balance" id="wallet-balance" style="display:none"></span>
           <span class="wallet-network" id="wallet-network" style="display:none"></span>
@@ -434,10 +439,10 @@ footer a:hover { text-decoration: underline; }
     </div>
 
     <div class="pay-to-row" id="pay-to-row" style="display:none">
-      <span class="pay-to-label">Send USDC to</span>
+      <span class="pay-to-label">Server wallet</span>
       <span class="pay-to-addr" id="pay-to-addr"></span>
       <button class="btn-copy" id="btn-copy-payto" type="button">Copy</button>
-      <span style="font-size:0.72rem;color:var(--text-muted)">(Base network)</span>
+      <span style="font-size:0.72rem;color:var(--text-muted)">USDC on Base</span>
     </div>
 
     <div class="mode-tabs">
@@ -713,6 +718,7 @@ function fetchUsdcBalance(address) {
 
 function updateWalletUI() {
   var btnConnect = $('btn-connect-wallet');
+  var labelEl = $('wallet-label');
   var addrEl = $('wallet-addr');
   var balEl = $('wallet-balance');
   var netEl = $('wallet-network');
@@ -720,6 +726,7 @@ function updateWalletUI() {
 
   if (walletState.connected) {
     btnConnect.style.display = 'none';
+    labelEl.style.display = '';
     addrEl.textContent = truncateAddr(walletState.address);
     addrEl.style.display = '';
     btnDisconnect.style.display = '';
@@ -739,6 +746,7 @@ function updateWalletUI() {
     }
   } else {
     btnConnect.style.display = '';
+    labelEl.style.display = 'none';
     addrEl.style.display = 'none';
     balEl.style.display = 'none';
     netEl.style.display = 'none';
