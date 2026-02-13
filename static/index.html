@@ -696,24 +696,33 @@ function truncateAddr(addr) {
 }
 
 function fetchUsdcBalance(address) {
-  if (!window.ethereum) return;
   // ERC-20 balanceOf(address) — selector 0x70a08231 + address padded to 32 bytes
   var padded = address.toLowerCase().replace('0x', '').padStart(64, '0');
-  var data = '0x70a08231' + padded;
-  window.ethereum.request({
-    method: 'eth_call',
-    params: [{ to: USDC_BASE, data: data }, 'latest']
-  }).then(function(result) {
-    // USDC has 6 decimals
-    var raw = parseInt(result, 16);
-    if (isNaN(raw)) raw = 0;
-    var balance = (raw / 1e6).toFixed(2);
-    var balEl = $('wallet-balance');
-    balEl.textContent = balance + ' USDC';
-    balEl.style.display = '';
-  }).catch(function() {
-    // Silently fail — balance is non-critical
-  });
+  var callData = '0x70a08231' + padded;
+
+  // Use public Base RPC directly — more reliable than routing through MetaMask
+  fetch('https://mainnet.base.org', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0', id: 1, method: 'eth_call',
+      params: [{ to: USDC_BASE, data: callData }, 'latest']
+    })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(resp) {
+      if (!resp.result) return;
+      var raw = parseInt(resp.result, 16);
+      if (isNaN(raw)) raw = 0;
+      // USDC has 6 decimals
+      var balance = (raw / 1e6).toFixed(2);
+      var balEl = $('wallet-balance');
+      balEl.textContent = balance + ' USDC';
+      balEl.style.display = '';
+    })
+    .catch(function() {
+      // Non-critical — balance just won't show
+    });
 }
 
 function updateWalletUI() {
