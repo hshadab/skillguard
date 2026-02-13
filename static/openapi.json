@@ -17,7 +17,7 @@
   ],
   "x-x402": {
     "description": "Paid endpoints accept x402 payment as an alternative to an API key. Send a 402 payment header with USDC on Base to access basic evaluation results without an API key.",
-    "facilitator": "https://api.cdp.coinbase.com/platform/v2/x402",
+    "facilitator": "https://facilitator.x402.rs",
     "token": "USDC",
     "network": "Base (EIP-155 chain 8453)"
   },

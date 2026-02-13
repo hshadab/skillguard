@@ -53,7 +53,7 @@ pub struct ServerConfig {
     /// Wallet address to receive x402 USDC payments on Base.
     /// If None, x402 payment is disabled (API key only).
     pub pay_to: Option<String>,
-    /// x402 facilitator URL (defaults to CDP mainnet facilitator).
+    /// x402 facilitator URL (defaults to free facilitator.x402.rs).
     pub facilitator_url: String,
 }
 
@@ -68,7 +68,7 @@ impl Default for ServerConfig {
             max_access_log_bytes: 50 * 1024 * 1024, // 50 MB
             api_key: None,
             pay_to: None,
-            facilitator_url: "https://api.cdp.coinbase.com/platform/v2/x402".to_string(),
+            facilitator_url: "https://facilitator.x402.rs".to_string(),
         }
     }
 }
@@ -609,7 +609,7 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
     let api_routes = if let Some(ref pay_to_addr) = state.config.pay_to {
         use alloy_primitives::Address;
         use x402_axum::X402Middleware;
-        use x402_chain_eip155::{KnownNetworkEip155, V2Eip155Exact};
+        use x402_chain_eip155::{KnownNetworkEip155, V1Eip155Exact};
         use x402_types::networks::USDC;
 
         let x402 = X402Middleware::try_from(state.config.facilitator_url.as_str())
@@ -644,13 +644,13 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
                         vec![]
                     } else if is_prove {
                         // Prove endpoint: $0.005 USDC = 5000 base units (6 decimals)
-                        vec![V2Eip155Exact::price_tag(
+                        vec![V1Eip155Exact::price_tag(
                             pay_to,
                             USDC::base().amount(5000u64),
                         )]
                     } else {
                         // Evaluate endpoint: $0.001 USDC = 1000 base units (6 decimals)
-                        vec![V2Eip155Exact::price_tag(
+                        vec![V1Eip155Exact::price_tag(
                             pay_to,
                             USDC::base().amount(1000u64),
                         )]
@@ -1393,7 +1393,7 @@ mod tests {
         assert!(config.pay_to.is_some());
         assert_eq!(
             config.facilitator_url,
-            "https://api.cdp.coinbase.com/platform/v2/x402"
+            "https://facilitator.x402.rs"
         );
     }
 }

@@ -1,5 +1,7 @@
 # SkillGuard ZKML
 
+> Powered by [Jolt Atlas zkML](https://github.com/ICME-Lab/jolt-atlasc)
+
 [![CI](https://github.com/hshadab/skillguard/actions/workflows/ci.yml/badge.svg)](https://github.com/hshadab/skillguard/actions/workflows/ci.yml)
 
 Provably correct AI safety classifications with agentic commerce. A verifiable skill safety classifier that produces cryptographic SNARK proofs via [Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas) and accepts pay-per-request via [x402](https://www.x402.org/) on Base.
@@ -179,7 +181,7 @@ skillguard check --input SKILL.md --prove --format json
 |----------|-------------|---------|
 | `SKILLGUARD_API_KEY` | Bearer token for API authentication. If unset, all endpoints are open. | (none) |
 | `SKILLGUARD_PAY_TO` | Ethereum address to receive x402 USDC payments on Base. | (none) |
-| `SKILLGUARD_FACILITATOR_URL` | x402 facilitator URL. | `https://api.cdp.coinbase.com/platform/v2/x402` |
+| `SKILLGUARD_FACILITATOR_URL` | x402 facilitator URL. | `https://facilitator.x402.rs` |
 | `SKILLGUARD_SKIP_PROVER` | Set to `1` to disable the ZKML prover (saves memory). Prove endpoints return an error. | `0` |
 | `RUST_LOG` | Log level filter. | `info` |
 

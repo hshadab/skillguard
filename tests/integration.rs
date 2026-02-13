@@ -36,7 +36,7 @@ async fn spawn_test_server_full(
         max_access_log_bytes: 0,
         api_key,
         pay_to,
-        facilitator_url: "https://api.cdp.coinbase.com/platform/v2/x402".to_string(),
+        facilitator_url: "https://facilitator.x402.rs".to_string(),
     };
     let state = Arc::new(ServerState::new(config));
 

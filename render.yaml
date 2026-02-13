@@ -17,7 +17,7 @@ services:
       - key: SKILLGUARD_PAY_TO
         sync: false
       - key: SKILLGUARD_FACILITATOR_URL
-        value: https://api.cdp.coinbase.com/platform/v2/x402
+        value: https://facilitator.x402.rs
       - key: RUST_LOG
         value: info
       - key: SKILLGUARD_SKIP_PROVER

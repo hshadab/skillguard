@@ -352,7 +352,7 @@ fn main() {
     let api_key = std::env::var("SKILLGUARD_API_KEY").ok();
     let pay_to = std::env::var("SKILLGUARD_PAY_TO").ok();
     let facilitator_url = std::env::var("SKILLGUARD_FACILITATOR_URL")
-        .unwrap_or_else(|_| "https://api.cdp.coinbase.com/platform/v2/x402".to_string());
+        .unwrap_or_else(|_| "https://facilitator.x402.rs".to_string());
 
     let result = match cli.command {
         Commands::Serve {
