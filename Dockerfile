@@ -51,6 +51,8 @@ COPY --from=builder /build/target/release/skillguard /app/skillguard
 # Copy data directory (registry)
 COPY data/ /app/data/
 
-EXPOSE 8080
+# Render sets PORT=10000 for web services
+ENV PORT=10000
+EXPOSE 10000
 
-CMD ["/app/skillguard", "serve", "--bind", "0.0.0.0:8080", "--rate-limit", "30"]
+CMD /app/skillguard serve --bind "0.0.0.0:${PORT}" --rate-limit 30
