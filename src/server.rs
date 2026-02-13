@@ -682,7 +682,15 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
-        .allow_headers(Any);
+        .allow_headers(Any)
+        .expose_headers([
+            "Payment-Required"
+                .parse::<axum::http::HeaderName>()
+                .unwrap(),
+            "X-Payment-Response"
+                .parse::<axum::http::HeaderName>()
+                .unwrap(),
+        ]);
 
     // Public routes (no auth required)
     let app = Router::new()

@@ -1,0 +1,13 @@
+{
+  "name": "skillguard-agent-demo",
+  "version": "1.0.0",
+  "description": "Demo: autonomous agent paying for SkillGuard evaluations via x402",
+  "type": "module",
+  "scripts": {
+    "demo": "node agent_demo.mjs"
+  },
+  "dependencies": {
+    "viem": "^2.27.0",
+    "x402-fetch": "^0.0.7"
+  }
+}

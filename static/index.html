@@ -112,9 +112,133 @@ footer {
 footer a { color: var(--accent); text-decoration: none; }
 footer a:hover { text-decoration: underline; }
 
+/* Try It form */
+.try-form { display: flex; flex-direction: column; gap: 12px; }
+.try-form label { font-size: 0.82rem; color: var(--text-secondary); font-weight: 600; }
+.try-form input[type="text"],
+.try-form textarea {
+  width: 100%; background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 12px; color: var(--text-primary);
+  font-family: inherit; font-size: 0.88rem; resize: vertical; outline: none;
+  transition: border-color 0.2s;
+}
+.try-form input[type="text"]:focus,
+.try-form textarea:focus { border-color: var(--accent); }
+.try-form textarea { min-height: 80px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.82rem; }
+.try-form .field { display: flex; flex-direction: column; gap: 4px; }
+.try-form .row { display: flex; gap: 12px; }
+.try-form .row .field { flex: 1; }
+
+.try-buttons { display: flex; gap: 10px; margin-top: 4px; }
+.try-buttons button {
+  padding: 10px 20px; border: none; border-radius: var(--radius);
+  font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s;
+}
+.try-buttons button:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-classify { background: var(--accent); color: #fff; }
+.btn-prove { background: var(--safe); color: #0a0e17; }
+.btn-classify:hover:not(:disabled) { opacity: 0.85; }
+.btn-prove:hover:not(:disabled) { opacity: 0.85; }
+
+.advanced-toggle {
+  background: none; border: none; color: var(--text-muted); font-size: 0.8rem;
+  cursor: pointer; padding: 0; text-align: left;
+}
+.advanced-toggle:hover { color: var(--text-secondary); }
+
+.try-result { margin-top: 16px; }
+.try-result .result-card {
+  background: var(--bg-input); border-radius: var(--radius); padding: 16px;
+  border: 1px solid var(--border);
+}
+.result-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.result-badge {
+  display: inline-flex; align-items: center; padding: 4px 14px;
+  border-radius: 20px; font-size: 0.88rem; font-weight: 700; text-transform: capitalize;
+}
+.result-badge.safe { background: var(--safe-bg); color: var(--safe); }
+.result-badge.caution { background: var(--caution-bg); color: var(--caution); }
+.result-badge.dangerous { background: var(--dangerous-bg); color: var(--dangerous); }
+.result-badge.malicious { background: var(--malicious-bg); color: var(--malicious); }
+.result-decision { font-size: 0.85rem; color: var(--text-secondary); }
+.result-decision strong { color: var(--text-primary); }
+.result-confidence { font-size: 0.85rem; color: var(--text-secondary); }
+
+.result-scores { margin-top: 12px; }
+.result-scores .breakdown-row { margin-bottom: 6px; }
+.result-scores .breakdown-label { width: 70px; font-size: 0.75rem; }
+.result-scores .breakdown-count { width: 44px; font-size: 0.78rem; }
+
+.proof-meta { margin-top: 12px; display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.82rem; color: var(--text-secondary); }
+.proof-meta span code { color: var(--text-primary); }
+.proof-toggle {
+  background: none; border: none; color: var(--accent); font-size: 0.8rem;
+  cursor: pointer; padding: 0; margin-top: 8px;
+}
+.proof-toggle:hover { text-decoration: underline; }
+.proof-raw {
+  margin-top: 8px; background: var(--bg-primary); border-radius: var(--radius);
+  padding: 12px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.72rem;
+  color: var(--text-secondary); max-height: 300px; overflow: auto;
+  white-space: pre-wrap; word-break: break-all;
+}
+
+.try-error {
+  margin-top: 12px; padding: 12px 14px; background: var(--malicious-bg);
+  border-radius: var(--radius); color: var(--malicious); font-size: 0.85rem;
+}
+
+.try-loading {
+  margin-top: 12px; color: var(--text-muted); font-size: 0.85rem;
+}
+.try-loading .spinner {
+  display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Wallet connection */
+.wallet-section {
+  margin-top: 8px; margin-bottom: 4px;
+  padding: 12px 14px; background: var(--bg-input); border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.wallet-section.hidden { display: none; }
+.wallet-info-text {
+  font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;
+}
+.wallet-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.btn-wallet {
+  padding: 7px 16px; border: none; border-radius: var(--radius);
+  font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s;
+}
+.btn-wallet:hover { opacity: 0.85; }
+.btn-connect { background: #f6851b; color: #fff; }
+.btn-disconnect { background: var(--border); color: var(--text-secondary); font-size: 0.78rem; padding: 5px 12px; }
+.wallet-addr {
+  font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.82rem;
+  color: var(--text-primary);
+}
+.wallet-network {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 10px; border-radius: 12px; font-size: 0.72rem; font-weight: 600;
+}
+.wallet-network.base { background: rgba(59,130,246,0.15); color: var(--accent); }
+.wallet-network.wrong { background: var(--malicious-bg); color: var(--malicious); }
+.payment-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;
+  background: rgba(59,130,246,0.15); color: var(--accent); margin-left: 4px;
+}
+
 @media (max-width: 600px) {
   .x402-grid { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .try-form .row { flex-direction: column; gap: 12px; }
+  .try-buttons { flex-direction: column; }
 }
 </style>
 </head>
@@ -135,13 +259,61 @@ footer a:hover { text-decoration: underline; }
     <div class="status-meta" id="status-meta" style="margin-top:10px"></div>
   </div>
 
+  <!-- Try It -->
+  <div class="card">
+    <div class="card-title">Try It</div>
+    <div class="try-form" id="try-form">
+      <div class="row">
+        <div class="field">
+          <label for="try-name">Skill Name</label>
+          <input type="text" id="try-name" placeholder="e.g. my-weather-skill" required>
+        </div>
+        <div class="field">
+          <label for="try-author">Author</label>
+          <input type="text" id="try-author" placeholder="e.g. alice" required>
+        </div>
+      </div>
+      <div class="field">
+        <label for="try-skillmd">SKILL.md Content</label>
+        <textarea id="try-skillmd" rows="5" placeholder="Paste SKILL.md content...">## Weather Lookup
+This skill fetches current weather data from a public API and returns a friendly summary.
+
+### Permissions
+- network: api.open-meteo.com</textarea>
+      </div>
+      <div class="field">
+        <label for="try-scripts">Scripts <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+        <textarea id="try-scripts" rows="3" placeholder="Paste script content if any..."></textarea>
+      </div>
+      <button class="advanced-toggle" type="button" id="try-adv-toggle">&#9654; Advanced</button>
+      <div class="field" id="try-adv-section" style="display:none">
+        <label for="try-apikey">API Key</label>
+        <input type="text" id="try-apikey" placeholder="Bearer token (if auth is enabled)">
+      </div>
+      <div class="wallet-section hidden" id="wallet-section">
+        <div class="wallet-info-text" id="wallet-info">Connect a MetaMask wallet to pay with USDC on Base.</div>
+        <div class="wallet-row">
+          <button class="btn-wallet btn-connect" id="btn-connect-wallet" type="button">Connect Wallet</button>
+          <span class="wallet-addr" id="wallet-addr" style="display:none"></span>
+          <span class="wallet-network" id="wallet-network" style="display:none"></span>
+          <button class="btn-wallet btn-disconnect" id="btn-disconnect-wallet" type="button" style="display:none">Disconnect</button>
+        </div>
+      </div>
+      <div class="try-buttons">
+        <button class="btn-classify" id="btn-classify" type="button">Classify</button>
+        <button class="btn-prove" id="btn-prove" type="button">Classify + Prove</button>
+      </div>
+    </div>
+    <div id="try-output"></div>
+  </div>
+
   <!-- ZKML Proving -->
   <div class="card">
     <div class="card-title">ZKML Proving</div>
     <div class="x402-grid">
       <div class="x402-item">
         <div class="x402-label">Proving Scheme</div>
-        <div class="x402-value">Jolt / HyperKZG</div>
+        <div class="x402-value">Jolt / Dory</div>
       </div>
       <div class="x402-item">
         <div class="x402-label">Model Size</div>
@@ -333,6 +505,439 @@ function loadStats() {
     })
     .catch(function() {});
 }
+
+/* ── Wallet connection (MetaMask / window.ethereum) ── */
+var walletState = { connected: false, address: null, chainId: null };
+var BASE_CHAIN_ID = '0x2105'; // 8453
+
+function truncateAddr(addr) {
+  return addr.slice(0, 6) + '...' + addr.slice(-4);
+}
+
+function updateWalletUI() {
+  var section = $('wallet-section');
+  var btnConnect = $('btn-connect-wallet');
+  var addrEl = $('wallet-addr');
+  var netEl = $('wallet-network');
+  var btnDisconnect = $('btn-disconnect-wallet');
+  var infoEl = $('wallet-info');
+
+  if (walletState.connected) {
+    btnConnect.style.display = 'none';
+    addrEl.textContent = truncateAddr(walletState.address);
+    addrEl.style.display = '';
+    btnDisconnect.style.display = '';
+
+    var isBase = walletState.chainId === BASE_CHAIN_ID ||
+                 walletState.chainId === '0x2105' ||
+                 parseInt(walletState.chainId, 16) === 8453;
+    netEl.style.display = '';
+    if (isBase) {
+      netEl.className = 'wallet-network base';
+      netEl.textContent = 'Base';
+    } else {
+      netEl.className = 'wallet-network wrong';
+      netEl.textContent = 'Wrong Network';
+    }
+    infoEl.textContent = 'Wallet connected. Payments use USDC on Base.';
+  } else {
+    btnConnect.style.display = '';
+    addrEl.style.display = 'none';
+    netEl.style.display = 'none';
+    btnDisconnect.style.display = 'none';
+    infoEl.textContent = 'Connect a MetaMask wallet to pay with USDC on Base.';
+  }
+}
+
+function showWalletSection() {
+  $('wallet-section').classList.remove('hidden');
+}
+
+function connectWallet() {
+  if (!window.ethereum) {
+    alert('MetaMask not detected. Install MetaMask to pay with USDC.');
+    return Promise.reject(new Error('No MetaMask'));
+  }
+  showWalletSection();
+  return window.ethereum.request({ method: 'eth_requestAccounts' })
+    .then(function(accounts) {
+      walletState.address = accounts[0];
+      walletState.connected = true;
+      return window.ethereum.request({ method: 'eth_chainId' });
+    })
+    .then(function(chainId) {
+      walletState.chainId = chainId;
+      if (chainId !== BASE_CHAIN_ID) {
+        return switchToBase().then(function() {
+          walletState.chainId = BASE_CHAIN_ID;
+        }).catch(function() {
+          // User rejected chain switch — stay connected but show wrong network
+        });
+      }
+    })
+    .then(function() {
+      updateWalletUI();
+    });
+}
+
+function switchToBase() {
+  return window.ethereum.request({
+    method: 'wallet_switchEthereumChain',
+    params: [{ chainId: BASE_CHAIN_ID }]
+  }).catch(function(err) {
+    if (err.code === 4902) {
+      return window.ethereum.request({
+        method: 'wallet_addEthereumChain',
+        params: [{
+          chainId: BASE_CHAIN_ID,
+          chainName: 'Base',
+          nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+          rpcUrls: ['https://mainnet.base.org'],
+          blockExplorerUrls: ['https://basescan.org']
+        }]
+      });
+    }
+    throw err;
+  });
+}
+
+function disconnectWallet() {
+  walletState = { connected: false, address: null, chainId: null };
+  updateWalletUI();
+}
+
+// Auto-detect MetaMask and show wallet section
+if (window.ethereum) {
+  showWalletSection();
+  window.ethereum.on('accountsChanged', function(accounts) {
+    if (accounts.length === 0) {
+      disconnectWallet();
+    } else {
+      walletState.address = accounts[0];
+      walletState.connected = true;
+      updateWalletUI();
+    }
+  });
+  window.ethereum.on('chainChanged', function(chainId) {
+    walletState.chainId = chainId;
+    updateWalletUI();
+  });
+}
+
+/* ── x402 payment helpers ── */
+function randomBytes32() {
+  var arr = new Uint8Array(32);
+  crypto.getRandomValues(arr);
+  return '0x' + Array.from(arr).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+}
+
+function parse402Headers(response) {
+  var raw = response.headers.get('Payment-Required');
+  if (!raw) return null;
+  try {
+    return JSON.parse(atob(raw));
+  } catch (e) {
+    return null;
+  }
+}
+
+function signX402Payment(requirements) {
+  var accept = requirements.accepts[0];
+  var USDC_ADDRESS = accept.asset || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+  var extraName = (accept.extra && accept.extra.name) || 'USD Coin';
+  var extraVersion = (accept.extra && accept.extra.version) || '2';
+  var maxTimeout = accept.maxTimeoutSeconds || 30;
+  var validBefore = '0x' + (Math.floor(Date.now() / 1000) + maxTimeout).toString(16);
+  var nonce = randomBytes32();
+
+  var typedData = {
+    types: {
+      EIP712Domain: [
+        { name: 'name', type: 'string' },
+        { name: 'version', type: 'string' },
+        { name: 'chainId', type: 'uint256' },
+        { name: 'verifyingContract', type: 'address' }
+      ],
+      TransferWithAuthorization: [
+        { name: 'from', type: 'address' },
+        { name: 'to', type: 'address' },
+        { name: 'value', type: 'uint256' },
+        { name: 'validAfter', type: 'uint256' },
+        { name: 'validBefore', type: 'uint256' },
+        { name: 'nonce', type: 'bytes32' }
+      ]
+    },
+    primaryType: 'TransferWithAuthorization',
+    domain: {
+      name: extraName,
+      version: extraVersion,
+      chainId: 8453,
+      verifyingContract: USDC_ADDRESS
+    },
+    message: {
+      from: walletState.address,
+      to: accept.payTo,
+      value: accept.amount,
+      validAfter: '0',
+      validBefore: validBefore,
+      nonce: nonce
+    }
+  };
+
+  return window.ethereum.request({
+    method: 'eth_signTypedData_v4',
+    params: [walletState.address, JSON.stringify(typedData)]
+  }).then(function(signature) {
+    var payload = {
+      x402Version: 2,
+      scheme: accept.scheme,
+      network: accept.network,
+      payload: {
+        signature: signature,
+        authorization: {
+          from: walletState.address,
+          to: accept.payTo,
+          value: accept.amount,
+          validAfter: '0',
+          validBefore: validBefore,
+          nonce: nonce
+        }
+      },
+      resource: requirements.resource
+    };
+    return btoa(JSON.stringify(payload));
+  });
+}
+
+// Try It form logic
+(function() {
+  var advToggle = $('try-adv-toggle');
+  var advSection = $('try-adv-section');
+  advToggle.addEventListener('click', function() {
+    var open = advSection.style.display !== 'none';
+    advSection.style.display = open ? 'none' : 'flex';
+    advToggle.innerHTML = (open ? '&#9654;' : '&#9660;') + ' Advanced';
+  });
+
+  $('btn-connect-wallet').addEventListener('click', function() { connectWallet(); });
+  $('btn-disconnect-wallet').addEventListener('click', function() { disconnectWallet(); });
+
+  function getFormData() {
+    var name = $('try-name').value.trim();
+    var author = $('try-author').value.trim();
+    var skillmd = $('try-skillmd').value.trim();
+    var scripts = $('try-scripts').value.trim();
+    if (!name || !author || !skillmd) return null;
+    var body = {
+      skill: {
+        name: name,
+        version: '1.0.0',
+        author: author,
+        description: '',
+        skill_md: skillmd,
+        scripts: [],
+        metadata: {},
+        files: []
+      }
+    };
+    if (scripts) {
+      body.skill.scripts = [{ name: 'script.sh', content: scripts, extension: 'sh' }];
+    }
+    return body;
+  }
+
+  function getHeaders() {
+    var h = { 'Content-Type': 'application/json' };
+    var key = $('try-apikey').value.trim();
+    if (key) h['Authorization'] = 'Bearer ' + key;
+    return h;
+  }
+
+  function setOutput(html) {
+    $('try-output').innerHTML = html;
+  }
+
+  function showLoading(msg) {
+    setOutput(
+      '<div class="try-loading"><span class="spinner"></span>' + escHtml(msg) + '</div>'
+    );
+  }
+
+  function showError(msg) {
+    setOutput('<div class="try-error">' + escHtml(msg) + '</div>');
+  }
+
+  function classColor(cls) {
+    var c = cls.toLowerCase();
+    if (c === 'safe') return 'safe';
+    if (c === 'caution') return 'caution';
+    if (c === 'dangerous') return 'dangerous';
+    return 'malicious';
+  }
+
+  function pct(v) { return (v * 100).toFixed(1) + '%'; }
+
+  function renderScores(scores) {
+    var cats = [
+      { key: 'SAFE', label: 'Safe', color: 'var(--safe)' },
+      { key: 'CAUTION', label: 'Caution', color: 'var(--caution)' },
+      { key: 'DANGEROUS', label: 'Dangerous', color: 'var(--dangerous)' },
+      { key: 'MALICIOUS', label: 'Malicious', color: 'var(--malicious)' }
+    ];
+    var html = '<div class="result-scores">';
+    for (var i = 0; i < cats.length; i++) {
+      var c = cats[i];
+      var val = scores[c.key] || 0;
+      var w = (val * 100).toFixed(1);
+      html += '<div class="breakdown-row">' +
+        '<div class="breakdown-label">' + c.label + '</div>' +
+        '<div class="breakdown-track"><div class="breakdown-fill" style="width:' + w + '%;background:' + c.color + '"></div></div>' +
+        '<div class="breakdown-count">' + pct(val) + '</div>' +
+        '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderResult(ev, proofBundle, timeMs, paidViaX402) {
+    var cls = classColor(ev.classification);
+    var html = '<div class="result-card">';
+    html += '<div class="result-header">';
+    html += '<span class="result-badge ' + cls + '">' + escHtml(ev.classification) + '</span>';
+    html += '<span class="result-decision">Decision: <strong>' + escHtml(ev.decision) + '</strong></span>';
+    if (typeof ev.confidence === 'number') {
+      html += '<span class="result-confidence">Confidence: <strong>' + pct(ev.confidence) + '</strong></span>';
+    }
+    if (paidViaX402) {
+      html += '<span class="payment-badge">Paid via x402</span>';
+    }
+    html += '</div>';
+    if (ev.scores) html += renderScores(ev.scores);
+    if (ev.reasoning) {
+      html += '<div style="margin-top:10px;font-size:0.82rem;color:var(--text-secondary)"><strong>Reasoning:</strong> ' + escHtml(ev.reasoning) + '</div>';
+    }
+    if (proofBundle) {
+      html += '<div class="proof-meta">';
+      html += '<span>Proof size: <code>' + proofBundle.proof_size_bytes.toLocaleString() + ' bytes</code></span>';
+      html += '<span>Proving time: <code>' + proofBundle.proving_time_ms.toLocaleString() + ' ms</code></span>';
+      html += '</div>';
+      html += '<button class="proof-toggle" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\'">Show raw proof JSON</button>';
+      html += '<div class="proof-raw" style="display:none">' + escHtml(JSON.stringify(proofBundle, null, 2)) + '</div>';
+    }
+    html += '<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted)">Processed in ' + timeMs + ' ms</div>';
+    html += '</div>';
+    return html;
+  }
+
+  function renderBasicResult(ev, timeMs, paidViaX402) {
+    var cls = classColor(ev.classification);
+    var html = '<div class="result-card">';
+    html += '<div class="result-header">';
+    html += '<span class="result-badge ' + cls + '">' + escHtml(ev.classification) + '</span>';
+    html += '<span class="result-decision">Decision: <strong>' + escHtml(ev.decision) + '</strong></span>';
+    if (paidViaX402) {
+      html += '<span class="payment-badge">Paid via x402</span>';
+    }
+    html += '</div>';
+    html += '<div style="margin-top:8px;font-size:0.8rem;color:var(--text-muted)">Basic evaluation (x402 payment). Use an API key for full scores.</div>';
+    html += '<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted)">Processed in ' + timeMs + ' ms</div>';
+    html += '</div>';
+    return html;
+  }
+
+  function handleResponse(r, paidViaX402) {
+    return r.json().then(function(d) {
+      if (!r.ok || !d.success) throw new Error(d.error || 'Request failed (HTTP ' + r.status + ')');
+      var html;
+      if (d.evaluation) {
+        var proof = d.evaluation.proof || null;
+        html = renderResult(d.evaluation, proof, d.processing_time_ms, paidViaX402);
+      } else if (d.basic_evaluation) {
+        html = renderBasicResult(d.basic_evaluation, d.processing_time_ms, paidViaX402);
+      } else {
+        html = '<div class="try-error">Unexpected response format.</div>';
+      }
+      setOutput('<div class="try-result">' + html + '</div>');
+    });
+  }
+
+  function doRequest(url) {
+    var data = getFormData();
+    if (!data) {
+      showError('Please fill in Skill Name, Author, and SKILL.md Content.');
+      return;
+    }
+    var isProve = url.indexOf('/prove') !== -1;
+    showLoading(isProve ? 'Classifying and generating ZK proof...' : 'Classifying...');
+    $('btn-classify').disabled = true;
+    $('btn-prove').disabled = true;
+    var reqBody = JSON.stringify(data);
+
+    fetch(url, { method: 'POST', headers: getHeaders(), body: reqBody })
+      .then(function(r) {
+        if (r.status === 401) throw new Error('API key required. Provide a valid key under Advanced.');
+        if (r.status === 402) {
+          // Parse x402 payment requirements
+          var requirements = parse402Headers(r);
+          if (!requirements || !requirements.accepts || !requirements.accepts.length) {
+            throw new Error('Payment required but server sent no payment details.');
+          }
+
+          // Show wallet section if hidden
+          showWalletSection();
+
+          // If wallet not connected, prompt connection first
+          if (!walletState.connected) {
+            showLoading('Connecting wallet...');
+            return connectWallet().then(function() {
+              showLoading('Signing USDC payment...');
+              return signX402Payment(requirements);
+            }).then(function(paymentHeader) {
+              var headers = getHeaders();
+              headers['Payment-Signature'] = paymentHeader;
+              showLoading(isProve ? 'Classifying with payment...' : 'Classifying with payment...');
+              return fetch(url, { method: 'POST', headers: headers, body: reqBody });
+            }).then(function(r2) {
+              if (!r2.ok && r2.status !== 200) {
+                return r2.json().then(function(d) { throw new Error(d.error || 'Payment failed (HTTP ' + r2.status + ')'); });
+              }
+              return handleResponse(r2, true);
+            });
+          }
+
+          // Wallet already connected — sign and retry
+          showLoading('Signing USDC payment...');
+          return signX402Payment(requirements).then(function(paymentHeader) {
+            var headers = getHeaders();
+            headers['Payment-Signature'] = paymentHeader;
+            showLoading(isProve ? 'Classifying with payment...' : 'Classifying with payment...');
+            return fetch(url, { method: 'POST', headers: headers, body: reqBody });
+          }).then(function(r2) {
+            if (!r2.ok && r2.status !== 200) {
+              return r2.json().then(function(d) { throw new Error(d.error || 'Payment failed (HTTP ' + r2.status + ')'); });
+            }
+            return handleResponse(r2, true);
+          });
+        }
+        // Non-402 success path
+        return handleResponse(r, false);
+      })
+      .catch(function(err) {
+        if (err && err.code === 4001) {
+          showError('Payment rejected by user.');
+        } else {
+          showError(err.message || 'Network error');
+        }
+      })
+      .finally(function() {
+        $('btn-classify').disabled = false;
+        $('btn-prove').disabled = false;
+      });
+  }
+
+  $('btn-classify').addEventListener('click', function() { doRequest('/api/v1/evaluate'); });
+  $('btn-prove').addEventListener('click', function() { doRequest('/api/v1/evaluate/prove'); });
+})();
 
 checkHealth();
 loadStats();

@@ -5,6 +5,9 @@ skillguard-access.jsonl
 skillguard-access.jsonl.*
 crawled-skills/
 
+# Demo agent wallets
+demo/wallets.env
+
 # Secrets and credentials
 .env
 .env.*
