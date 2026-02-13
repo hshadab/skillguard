@@ -703,7 +703,7 @@ function fetchUsdcBalance(address) {
   var callData = '0x70a08231' + padded;
 
   // Use public Base RPC directly — more reliable than routing through MetaMask
-  fetch('https://mainnet.base.org', {
+  return fetch('https://mainnet.base.org', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -713,7 +713,7 @@ function fetchUsdcBalance(address) {
   })
     .then(function(r) { return r.json(); })
     .then(function(resp) {
-      if (!resp.result) return;
+      if (!resp.result) return '0.00';
       var raw = parseInt(resp.result, 16);
       if (isNaN(raw)) raw = 0;
       // USDC has 6 decimals
@@ -721,9 +721,11 @@ function fetchUsdcBalance(address) {
       var balEl = $('wallet-balance');
       balEl.textContent = balance + ' USDC';
       balEl.style.display = '';
+      return balance;
     })
     .catch(function() {
       // Non-critical — balance just won't show
+      return '0.00';
     });
 }
 
