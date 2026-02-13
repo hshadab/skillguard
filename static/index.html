@@ -429,8 +429,9 @@ footer a:hover { text-decoration: underline; }
         <div class="wallet-info-text" id="wallet-info"></div>
         <div class="wallet-row">
           <button class="btn-wallet btn-connect" id="btn-connect-wallet" type="button">Connect Wallet</button>
-          <span class="wallet-label" id="wallet-label" style="display:none">Your wallet</span>
+          <span class="wallet-label" id="wallet-label" style="display:none">Your Wallet</span>
           <span class="wallet-addr" id="wallet-addr" style="display:none"></span>
+          <button class="btn-copy btn-copy-addr" id="btn-copy-addr" type="button" style="display:none">Copy</button>
           <span class="wallet-balance" id="wallet-balance" style="display:none"></span>
           <span class="wallet-network" id="wallet-network" style="display:none"></span>
           <button class="btn-wallet btn-disconnect" id="btn-disconnect-wallet" type="button" style="display:none">Disconnect</button>
@@ -439,10 +440,8 @@ footer a:hover { text-decoration: underline; }
     </div>
 
     <div class="pay-to-row" id="pay-to-row" style="display:none">
-      <span class="pay-to-label">Server wallet</span>
-      <span class="pay-to-addr" id="pay-to-addr"></span>
-      <button class="btn-copy" id="btn-copy-payto" type="button">Copy</button>
-      <span style="font-size:0.72rem;color:var(--text-muted)">USDC on Base</span>
+      <span class="pay-to-label">SkillGuard Earnings</span>
+      <span class="pay-to-addr" id="pay-to-balance"></span>
     </div>
 
     <div class="mode-tabs">
@@ -729,6 +728,7 @@ function updateWalletUI() {
   var btnConnect = $('btn-connect-wallet');
   var labelEl = $('wallet-label');
   var addrEl = $('wallet-addr');
+  var btnCopy = $('btn-copy-addr');
   var balEl = $('wallet-balance');
   var netEl = $('wallet-network');
   var btnDisconnect = $('btn-disconnect-wallet');
@@ -738,6 +738,7 @@ function updateWalletUI() {
     labelEl.style.display = '';
     addrEl.textContent = truncateAddr(walletState.address);
     addrEl.style.display = '';
+    btnCopy.style.display = '';
     btnDisconnect.style.display = '';
 
     var isBase = walletState.chainId === BASE_CHAIN_ID ||
@@ -757,6 +758,7 @@ function updateWalletUI() {
     btnConnect.style.display = '';
     labelEl.style.display = 'none';
     addrEl.style.display = 'none';
+    btnCopy.style.display = 'none';
     balEl.style.display = 'none';
     netEl.style.display = 'none';
     btnDisconnect.style.display = 'none';
@@ -997,12 +999,11 @@ function signX402Payment(requirements) {
   $('btn-connect-wallet').addEventListener('click', onConnectClick);
   $('btn-disconnect-wallet').addEventListener('click', function() { disconnectWallet(); });
 
-  /* ── Copy pay-to address ── */
-  $('btn-copy-payto').addEventListener('click', function() {
-    var addr = $('pay-to-addr').textContent;
-    if (!addr) return;
-    navigator.clipboard.writeText(addr).then(function() {
-      var btn = $('btn-copy-payto');
+  /* ── Copy user wallet address ── */
+  $('btn-copy-addr').addEventListener('click', function() {
+    if (!walletState.address) return;
+    navigator.clipboard.writeText(walletState.address).then(function() {
+      var btn = $('btn-copy-addr');
       btn.textContent = 'Copied!';
       btn.classList.add('copied');
       setTimeout(function() { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
@@ -1476,8 +1477,8 @@ function signX402Payment(requirements) {
   });
 
   /* ── Probe for pay-to address ── */
-  function loadPayToAddress() {
-    // Send a minimal request expecting a 402 to extract the payTo address
+  function loadServerEarnings() {
+    // Probe for the server's payTo address, then fetch its USDC balance
     fetch('/api/v1/evaluate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1487,17 +1488,33 @@ function signX402Payment(requirements) {
         var info = parse402Headers(r);
         if (info && info.accepts && info.accepts[0] && info.accepts[0].payTo) {
           var addr = info.accepts[0].payTo;
-          $('pay-to-addr').textContent = addr;
-          $('pay-to-row').style.display = '';
+          // Fetch USDC balance of the server wallet
+          var padded = addr.toLowerCase().replace('0x', '').padStart(64, '0');
+          var callData = '0x70a08231' + padded;
+          return fetch('https://mainnet.base.org', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0', id: 1, method: 'eth_call',
+              params: [{ to: USDC_BASE, data: callData }, 'latest']
+            })
+          }).then(function(rpc) { return rpc.json(); })
+            .then(function(resp) {
+              if (!resp.result) return;
+              var raw = parseInt(resp.result, 16);
+              if (isNaN(raw)) raw = 0;
+              var balance = (raw / 1e6).toFixed(2);
+              $('pay-to-balance').textContent = '$' + balance + ' USDC';
+              $('pay-to-row').style.display = '';
+            });
         }
       }
-      // If not 402 (e.g. API key auth, or open), hide the pay-to row
     }).catch(function() {});
   }
 
   /* ── Init ── */
   loadSkillIndex();
-  loadPayToAddress();
+  loadServerEarnings();
 })();
 
 checkHealth();
