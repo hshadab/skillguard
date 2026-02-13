@@ -1210,7 +1210,20 @@ function signX402Payment(requirements) {
           }
 
           return walletReady.then(function() {
-            showLoading('Signing USDC payment...');
+            // Check USDC balance before signing
+            var requiredAmount = parseInt(requirements.accepts[0].amount) || 0;
+            return fetchUsdcBalance(walletState.address).then(function(bal) {
+              var balUnits = Math.round(parseFloat(bal) * 1e6);
+              if (balUnits < requiredAmount) {
+                var needed = (requiredAmount / 1e6).toFixed(4);
+                throw new Error('Insufficient USDC balance. You need at least $' + needed + ' USDC on Base. Your balance: ' + bal + ' USDC. Send USDC (Base network) to your wallet: ' + walletState.address);
+              }
+            }).catch(function(e) {
+              if (e.message && e.message.indexOf('Insufficient') !== -1) throw e;
+              // Balance check failed (network issue) — continue anyway
+            });
+          }).then(function() {
+            showLoading('Signing USDC payment \u2014 check MetaMask...');
             return signX402Payment(requirements);
           }).then(function(paymentHeader) {
             var headers = getHeaders();
@@ -1219,7 +1232,12 @@ function signX402Payment(requirements) {
             return fetch(url, { method: 'POST', headers: headers, body: reqBody });
           }).then(function(r2) {
             if (!r2.ok && r2.status !== 200) {
-              return safeJson(r2).then(function(d) { throw new Error((d && d.error) || 'Payment failed (HTTP ' + r2.status + ')'); });
+              return safeJson(r2).then(function(d) {
+                var msg = (d && d.error) || 'Payment failed';
+                if (d && d.details) msg += ': ' + d.details;
+                msg += ' (HTTP ' + r2.status + ')';
+                throw new Error(msg);
+              });
             }
             return handleResponse(r2, true);
           });
