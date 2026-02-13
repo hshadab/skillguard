@@ -51,6 +51,11 @@ header p { color: var(--text-secondary); margin-top: 4px; font-size: 0.95rem; }
   font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em;
   color: var(--text-muted); margin-bottom: 12px; font-weight: 600;
 }
+.card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
+}
+.card-header .card-title { margin-bottom: 0; }
 
 /* Status */
 .status-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
@@ -200,17 +205,32 @@ footer a:hover { text-decoration: underline; }
 
 /* Wallet connection */
 .wallet-section {
-  margin-top: 8px; margin-bottom: 4px;
-  padding: 12px 14px; background: var(--bg-input); border-radius: var(--radius);
-  border: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
-/* .wallet-section.hidden removed — wallet sections always visible */
-.wallet-info-text {
-  font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;
-}
+.wallet-info-text { display: none; }
 .wallet-row {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
+.pay-to-row {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-bottom: 12px; padding: 8px 12px;
+  background: var(--bg-input); border-radius: var(--radius); border: 1px solid var(--border);
+}
+.pay-to-label {
+  font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.06em; font-weight: 600; margin-right: 4px;
+}
+.pay-to-addr {
+  font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.82rem;
+  color: var(--safe); word-break: break-all;
+}
+.btn-copy {
+  padding: 3px 10px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg-card); color: var(--text-secondary); font-size: 0.72rem;
+  cursor: pointer; transition: border-color 0.2s, color 0.2s; white-space: nowrap;
+}
+.btn-copy:hover { border-color: var(--accent); color: var(--accent); }
+.btn-copy.copied { border-color: var(--safe); color: var(--safe); }
 .btn-wallet {
   padding: 7px 16px; border: none; border-radius: var(--radius);
   font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s;
@@ -370,7 +390,25 @@ footer a:hover { text-decoration: underline; }
 
   <!-- Try It -->
   <div class="card">
-    <div class="card-title">Try It</div>
+    <div class="card-header">
+      <div class="card-title">Try It</div>
+      <div class="wallet-section" id="wallet-section">
+        <div class="wallet-info-text" id="wallet-info"></div>
+        <div class="wallet-row">
+          <button class="btn-wallet btn-connect" id="btn-connect-wallet" type="button">Connect Wallet</button>
+          <span class="wallet-addr" id="wallet-addr" style="display:none"></span>
+          <span class="wallet-network" id="wallet-network" style="display:none"></span>
+          <button class="btn-wallet btn-disconnect" id="btn-disconnect-wallet" type="button" style="display:none">Disconnect</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="pay-to-row" id="pay-to-row" style="display:none">
+      <span class="pay-to-label">Send USDC to</span>
+      <span class="pay-to-addr" id="pay-to-addr"></span>
+      <button class="btn-copy" id="btn-copy-payto" type="button">Copy</button>
+      <span style="font-size:0.72rem;color:var(--text-muted)">(Base network)</span>
+    </div>
 
     <div class="mode-tabs">
       <button class="mode-tab active" id="tab-search" type="button">Search Skills</button>
@@ -394,15 +432,6 @@ footer a:hover { text-decoration: underline; }
         <div class="url-detect-label">GitHub URL detected</div>
         <div id="url-detect-preview" style="font-size:0.8rem;color:var(--text-secondary);word-break:break-all;margin-bottom:6px"></div>
         <button class="btn-fetch-classify" id="btn-fetch-classify" type="button">Fetch &amp; Classify</button>
-      </div>
-      <div class="wallet-section" id="wallet-section">
-        <div class="wallet-info-text" id="wallet-info">Connect a MetaMask wallet to pay with USDC on Base.</div>
-        <div class="wallet-row">
-          <button class="btn-wallet btn-connect" id="btn-connect-wallet" type="button">Connect Wallet</button>
-          <span class="wallet-addr" id="wallet-addr" style="display:none"></span>
-          <span class="wallet-network" id="wallet-network" style="display:none"></span>
-          <button class="btn-wallet btn-disconnect" id="btn-disconnect-wallet" type="button" style="display:none">Disconnect</button>
-        </div>
       </div>
     </div>
 
@@ -435,15 +464,6 @@ This skill fetches current weather data from a public API and returns a friendly
         <div class="field" id="try-adv-section" style="display:none">
           <label for="try-apikey">API Key</label>
           <input type="text" id="try-apikey" placeholder="Bearer token (if auth is enabled)">
-        </div>
-        <div class="wallet-section" id="wallet-section-custom">
-          <div class="wallet-info-text" id="wallet-info-custom">Connect a MetaMask wallet to pay with USDC on Base.</div>
-          <div class="wallet-row">
-            <button class="btn-wallet btn-connect" id="btn-connect-wallet-custom" type="button">Connect Wallet</button>
-            <span class="wallet-addr" id="wallet-addr-custom" style="display:none"></span>
-            <span class="wallet-network" id="wallet-network-custom" style="display:none"></span>
-            <button class="btn-wallet btn-disconnect" id="btn-disconnect-wallet-custom" type="button" style="display:none">Disconnect</button>
-          </div>
         </div>
         <div class="try-buttons">
           <button class="btn-classify" id="btn-classify" type="button">Classify</button>
@@ -663,50 +683,38 @@ function truncateAddr(addr) {
 }
 
 function updateWalletUI() {
-  // Update both wallet sections (search mode + custom mode)
-  var ids = [
-    { section: 'wallet-section', btn: 'btn-connect-wallet', addr: 'wallet-addr', net: 'wallet-network', disc: 'btn-disconnect-wallet', info: 'wallet-info' },
-    { section: 'wallet-section-custom', btn: 'btn-connect-wallet-custom', addr: 'wallet-addr-custom', net: 'wallet-network-custom', disc: 'btn-disconnect-wallet-custom', info: 'wallet-info-custom' }
-  ];
-  for (var i = 0; i < ids.length; i++) {
-    var els = ids[i];
-    var btnConnect = $(els.btn);
-    var addrEl = $(els.addr);
-    var netEl = $(els.net);
-    var btnDisconnect = $(els.disc);
-    var infoEl = $(els.info);
-    if (!btnConnect) continue;
+  var btnConnect = $('btn-connect-wallet');
+  var addrEl = $('wallet-addr');
+  var netEl = $('wallet-network');
+  var btnDisconnect = $('btn-disconnect-wallet');
 
-    if (walletState.connected) {
-      btnConnect.style.display = 'none';
-      addrEl.textContent = truncateAddr(walletState.address);
-      addrEl.style.display = '';
-      btnDisconnect.style.display = '';
+  if (walletState.connected) {
+    btnConnect.style.display = 'none';
+    addrEl.textContent = truncateAddr(walletState.address);
+    addrEl.style.display = '';
+    btnDisconnect.style.display = '';
 
-      var isBase = walletState.chainId === BASE_CHAIN_ID ||
-                   walletState.chainId === '0x2105' ||
-                   parseInt(walletState.chainId, 16) === 8453;
-      netEl.style.display = '';
-      if (isBase) {
-        netEl.className = 'wallet-network base';
-        netEl.textContent = 'Base';
-      } else {
-        netEl.className = 'wallet-network wrong';
-        netEl.textContent = 'Wrong Network';
-      }
-      infoEl.textContent = 'Wallet connected. Payments use USDC on Base.';
+    var isBase = walletState.chainId === BASE_CHAIN_ID ||
+                 walletState.chainId === '0x2105' ||
+                 parseInt(walletState.chainId, 16) === 8453;
+    netEl.style.display = '';
+    if (isBase) {
+      netEl.className = 'wallet-network base';
+      netEl.textContent = 'Base';
     } else {
-      btnConnect.style.display = '';
-      addrEl.style.display = 'none';
-      netEl.style.display = 'none';
-      btnDisconnect.style.display = 'none';
-      infoEl.textContent = 'Connect a MetaMask wallet to pay with USDC on Base.';
+      netEl.className = 'wallet-network wrong';
+      netEl.textContent = 'Wrong Network';
     }
+  } else {
+    btnConnect.style.display = '';
+    addrEl.style.display = 'none';
+    netEl.style.display = 'none';
+    btnDisconnect.style.display = 'none';
   }
 }
 
 function showWalletSection() {
-  // Wallet sections are always visible now; kept for 402 flow compatibility
+  // No-op — wallet is always visible in the card header
 }
 
 function withTimeout(promise, ms, msg) {
@@ -922,7 +930,7 @@ function signX402Payment(requirements) {
     advToggle.innerHTML = (open ? '&#9654;' : '&#9660;') + ' Advanced';
   });
 
-  /* ── Wallet buttons (both sections) ── */
+  /* ── Wallet buttons ── */
   function onConnectClick() {
     if (!window.ethereum) {
       setOutput('<div class="try-error">MetaMask not detected. Install the MetaMask browser extension to pay with USDC on Base.</div>');
@@ -936,13 +944,19 @@ function signX402Payment(requirements) {
       }
     });
   }
-  ['btn-connect-wallet', 'btn-connect-wallet-custom'].forEach(function(id) {
-    var el = $(id);
-    if (el) el.addEventListener('click', onConnectClick);
-  });
-  ['btn-disconnect-wallet', 'btn-disconnect-wallet-custom'].forEach(function(id) {
-    var el = $(id);
-    if (el) el.addEventListener('click', function() { disconnectWallet(); });
+  $('btn-connect-wallet').addEventListener('click', onConnectClick);
+  $('btn-disconnect-wallet').addEventListener('click', function() { disconnectWallet(); });
+
+  /* ── Copy pay-to address ── */
+  $('btn-copy-payto').addEventListener('click', function() {
+    var addr = $('pay-to-addr').textContent;
+    if (!addr) return;
+    navigator.clipboard.writeText(addr).then(function() {
+      var btn = $('btn-copy-payto');
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(function() { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
   });
 
   /* ── Shared helpers ── */
@@ -1403,8 +1417,29 @@ function signX402Payment(requirements) {
       });
   });
 
+  /* ── Probe for pay-to address ── */
+  function loadPayToAddress() {
+    // Send a minimal request expecting a 402 to extract the payTo address
+    fetch('/api/v1/evaluate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ skill: { name: '_probe', version: '0', author: '_', description: '', skill_md: '_', scripts: [], metadata: {}, files: [] } })
+    }).then(function(r) {
+      if (r.status === 402) {
+        var info = parse402Headers(r);
+        if (info && info.accepts && info.accepts[0] && info.accepts[0].payTo) {
+          var addr = info.accepts[0].payTo;
+          $('pay-to-addr').textContent = addr;
+          $('pay-to-row').style.display = '';
+        }
+      }
+      // If not 402 (e.g. API key auth, or open), hide the pay-to row
+    }).catch(function() {});
+  }
+
   /* ── Init ── */
   loadSkillIndex();
+  loadPayToAddress();
 })();
 
 checkHealth();
