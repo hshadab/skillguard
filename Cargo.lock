@@ -938,7 +938,7 @@ dependencies = [
 [[package]]
 name = "common"
 version = "0.2.0"
-source = "git+https://github.com/ICME-Lab/zkml-jolt?branch=dev#e8700816a212b2b199df9cc72ef2b633d8b8a6e4"
+source = "git+https://github.com/hshadab/zkml-jolt?rev=b217e7e4#b217e7e416bc691393dd7b2c594810d9bc836433"
 dependencies = [
  "ark-serialize 0.5.0",
  "derive_more",
@@ -2305,7 +2305,7 @@ dependencies = [
 [[package]]
 name = "jolt-core"
 version = "0.1.0"
-source = "git+https://github.com/ICME-Lab/zkml-jolt?branch=dev#e8700816a212b2b199df9cc72ef2b633d8b8a6e4"
+source = "git+https://github.com/hshadab/zkml-jolt?rev=b217e7e4#b217e7e416bc691393dd7b2c594810d9bc836433"
 dependencies = [
  "allocative",
  "anyhow",
@@ -2378,7 +2378,7 @@ dependencies = [
 [[package]]
 name = "jolt-platform"
 version = "0.1.0"
-source = "git+https://github.com/ICME-Lab/zkml-jolt?branch=dev#e8700816a212b2b199df9cc72ef2b633d8b8a6e4"
+source = "git+https://github.com/hshadab/zkml-jolt?rev=b217e7e4#b217e7e416bc691393dd7b2c594810d9bc836433"
 dependencies = [
  "getrandom 0.2.17",
  "rand 0.8.5",
@@ -4812,7 +4812,7 @@ checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 [[package]]
 name = "tracer"
 version = "0.2.0"
-source = "git+https://github.com/ICME-Lab/zkml-jolt?branch=dev#e8700816a212b2b199df9cc72ef2b633d8b8a6e4"
+source = "git+https://github.com/hshadab/zkml-jolt?rev=b217e7e4#b217e7e416bc691393dd7b2c594810d9bc836433"
 dependencies = [
  "ark-serialize 0.5.0",
  "clap",

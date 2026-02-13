@@ -53,7 +53,7 @@ onnx-tracer = { git = "https://github.com/ICME-Lab/jolt-atlas", rev = "194ee9273
 
 # ZK proving
 zkml-jolt-core = { git = "https://github.com/ICME-Lab/jolt-atlas", rev = "194ee927313f90f3827e86e885fb045742f3e971" }
-jolt-core = { git = "https://github.com/ICME-Lab/zkml-jolt", branch = "dev", package = "jolt-core", default-features = true }
+jolt-core = { git = "https://github.com/hshadab/zkml-jolt", rev = "b217e7e4", package = "jolt-core", default-features = true }
 ark-bn254 = "0.5.0"
 ark-serialize = { version = "0.5.0", default-features = false, features = ["derive"] }
 base64 = "0.22"
@@ -70,6 +70,10 @@ ark-ff = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist
 ark-ec = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
 ark-serialize = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
 ark-bn254 = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+
+# Redirect jolt-core from ICME-Lab to fork with const generics fix
+[patch."https://github.com/ICME-Lab/zkml-jolt"]
+jolt-core = { git = "https://github.com/hshadab/zkml-jolt", rev = "b217e7e4", package = "jolt-core" }
 
 [dev-dependencies]
 tempfile = "3"
