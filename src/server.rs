@@ -442,7 +442,9 @@ pub struct ServerState {
     pub rate_limiters: Mutex<LruCache<std::net::IpAddr, Arc<IpRateLimiter>>>,
     pub clawhub_client: ClawHubClient,
     pub usage: UsageMetrics,
-    pub prover: Option<Arc<crate::prover::ProverState>>,
+    /// Prover initialized lazily in background after server starts listening.
+    pub prover: tokio::sync::OnceCell<Arc<crate::prover::ProverState>>,
+    pub skip_prover: bool,
     pub proof_cache: crate::cache::ProofCache,
 }
 
@@ -455,29 +457,9 @@ impl ServerState {
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
 
-        let prover = if skip_prover {
+        if skip_prover {
             info!("ZKML prover disabled (SKILLGUARD_SKIP_PROVER=1). Prove endpoints unavailable.");
-            None
-        } else {
-            // catch_unwind guards against Dory global state panics (GLOBAL_T, SRS generation)
-            match std::panic::catch_unwind(crate::prover::ProverState::initialize) {
-                Ok(Ok(p)) => {
-                    info!("ZKML prover ready (Jolt/Dory)");
-                    Some(Arc::new(p))
-                }
-                Ok(Err(e)) => {
-                    warn!(
-                        "ZKML prover initialization failed: {}. Prove endpoints disabled.",
-                        e
-                    );
-                    None
-                }
-                Err(_) => {
-                    warn!("ZKML prover initialization panicked. Prove endpoints disabled.");
-                    None
-                }
-            }
-        };
+        }
 
         let proof_cache = crate::cache::ProofCache::open(None);
 
@@ -490,9 +472,18 @@ impl ServerState {
             )),
             clawhub_client: ClawHubClient::new(),
             usage,
-            prover,
+            prover: tokio::sync::OnceCell::new(),
+            skip_prover,
             proof_cache,
         }
+    }
+
+    /// Get the prover, returning None if skipped or not yet initialized.
+    pub fn get_prover(&self) -> Option<Arc<crate::prover::ProverState>> {
+        if self.skip_prover {
+            return None;
+        }
+        self.prover.get().cloned()
     }
 
     pub async fn get_rate_limiter(&self, ip: std::net::IpAddr) -> Option<Arc<IpRateLimiter>> {
@@ -727,6 +718,42 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
     }
     info!(access_log = %access_log);
 
+    // Initialize ZKML prover in background so the server can start serving health checks
+    // immediately. Without this, prover init (5-15s) blocks port binding and causes
+    // Render to kill the app with "Application exited early".
+    if !state.skip_prover {
+        let prover_state = state.clone();
+        tokio::spawn(async move {
+            info!("Starting ZKML prover initialization in background...");
+            let result = tokio::task::spawn_blocking(|| {
+                std::panic::catch_unwind(crate::prover::ProverState::initialize)
+            })
+            .await;
+
+            match result {
+                Ok(Ok(Ok(p))) => {
+                    let _ = prover_state.prover.set(Arc::new(p));
+                    info!("ZKML prover ready (Jolt/Dory)");
+                }
+                Ok(Ok(Err(e))) => {
+                    warn!(
+                        "ZKML prover initialization failed: {}. Prove endpoints disabled.",
+                        e
+                    );
+                }
+                Ok(Err(_)) => {
+                    warn!("ZKML prover initialization panicked. Prove endpoints disabled.");
+                }
+                Err(e) => {
+                    warn!(
+                        "ZKML prover init task failed: {}. Prove endpoints disabled.",
+                        e
+                    );
+                }
+            }
+        });
+    }
+
     // Graceful shutdown on SIGTERM/SIGINT
     let shutdown_state = state;
     axum::serve(
@@ -844,7 +871,7 @@ async fn health_handler(
         version: env!("CARGO_PKG_VERSION").to_string(),
         model_hash: state.model_hash.clone(),
         uptime_seconds: state.start_time.elapsed().as_secs(),
-        zkml_enabled: state.prover.is_some(),
+        zkml_enabled: state.get_prover().is_some(),
         proving_scheme: "Jolt/Dory".to_string(),
         cache_writable,
     };
@@ -1067,8 +1094,8 @@ async fn prove_evaluate_handler(
         }
     }
 
-    let prover = match &state.prover {
-        Some(p) => p.clone(),
+    let prover = match state.get_prover() {
+        Some(p) => p,
         None => {
             state.usage.record_error();
             return axum::Json(ProveEvaluateResponse {
@@ -1173,8 +1200,8 @@ async fn verify_handler(
 
     state.usage.ep_verify.fetch_add(1, Ordering::Relaxed);
 
-    let prover = match &state.prover {
-        Some(p) => p.clone(),
+    let prover = match state.get_prover() {
+        Some(p) => p,
         None => {
             return axum::Json(serde_json::json!({
                 "error": "ZKML prover not available",

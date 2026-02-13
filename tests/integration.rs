@@ -88,7 +88,7 @@ async fn health_handler(
         version: env!("CARGO_PKG_VERSION").to_string(),
         model_hash: state.model_hash.clone(),
         uptime_seconds: state.start_time.elapsed().as_secs(),
-        zkml_enabled: state.prover.is_some(),
+        zkml_enabled: state.get_prover().is_some(),
         proving_scheme: "Jolt/Dory".to_string(),
         cache_writable: false,
     };
@@ -203,8 +203,8 @@ async fn prove_evaluate_handler(
         }
     };
 
-    let prover = match &state.prover {
-        Some(p) => p.clone(),
+    let prover = match state.get_prover() {
+        Some(p) => p,
         None => {
             return axum::Json(ProveEvaluateResponse {
                 success: false,
@@ -257,8 +257,8 @@ async fn verify_handler(
 ) -> impl axum::response::IntoResponse {
     let start = std::time::Instant::now();
 
-    let prover = match &state.prover {
-        Some(p) => p.clone(),
+    let prover = match state.get_prover() {
+        Some(p) => p,
         None => {
             return axum::Json(serde_json::json!({
                 "error": "ZKML prover not available",
@@ -485,7 +485,7 @@ async fn test_evaluate_invalid_json_returns_error() {
 #[serial]
 async fn test_prove_evaluate_endpoint() {
     let (addr, state) = spawn_test_server().await;
-    if state.prover.is_none() {
+    if state.get_prover().is_none() {
         // Skip test if prover didn't initialize
         return;
     }
@@ -521,7 +521,7 @@ async fn test_prove_evaluate_endpoint() {
 #[serial]
 async fn test_verify_endpoint_valid() {
     let (addr, state) = spawn_test_server().await;
-    if state.prover.is_none() {
+    if state.get_prover().is_none() {
         return;
     }
 
@@ -571,7 +571,7 @@ async fn test_verify_endpoint_valid() {
 #[serial]
 async fn test_verify_endpoint_invalid() {
     let (addr, state) = spawn_test_server().await;
-    if state.prover.is_none() {
+    if state.get_prover().is_none() {
         return;
     }
 
