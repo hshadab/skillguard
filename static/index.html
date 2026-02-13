@@ -895,14 +895,27 @@ function signX402Payment(requirements) {
   });
 
   /* ── Wallet buttons (both sections) ── */
-  $('btn-connect-wallet').addEventListener('click', function() {
-    connectWallet().catch(function() {});
+  function onConnectClick() {
+    if (!window.ethereum) {
+      setOutput('<div class="try-error">MetaMask not detected. Install the MetaMask browser extension to pay with USDC on Base.</div>');
+      return;
+    }
+    connectWallet().catch(function(err) {
+      if (err && err.code === 4001) {
+        setOutput('<div class="try-error">Wallet connection rejected by user.</div>');
+      } else {
+        setOutput('<div class="try-error">Wallet connection failed: ' + escHtml(err.message || String(err)) + '</div>');
+      }
+    });
+  }
+  ['btn-connect-wallet', 'btn-connect-wallet-custom'].forEach(function(id) {
+    var el = $(id);
+    if (el) el.addEventListener('click', onConnectClick);
   });
-  $('btn-disconnect-wallet').addEventListener('click', function() { disconnectWallet(); });
-  $('btn-connect-wallet-custom').addEventListener('click', function() {
-    connectWallet().catch(function() {});
+  ['btn-disconnect-wallet', 'btn-disconnect-wallet-custom'].forEach(function(id) {
+    var el = $(id);
+    if (el) el.addEventListener('click', function() { disconnectWallet(); });
   });
-  $('btn-disconnect-wallet-custom').addEventListener('click', function() { disconnectWallet(); });
 
   /* ── Shared helpers ── */
   function getFormData() {
