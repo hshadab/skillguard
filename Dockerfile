@@ -14,16 +14,26 @@ FROM rustlang/rust:nightly-bookworm AS builder
 WORKDIR /build
 
 # Limit parallel jobs to avoid OOM with ZKML deps
-ENV CARGO_BUILD_JOBS=2
+ENV CARGO_BUILD_JOBS=1
 
-# Copy manifest first for layer caching
-COPY Cargo.toml Cargo.lock* ./
+# Override fat LTO from Cargo.toml — thin LTO uses far less memory
+ENV CARGO_PROFILE_RELEASE_LTO=thin
 
-# Copy source and static assets
+# Copy manifest + lockfile first for layer caching
+COPY Cargo.toml Cargo.lock ./
+
+# Create dummy sources so cargo can fetch & compile dependencies first (layer cache)
+RUN mkdir -p src \
+    && echo 'fn main(){}' > src/main.rs \
+    && echo '' > src/lib.rs \
+    && cargo build --release --bin skillguard || true \
+    && rm -rf src
+
+# Copy real source and static assets
 COPY src/ src/
 COPY static/ static/
 
-# Build in release mode
+# Build in release mode (only re-compiles skillguard crate, deps are cached)
 RUN cargo build --release --bin skillguard
 
 # --- Runtime stage ---
