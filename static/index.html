@@ -242,6 +242,12 @@ footer a:hover { text-decoration: underline; }
   font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.82rem;
   color: var(--text-primary);
 }
+.wallet-balance {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;
+  background: var(--safe-bg); color: var(--safe);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
 .wallet-network {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 2px 10px; border-radius: 12px; font-size: 0.72rem; font-weight: 600;
@@ -388,6 +394,29 @@ footer a:hover { text-decoration: underline; }
     <div class="status-meta" id="status-meta" style="margin-top:10px"></div>
   </div>
 
+  <!-- x402 Payment Info -->
+  <div class="card">
+    <div class="card-title">x402 Payment</div>
+    <div class="x402-grid">
+      <div class="x402-item">
+        <div class="x402-label">Price per evaluation</div>
+        <div class="x402-value highlight">$0.001 USDC</div>
+      </div>
+      <div class="x402-item">
+        <div class="x402-label">Price per proof</div>
+        <div class="x402-value highlight">$0.005 USDC</div>
+      </div>
+      <div class="x402-item">
+        <div class="x402-label">Network</div>
+        <div class="x402-value">Base (eip155:8453)</div>
+      </div>
+      <div class="x402-item">
+        <div class="x402-label">Protocol</div>
+        <div class="x402-value">HTTP 402 / x402 v2</div>
+      </div>
+    </div>
+  </div>
+
   <!-- Try It -->
   <div class="card">
     <div class="card-header">
@@ -397,6 +426,7 @@ footer a:hover { text-decoration: underline; }
         <div class="wallet-row">
           <button class="btn-wallet btn-connect" id="btn-connect-wallet" type="button">Connect Wallet</button>
           <span class="wallet-addr" id="wallet-addr" style="display:none"></span>
+          <span class="wallet-balance" id="wallet-balance" style="display:none"></span>
           <span class="wallet-network" id="wallet-network" style="display:none"></span>
           <button class="btn-wallet btn-disconnect" id="btn-disconnect-wallet" type="button" style="display:none">Disconnect</button>
         </div>
@@ -494,29 +524,6 @@ This skill fetches current weather data from a public API and returns a friendly
       <div class="x402-item">
         <div class="x402-label">Proofs Verified</div>
         <div class="x402-value" id="st-proofs-ver">-</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- x402 Payment Info -->
-  <div class="card">
-    <div class="card-title">x402 Payment</div>
-    <div class="x402-grid">
-      <div class="x402-item">
-        <div class="x402-label">Price per evaluation</div>
-        <div class="x402-value highlight">$0.001 USDC</div>
-      </div>
-      <div class="x402-item">
-        <div class="x402-label">Price per proof</div>
-        <div class="x402-value highlight">$0.005 USDC</div>
-      </div>
-      <div class="x402-item">
-        <div class="x402-label">Network</div>
-        <div class="x402-value">Base (eip155:8453)</div>
-      </div>
-      <div class="x402-item">
-        <div class="x402-label">Protocol</div>
-        <div class="x402-value">HTTP 402 / x402 v2</div>
       </div>
     </div>
   </div>
@@ -677,14 +684,37 @@ function loadStats() {
 /* ── Wallet connection (MetaMask / window.ethereum) ── */
 var walletState = { connected: false, address: null, chainId: null };
 var BASE_CHAIN_ID = '0x2105'; // 8453
+var USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 
 function truncateAddr(addr) {
   return addr.slice(0, 6) + '...' + addr.slice(-4);
 }
 
+function fetchUsdcBalance(address) {
+  if (!window.ethereum) return;
+  // ERC-20 balanceOf(address) — selector 0x70a08231 + address padded to 32 bytes
+  var padded = address.toLowerCase().replace('0x', '').padStart(64, '0');
+  var data = '0x70a08231' + padded;
+  window.ethereum.request({
+    method: 'eth_call',
+    params: [{ to: USDC_BASE, data: data }, 'latest']
+  }).then(function(result) {
+    // USDC has 6 decimals
+    var raw = parseInt(result, 16);
+    if (isNaN(raw)) raw = 0;
+    var balance = (raw / 1e6).toFixed(2);
+    var balEl = $('wallet-balance');
+    balEl.textContent = balance + ' USDC';
+    balEl.style.display = '';
+  }).catch(function() {
+    // Silently fail — balance is non-critical
+  });
+}
+
 function updateWalletUI() {
   var btnConnect = $('btn-connect-wallet');
   var addrEl = $('wallet-addr');
+  var balEl = $('wallet-balance');
   var netEl = $('wallet-network');
   var btnDisconnect = $('btn-disconnect-wallet');
 
@@ -701,13 +731,16 @@ function updateWalletUI() {
     if (isBase) {
       netEl.className = 'wallet-network base';
       netEl.textContent = 'Base';
+      fetchUsdcBalance(walletState.address);
     } else {
       netEl.className = 'wallet-network wrong';
       netEl.textContent = 'Wrong Network';
+      balEl.style.display = 'none';
     }
   } else {
     btnConnect.style.display = '';
     addrEl.style.display = 'none';
+    balEl.style.display = 'none';
     netEl.style.display = 'none';
     btnDisconnect.style.display = 'none';
   }
