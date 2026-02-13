@@ -8,6 +8,7 @@ use axum::routing::{get, post};
 use axum::Router;
 use tokio::net::TcpListener;
 
+use serial_test::serial;
 use skillguard::scores::ClassScores;
 use skillguard::server::*;
 use skillguard::skill::{ScriptFile, Skill, SkillFeatures, SkillMetadata, VTReport};
@@ -88,7 +89,8 @@ async fn health_handler(
         model_hash: state.model_hash.clone(),
         uptime_seconds: state.start_time.elapsed().as_secs(),
         zkml_enabled: state.prover.is_some(),
-        proving_scheme: "Jolt/HyperKZG".to_string(),
+        proving_scheme: "Jolt/Dory".to_string(),
+        cache_writable: false,
     };
     axum::Json(response)
 }
@@ -357,7 +359,7 @@ async fn test_health_shows_zkml() {
 
     let body: serde_json::Value = resp.json().await.unwrap();
     assert!(body["zkml_enabled"].as_bool().is_some());
-    assert_eq!(body["proving_scheme"], "Jolt/HyperKZG");
+    assert_eq!(body["proving_scheme"], "Jolt/Dory");
 }
 
 #[tokio::test]
@@ -480,6 +482,7 @@ async fn test_evaluate_invalid_json_returns_error() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
+#[serial]
 async fn test_prove_evaluate_endpoint() {
     let (addr, state) = spawn_test_server().await;
     if state.prover.is_none() {
@@ -515,6 +518,7 @@ async fn test_prove_evaluate_endpoint() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_verify_endpoint_valid() {
     let (addr, state) = spawn_test_server().await;
     if state.prover.is_none() {
@@ -564,6 +568,7 @@ async fn test_verify_endpoint_valid() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_verify_endpoint_invalid() {
     let (addr, state) = spawn_test_server().await;
     if state.prover.is_none() {

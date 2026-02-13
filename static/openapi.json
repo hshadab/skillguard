@@ -3,7 +3,7 @@
   "info": {
     "title": "SkillGuard ZKML",
     "version": "0.1.0",
-    "description": "Verifiable AI safety classifier for OpenClaw skills. Evaluates skill metadata and scripts to produce a safety classification (SAFE, CAUTION, DANGEROUS, MALICIOUS) with optional SNARK proof via Jolt/HyperKZG.",
+    "description": "Verifiable AI safety classifier for OpenClaw skills. Evaluates skill metadata and scripts to produce a safety classification (SAFE, CAUTION, DANGEROUS, MALICIOUS) with optional SNARK proof via Jolt/Dory.",
     "license": {
       "name": "MIT",
       "url": "https://github.com/hshadab/skillguard/blob/main/LICENSE"
@@ -177,7 +177,7 @@
       "post": {
         "operationId": "evaluateSkillWithProof",
         "summary": "Evaluate with ZK proof",
-        "description": "Classify a skill and generate a Jolt/HyperKZG SNARK proof of the MLP forward pass. The proof can be independently verified via /api/v1/verify.",
+        "description": "Classify a skill and generate a Jolt/Dory SNARK proof of the MLP forward pass. The proof can be independently verified via /api/v1/verify.",
         "x-x402-pricing": {
           "amount": "0.005",
           "currency": "USDC",

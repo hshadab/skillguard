@@ -2,3 +2,9 @@ target/
 .git/
 *.srs
 skillguard-access.jsonl
+skillguard-access.jsonl.*
+.env
+.env.*
+*.pem
+*.key
+crawled-skills/

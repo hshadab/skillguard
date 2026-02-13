@@ -38,9 +38,16 @@ tokio = { version = "1.43", features = ["full"] }
 
 # Rate limiting
 governor = "0.6"
+lru = "0.12"
 
 # HTTP client for ClawHub API
 reqwest = { version = "0.12", features = ["json"] }
+
+# Middleware
+tower-http = { version = "0.6", features = ["cors"] }
+
+# Constant-time comparison
+subtle = "2.6"
 
 # x402 payment protocol
 x402-axum = "1"
@@ -77,10 +84,11 @@ jolt-core = { git = "https://github.com/hshadab/zkml-jolt", rev = "b217e7e4", pa
 
 [dev-dependencies]
 tempfile = "3"
+serial_test = "3"
 
 [profile.test]
 opt-level = 3
 lto = "off"
 
 [profile.release]
-lto = "fat"
+lto = "thin"

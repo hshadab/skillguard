@@ -12,6 +12,8 @@ services:
       mountPath: /var/data/skillguard-cache
       sizeGB: 1
     envVars:
+      - key: SKILLGUARD_API_KEY
+        sync: false
       - key: SKILLGUARD_PAY_TO
         sync: false
       - key: SKILLGUARD_FACILITATOR_URL
@@ -19,4 +21,4 @@ services:
       - key: RUST_LOG
         value: info
       - key: SKILLGUARD_SKIP_PROVER
-        value: "1"
+        value: "0"

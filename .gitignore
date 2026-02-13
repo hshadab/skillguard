@@ -1,8 +1,17 @@
 /target
 *.srs
 skillguard-access.jsonl
-skillguard-access.jsonl.1
+skillguard-access.jsonl.*
 crawled-skills/
+
+# Secrets and credentials
+.env
+.env.*
+*.pem
+*.key
+*.pk8
+*.p12
+*.pfx
 
 # IDE / editor
 .idea/

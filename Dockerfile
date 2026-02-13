@@ -16,9 +16,6 @@ WORKDIR /build
 # Limit parallel jobs to avoid OOM with ZKML deps
 ENV CARGO_BUILD_JOBS=1
 
-# Override fat LTO from Cargo.toml — thin LTO uses far less memory
-ENV CARGO_PROFILE_RELEASE_LTO=thin
-
 # Copy manifest + lockfile first for layer caching
 COPY Cargo.toml Cargo.lock ./
 

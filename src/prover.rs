@@ -13,7 +13,7 @@ use std::time::Instant;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use eyre::Result;
-use jolt_core::poly::commitment::hyperkzg::HyperKZG;
+use jolt_core::poly::commitment::dory::DoryCommitmentScheme;
 use onnx_tracer::graph::model::Model;
 use onnx_tracer::tensor::Tensor;
 use onnx_tracer::ProgramIO;
@@ -26,8 +26,7 @@ use crate::model::skill_safety_model;
 /// Maximum trace length for the Jolt prover (2^16 = 65536 steps).
 const MAX_TRACE_LENGTH: usize = 1 << 16;
 
-#[allow(clippy::upper_case_acronyms)]
-type PCS = HyperKZG<ark_bn254::Bn254>;
+type PCS = DoryCommitmentScheme;
 type Transcript = jolt_core::transcripts::KeccakTranscript;
 type F = ark_bn254::Fr;
 
@@ -71,7 +70,7 @@ impl ProverState {
         let elapsed = start.elapsed();
         info!(
             elapsed_ms = elapsed.as_millis() as u64,
-            "ZKML prover initialized (Jolt/HyperKZG)"
+            "ZKML prover initialized (Jolt/Dory)"
         );
 
         Ok(Self {
@@ -141,18 +140,23 @@ impl ProverState {
     ///
     /// Returns `Ok(true)` if valid, `Ok(false)` if invalid.
     pub fn verify_proof(&self, bundle: &ProofBundle) -> Result<bool> {
-        let proof_bytes = BASE64
-            .decode(&bundle.proof_b64)
-            .map_err(|e| eyre::eyre!("Base64 decode failed: {}", e))?;
+        let proof_bytes = match BASE64.decode(&bundle.proof_b64) {
+            Ok(bytes) => bytes,
+            Err(_) => return Ok(false),
+        };
 
-        let snark =
+        let snark = match
             <JoltSNARK<F, PCS, Transcript> as CanonicalDeserialize>::deserialize_compressed(
                 &proof_bytes[..],
-            )
-            .map_err(|e| eyre::eyre!("Proof deserialization failed: {}", e))?;
+            ) {
+            Ok(s) => s,
+            Err(_) => return Ok(false), // corrupted proof bytes = invalid
+        };
 
-        let program_io: ProgramIO = serde_json::from_value(bundle.program_io.clone())
-            .map_err(|e| eyre::eyre!("Program IO deserialization failed: {}", e))?;
+        let program_io: ProgramIO = match serde_json::from_value(bundle.program_io.clone()) {
+            Ok(io) => io,
+            Err(_) => return Ok(false),
+        };
 
         // verify() may panic on invalid proofs, so we catch that
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -170,13 +174,16 @@ impl ProverState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn test_prover_initialization() {
         let _state = ProverState::initialize().expect("ProverState::initialize() should not fail");
     }
 
     #[test]
+    #[serial]
     fn test_prove_and_verify_roundtrip() {
         let state = ProverState::initialize().unwrap();
 
@@ -196,6 +203,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_tampered_proof_fails() {
         let state = ProverState::initialize().unwrap();
 

@@ -10,7 +10,6 @@
 //! - Tiered x402 pricing ($0.001 for classify, $0.005 for classify+prove)
 //! - Structured logging via [`tracing`]
 
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::net::SocketAddr;
@@ -21,7 +20,9 @@ use std::time::Instant;
 
 use eyre::Result;
 use governor::{Quota, RateLimiter};
+use lru::LruCache;
 use serde::{Deserialize, Serialize};
+use subtle::ConstantTimeEq;
 use tokio::sync::Mutex;
 use tracing::{info, warn};
 
@@ -185,6 +186,7 @@ pub struct HealthResponse {
     pub uptime_seconds: u64,
     pub zkml_enabled: bool,
     pub proving_scheme: String,
+    pub cache_writable: bool,
 }
 
 /// Stats response
@@ -360,8 +362,13 @@ impl UsageMetrics {
                 let new_size =
                     self.access_log_bytes.fetch_add(line_len, Ordering::Relaxed) + line_len;
 
-                // Rotate if over size limit (0 = no limit)
+                // Rotate if over size limit (0 = no limit), keeping up to 5 rotated files
                 if self.max_access_log_bytes > 0 && new_size >= self.max_access_log_bytes {
+                    for i in (1..5).rev() {
+                        let from = format!("{}.{}", self.access_log_path, i);
+                        let to = format!("{}.{}", self.access_log_path, i + 1);
+                        let _ = std::fs::rename(&from, &to);
+                    }
                     let rotated = format!("{}.1", self.access_log_path);
                     let _ = std::fs::rename(&self.access_log_path, &rotated);
                     if let Ok(new_file) = std::fs::OpenOptions::new()
@@ -381,6 +388,38 @@ impl UsageMetrics {
         self.total_requests.fetch_add(1, Ordering::Relaxed);
         self.total_errors.fetch_add(1, Ordering::Relaxed);
     }
+
+    /// Persist current metrics snapshot to disk so they survive restarts.
+    fn persist_to_disk(&self) {
+        let snapshot = serde_json::json!({
+            "total_requests": self.total_requests.load(Ordering::Relaxed),
+            "total_errors": self.total_errors.load(Ordering::Relaxed),
+            "safe": self.safe.load(Ordering::Relaxed),
+            "caution": self.caution.load(Ordering::Relaxed),
+            "dangerous": self.dangerous.load(Ordering::Relaxed),
+            "malicious": self.malicious.load(Ordering::Relaxed),
+            "allow": self.allow.load(Ordering::Relaxed),
+            "deny": self.deny.load(Ordering::Relaxed),
+            "flag": self.flag.load(Ordering::Relaxed),
+            "ep_evaluate": self.ep_evaluate.load(Ordering::Relaxed),
+            "ep_evaluate_by_name": self.ep_evaluate_by_name.load(Ordering::Relaxed),
+            "ep_prove": self.ep_prove.load(Ordering::Relaxed),
+            "ep_verify": self.ep_verify.load(Ordering::Relaxed),
+            "ep_stats": self.ep_stats.load(Ordering::Relaxed),
+            "total_proofs_generated": self.total_proofs_generated.load(Ordering::Relaxed),
+            "total_proofs_verified": self.total_proofs_verified.load(Ordering::Relaxed),
+        });
+        let path = "/var/data/skillguard-cache/metrics.json";
+        match serde_json::to_vec_pretty(&snapshot) {
+            Ok(data) => {
+                if let Err(e) = std::fs::write(path, &data) {
+                    // Silently ignore — cache dir may not be writable locally
+                    let _ = e;
+                }
+            }
+            Err(_) => {}
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -393,11 +432,14 @@ type IpRateLimiter = RateLimiter<
     governor::clock::DefaultClock,
 >;
 
+/// Maximum number of per-IP rate limiter entries to keep in the LRU cache.
+const MAX_RATE_LIMITER_ENTRIES: usize = 10_000;
+
 pub struct ServerState {
     pub config: ServerConfig,
     pub model_hash: String,
     pub start_time: Instant,
-    pub rate_limiters: Mutex<HashMap<std::net::IpAddr, Arc<IpRateLimiter>>>,
+    pub rate_limiters: Mutex<LruCache<std::net::IpAddr, Arc<IpRateLimiter>>>,
     pub clawhub_client: ClawHubClient,
     pub usage: UsageMetrics,
     pub prover: Option<Arc<crate::prover::ProverState>>,
@@ -419,7 +461,7 @@ impl ServerState {
         } else {
             match crate::prover::ProverState::initialize() {
                 Ok(p) => {
-                    info!("ZKML prover ready (Jolt/HyperKZG)");
+                    info!("ZKML prover ready (Jolt/Dory)");
                     Some(Arc::new(p))
                 }
                 Err(e) => {
@@ -438,7 +480,9 @@ impl ServerState {
             config,
             model_hash,
             start_time: Instant::now(),
-            rate_limiters: Mutex::new(HashMap::new()),
+            rate_limiters: Mutex::new(LruCache::new(
+                std::num::NonZeroUsize::new(MAX_RATE_LIMITER_ENTRIES).unwrap(),
+            )),
             clawhub_client: ClawHubClient::new(),
             usage,
             prover,
@@ -457,23 +501,7 @@ impl ServerState {
 
         let quota = Quota::per_minute(rpm);
         let limiter = Arc::new(RateLimiter::direct(quota));
-        limiters.insert(ip, Arc::clone(&limiter));
-
-        // Evict oldest entries when the map grows too large (LRU-style trim)
-        const MAX_ENTRIES: usize = 10_000;
-        if limiters.len() > MAX_ENTRIES {
-            // Remove a batch of the oldest entries to avoid frequent evictions
-            let to_remove = limiters.len() - MAX_ENTRIES / 2;
-            let keys_to_remove: Vec<_> = limiters
-                .keys()
-                .filter(|k| **k != ip)
-                .take(to_remove)
-                .cloned()
-                .collect();
-            for key in keys_to_remove {
-                limiters.remove(&key);
-            }
-        }
+        limiters.push(ip, Arc::clone(&limiter));
 
         Some(limiter)
     }
@@ -558,10 +586,12 @@ fn classify_and_respond(
 /// Run the HTTP server (blocking)
 pub async fn run_server(config: ServerConfig) -> Result<()> {
     use axum::{
+        extract::DefaultBodyLimit,
         middleware,
         routing::{get, post},
         Router,
     };
+    use tower_http::cors::{Any, CorsLayer};
 
     let rate_limit_rpm = config.rate_limit_rpm;
     let bind_addr = config.bind_addr;
@@ -604,7 +634,11 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
                         .get("authorization")
                         .and_then(|v| v.to_str().ok())
                         .and_then(|h| h.strip_prefix("Bearer "))
-                        .map(|t| t.trim() == expected_key)
+                        .map(|t| {
+                            bool::from(
+                                t.trim().as_bytes().ct_eq(expected_key.as_bytes()),
+                            )
+                        })
                         .unwrap_or(false)
                 } else {
                     false
@@ -639,6 +673,12 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
         api_routes
     };
 
+    // CORS layer — allow any origin for public API access from browsers
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
     // Public routes (no auth required)
     let app = Router::new()
         .route("/", get(crate::ui::index_handler))
@@ -651,7 +691,19 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
         )
         .route("/api/v1/verify", post(verify_handler))
         .merge(api_routes)
-        .with_state(state);
+        .layer(cors)
+        .layer(DefaultBodyLimit::max(1024 * 1024)) // 1 MB
+        .with_state(state.clone());
+
+    // Spawn background task to persist metrics to disk periodically
+    let metrics_state = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+            metrics_state.usage.persist_to_disk();
+        }
+    });
 
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
     info!(bind = %bind_addr, "SkillGuard ZKML server listening");
@@ -666,10 +718,31 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
     }
     info!(access_log = %access_log);
 
+    // Graceful shutdown on SIGTERM/SIGINT
+    let shutdown_state = state;
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
+    .with_graceful_shutdown(async move {
+        let ctrl_c = tokio::signal::ctrl_c();
+        #[cfg(unix)]
+        let mut sigterm =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .expect("failed to install SIGTERM handler");
+        #[cfg(unix)]
+        let sigterm_recv = sigterm.recv();
+        #[cfg(not(unix))]
+        let sigterm_recv = std::future::pending::<Option<()>>();
+
+        tokio::select! {
+            _ = ctrl_c => info!("received SIGINT, shutting down gracefully"),
+            _ = sigterm_recv => info!("received SIGTERM, shutting down gracefully"),
+        }
+
+        // Persist metrics before exiting
+        shutdown_state.usage.persist_to_disk();
+    })
     .await?;
     Ok(())
 }
@@ -710,7 +783,9 @@ pub async fn auth_middleware(
             .map(|t| t.trim().to_string());
 
         match provided_token {
-            Some(ref token) if token == expected_key => {
+            Some(ref token)
+                if token.as_bytes().ct_eq(expected_key.as_bytes()).into() =>
+            {
                 request.extensions_mut().insert(AuthMethod::ApiKey);
             }
             Some(_) => {
@@ -754,13 +829,18 @@ pub async fn auth_middleware(
 async fn health_handler(
     axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
 ) -> impl axum::response::IntoResponse {
+    let cache_writable = std::fs::metadata("/var/data/skillguard-cache/proofs")
+        .map(|m| !m.permissions().readonly())
+        .unwrap_or(false);
+
     let response = HealthResponse {
         status: "ok".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         model_hash: state.model_hash.clone(),
         uptime_seconds: state.start_time.elapsed().as_secs(),
         zkml_enabled: state.prover.is_some(),
-        proving_scheme: "Jolt/HyperKZG".to_string(),
+        proving_scheme: "Jolt/Dory".to_string(),
+        cache_writable,
     };
     axum::Json(response)
 }
@@ -779,7 +859,7 @@ async fn evaluate_handler(
         .unwrap_or(AuthMethod::Open);
 
     let body = request.into_body();
-    let bytes = match axum::body::to_bytes(body, 1024 * 1024).await {
+    let bytes = match axum::body::to_bytes(body, 2 * 1024 * 1024).await {
         Ok(b) => b,
         Err(e) => {
             return axum::Json(EvaluateResponse {
@@ -845,7 +925,7 @@ async fn evaluate_by_name_handler(
         .unwrap_or(AuthMethod::Open);
 
     let body = request.into_body();
-    let bytes = match axum::body::to_bytes(body, 1024 * 1024).await {
+    let bytes = match axum::body::to_bytes(body, 2 * 1024 * 1024).await {
         Ok(b) => b,
         Err(e) => {
             return axum::Json(EvaluateResponse {
@@ -941,7 +1021,7 @@ async fn prove_evaluate_handler(
         .unwrap_or(AuthMethod::Open);
 
     let body = request.into_body();
-    let bytes = match axum::body::to_bytes(body, 1024 * 1024).await {
+    let bytes = match axum::body::to_bytes(body, 2 * 1024 * 1024).await {
         Ok(b) => b,
         Err(e) => {
             return axum::Json(ProveEvaluateResponse {
@@ -1012,13 +1092,28 @@ async fn prove_evaluate_handler(
     let feature_vec = features.to_normalized_vec();
     let skill_name = eval_request.skill.name.clone();
 
-    let result = match crate::classify_with_proof(&prover, &feature_vec) {
-        Ok(r) => r,
-        Err(e) => {
+    // Run the CPU-bound prover in a blocking thread to avoid starving the async runtime
+    let prove_result = tokio::task::spawn_blocking(move || {
+        crate::classify_with_proof(&prover, &feature_vec)
+    })
+    .await;
+
+    let result = match prove_result {
+        Ok(Ok(r)) => r,
+        Ok(Err(e)) => {
             state.usage.record_error();
             return axum::Json(ProveEvaluateResponse {
                 success: false,
                 error: Some(format!("Classification with proof failed: {}", e)),
+                evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            });
+        }
+        Err(e) => {
+            state.usage.record_error();
+            return axum::Json(ProveEvaluateResponse {
+                success: false,
+                error: Some(format!("Proving task panicked: {}", e)),
                 evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
             });
@@ -1156,7 +1251,8 @@ mod tests {
             model_hash: "sha256:abc".to_string(),
             uptime_seconds: 100,
             zkml_enabled: true,
-            proving_scheme: "Jolt/HyperKZG".to_string(),
+            proving_scheme: "Jolt/Dory".to_string(),
+            cache_writable: true,
         };
 
         let json = serde_json::to_string(&response).unwrap();
@@ -1250,10 +1346,10 @@ mod tests {
     #[test]
     fn test_server_config_with_api_key() {
         let config = ServerConfig {
-            api_key: Some("test-key-123".to_string()),
+            api_key: Some("secret-key-123".to_string()),
             ..Default::default()
         };
-        assert_eq!(config.api_key.as_deref(), Some("test-key-123"));
+        assert_eq!(config.api_key.as_deref(), Some("secret-key-123"));
     }
 
     #[test]

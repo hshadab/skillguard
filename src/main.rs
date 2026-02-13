@@ -143,7 +143,7 @@ fn cmd_serve(
     info!(
         model = "skill-safety",
         params = 1924,
-        proving = "Jolt/HyperKZG"
+        proving = "Jolt/Dory"
     );
     info!(model_hash = %skillguard::model_hash());
     if api_key.is_some() {
