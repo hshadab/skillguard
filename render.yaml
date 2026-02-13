@@ -18,3 +18,5 @@ services:
         value: https://api.cdp.coinbase.com/platform/v2/x402
       - key: RUST_LOG
         value: info
+      - key: SKILLGUARD_SKIP_PROVER
+        value: "1"

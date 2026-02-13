@@ -409,17 +409,26 @@ impl ServerState {
         let model_hash = crate::model_hash();
         let usage = UsageMetrics::new(&config.access_log_path, config.max_access_log_bytes);
 
-        let prover = match crate::prover::ProverState::initialize() {
-            Ok(p) => {
-                info!("ZKML prover ready (Jolt/HyperKZG)");
-                Some(Arc::new(p))
-            }
-            Err(e) => {
-                warn!(
-                    "ZKML prover initialization failed: {}. Prove endpoints disabled.",
-                    e
-                );
-                None
+        let skip_prover = std::env::var("SKILLGUARD_SKIP_PROVER")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
+        let prover = if skip_prover {
+            info!("ZKML prover disabled (SKILLGUARD_SKIP_PROVER=1). Prove endpoints unavailable.");
+            None
+        } else {
+            match crate::prover::ProverState::initialize() {
+                Ok(p) => {
+                    info!("ZKML prover ready (Jolt/HyperKZG)");
+                    Some(Arc::new(p))
+                }
+                Err(e) => {
+                    warn!(
+                        "ZKML prover initialization failed: {}. Prove endpoints disabled.",
+                        e
+                    );
+                    None
+                }
             }
         };
 
