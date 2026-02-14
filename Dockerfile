@@ -10,7 +10,26 @@
 # Nightly required: arkworks-algebra dev/twist-shout branch uses const generics
 # features that need Rust >= 1.95 nightly.
 # Pin to a known-good nightly to avoid breakage from compiler updates.
-FROM rustlang/rust:nightly-2026-01-29-bookworm AS builder
+# We use a base Debian image + rustup instead of rustlang/rust:nightly-*
+# because date-pinned bookworm tags don't exist on Docker Hub.
+FROM debian:bookworm AS builder
+
+# Install build dependencies and rustup
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pinned nightly toolchain via rustup
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+    sh -s -- -y --default-toolchain nightly-2026-01-29 && \
+    rustc --version
 
 WORKDIR /build
 
