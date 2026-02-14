@@ -744,7 +744,7 @@ async function fetchUsdcBalance(address) {
     var raw = parseInt(resp.result, 16);
     if (isNaN(raw)) raw = 0;
     // USDC has 6 decimals
-    var balance = (raw / 1e6).toFixed(2);
+    var balance = (raw / 1e6).toFixed(3);
     var balEl = $('wallet-balance');
     balEl.textContent = balance + ' USDC';
     balEl.style.display = '';
@@ -1635,7 +1635,7 @@ async function signX402Payment(requirements) {
         if (!resp.result) return;
         var raw = parseInt(resp.result, 16);
         if (isNaN(raw)) raw = 0;
-        var balance = (raw / 1e6).toFixed(2);
+        var balance = (raw / 1e6).toFixed(3);
         $('earnings-value').textContent = '$' + balance + ' USDC';
         $('earnings-addr').textContent = serverPayTo.slice(0, 6) + '...' + serverPayTo.slice(-4);
         $('earnings-badge').style.display = '';
