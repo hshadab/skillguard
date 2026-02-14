@@ -30,8 +30,8 @@ RUN mkdir -p src \
 COPY src/ src/
 COPY static/ static/
 
-# Build in release mode (only re-compiles skillguard crate, deps are cached)
-RUN cargo build --release --bin skillguard
+# Touch main.rs to force cargo to re-link even if Docker layer is cached
+RUN touch src/main.rs && cargo build --release --bin skillguard
 
 # --- Runtime stage ---
 FROM debian:bookworm-slim
