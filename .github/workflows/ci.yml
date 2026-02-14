@@ -37,14 +37,39 @@ jobs:
       - name: Clippy lints
         run: cargo clippy --all-targets -- -D warnings
 
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Audit dependencies
+        run: cargo audit
+
       - name: Run tests
         run: cargo test --all
         timeout-minutes: 15
+
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin
+
+      - name: Generate coverage
+        run: cargo tarpaulin --out xml
 
       - name: Build release
         run: cargo build --release
         env:
           CARGO_BUILD_JOBS: "2"
+
+  secrets:
+    name: Secrets scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
 
   docker:
     name: Docker build smoke test

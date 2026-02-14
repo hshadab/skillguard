@@ -7,7 +7,7 @@
     "demo": "node agent_demo.mjs"
   },
   "dependencies": {
-    "viem": "^2.27.0",
-    "x402-fetch": "^0.0.7"
+    "viem": "2.27.0",
+    "x402-fetch": "0.0.7"
   }
 }

@@ -96,8 +96,8 @@ pub static REVERSE_SHELL_RE: LazyLock<Vec<Regex>> = LazyLock::new(|| {
         Regex::new(r"/dev/tcp/").unwrap(),
         Regex::new(r"\bmkfifo\b").unwrap(),
         Regex::new(r"\bsocat\b").unwrap(),
-        Regex::new(r"(?s)python.*socket.*connect").unwrap(),
-        Regex::new(r"(?s)perl.*socket.*INET").unwrap(),
+        Regex::new(r"(?s)python.*?socket.*?connect").unwrap(),
+        Regex::new(r"(?s)perl.*?socket.*?INET").unwrap(),
     ]
 });
 
@@ -143,7 +143,7 @@ pub static OBFUSCATION_RE: LazyLock<Vec<Regex>> = LazyLock::new(|| {
 pub static EXFILTRATION_RE: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
         Regex::new(r#"\.(post|put)\s*\(\s*['"]https?://"#).unwrap(),
-        Regex::new(r#"(?s)fetch\s*\(\s*['"]https?://[^'"]*['"],\s*\{[^}]*method:\s*['"]POST"#)
+        Regex::new(r#"(?s)fetch\s*\(\s*['"]https?://[^'"]*['"],\s*\{[^}]*?method:\s*['"]POST"#)
             .unwrap(),
         Regex::new(r"(?i)\bwebhook\b").unwrap(),
         Regex::new(r"curl\s+(-X\s+POST|--data)").unwrap(),

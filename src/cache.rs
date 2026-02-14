@@ -14,6 +14,9 @@ use crate::server::ProveEvaluateResponse;
 /// Default cache directory (Render persistent disk mount point).
 const DEFAULT_CACHE_DIR: &str = "/var/data/skillguard-cache";
 
+/// Maximum number of cached proof entries before cleanup.
+const MAX_CACHE_ENTRIES: usize = 1000;
+
 /// Disk-backed proof cache.
 pub struct ProofCache {
     proofs_dir: PathBuf,
@@ -60,7 +63,11 @@ impl ProofCache {
     }
 
     /// Store a proof response in the cache.
+    /// If the cache exceeds [`MAX_CACHE_ENTRIES`], the oldest entries by mtime are removed.
     pub fn put(&self, key: &str, response: &ProveEvaluateResponse) {
+        // Evict oldest entries if over the limit
+        self.cleanup_if_needed();
+
         let path = self.proofs_dir.join(format!("{key}.json"));
         match serde_json::to_vec(response) {
             Ok(data) => {
@@ -74,5 +81,43 @@ impl ProofCache {
                 warn!(error = %e, "failed to serialize proof for cache");
             }
         }
+    }
+
+    /// Remove oldest cache entries when the count exceeds the limit.
+    fn cleanup_if_needed(&self) {
+        let entries: Vec<_> = match fs::read_dir(&self.proofs_dir) {
+            Ok(rd) => rd
+                .filter_map(|e| e.ok())
+                .filter(|e| {
+                    e.path()
+                        .extension()
+                        .map(|ext| ext == "json")
+                        .unwrap_or(false)
+                })
+                .collect(),
+            Err(_) => return,
+        };
+
+        if entries.len() <= MAX_CACHE_ENTRIES {
+            return;
+        }
+
+        let remove_count = entries.len() - MAX_CACHE_ENTRIES;
+        let mut by_mtime: Vec<_> = entries
+            .into_iter()
+            .filter_map(|e| {
+                let mtime = e.metadata().ok()?.modified().ok()?;
+                Some((mtime, e.path()))
+            })
+            .collect();
+        by_mtime.sort_by_key(|(mtime, _)| *mtime);
+
+        for (_, path) in by_mtime.into_iter().take(remove_count) {
+            if let Err(e) = fs::remove_file(&path) {
+                warn!(path = %path.display(), error = %e, "failed to evict cache entry");
+            }
+        }
+
+        info!(evicted = remove_count, "proof cache cleanup complete");
     }
 }

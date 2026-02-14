@@ -28,6 +28,19 @@ SKILL_VERSION="${2:-}"
 SKILLGUARD_API_URL="${SKILLGUARD_API_URL:-}"
 SKILLGUARD_API_KEY="${SKILLGUARD_API_KEY:-}"
 
+# ---- JSON parsing helper ----
+# Prefer jq if available; fall back to grep/cut.
+if command -v jq >/dev/null 2>&1; then
+    json_field() { echo "$1" | jq -r "$2 // empty"; }
+else
+    json_field() {
+        local key="$2"
+        # Strip jq-style path to bare key name (e.g. ".evaluation.decision" -> "decision")
+        key="${key##*.}"
+        echo "$1" | grep -o "\"${key}\":\"[^\"]*\"" | head -1 | cut -d'"' -f4
+    }
+fi
+
 # ---- Hosted API mode ----
 if [ -n "$SKILLGUARD_API_URL" ]; then
     echo "Using hosted SkillGuard API: ${SKILLGUARD_API_URL}"
@@ -53,16 +66,16 @@ if [ -n "$SKILLGUARD_API_URL" ]; then
     }
 
     # Check for API-level errors
-    SUCCESS=$(echo "$SCAN_OUTPUT" | grep -o '"success":true' || true)
-    if [ -z "$SUCCESS" ]; then
-        ERROR=$(echo "$SCAN_OUTPUT" | grep -o '"error":"[^"]*"' | head -1 | cut -d'"' -f4)
+    SUCCESS=$(json_field "$SCAN_OUTPUT" '.success')
+    if [ "$SUCCESS" != "true" ]; then
+        ERROR=$(json_field "$SCAN_OUTPUT" '.error')
         echo "WARNING: SkillGuard API error: ${ERROR:-unknown}. Proceeding with caution."
         exit 0
     fi
 
     # Parse the decision from the evaluation
-    DECISION=$(echo "$SCAN_OUTPUT" | grep -o '"decision":"[^"]*"' | head -1 | cut -d'"' -f4)
-    CLASSIFICATION=$(echo "$SCAN_OUTPUT" | grep -o '"classification":"[^"]*"' | head -1 | cut -d'"' -f4)
+    DECISION=$(json_field "$SCAN_OUTPUT" '.evaluation.decision')
+    CLASSIFICATION=$(json_field "$SCAN_OUTPUT" '.evaluation.classification')
 
     if [ -z "$DECISION" ]; then
         echo "WARNING: Could not determine safety decision. Proceeding with caution."
@@ -79,7 +92,7 @@ if [ -n "$SKILLGUARD_API_URL" ]; then
             ;;
         flag)
             echo "WARNING: Skill ${SKILL_NAME} has been flagged for review."
-            REASONING=$(echo "$SCAN_OUTPUT" | grep -o '"reasoning":"[^"]*"' | head -1 | cut -d'"' -f4)
+            REASONING=$(json_field "$SCAN_OUTPUT" '.evaluation.reasoning')
             [ -n "$REASONING" ] && echo "Reason: $REASONING"
             read -rp "Do you want to proceed with installation? [y/N] " CONFIRM
             case "$CONFIRM" in
@@ -95,7 +108,7 @@ if [ -n "$SKILLGUARD_API_URL" ]; then
             ;;
         deny)
             echo "BLOCKED: Skill ${SKILL_NAME} has been denied by SkillGuard."
-            REASONING=$(echo "$SCAN_OUTPUT" | grep -o '"reasoning":"[^"]*"' | head -1 | cut -d'"' -f4)
+            REASONING=$(json_field "$SCAN_OUTPUT" '.evaluation.reasoning')
             [ -n "$REASONING" ] && echo "Reason: $REASONING"
             exit 1
             ;;
@@ -127,7 +140,7 @@ echo "Checking ${SKILL_NAME} for safety issues..."
 SCAN_OUTPUT=$("$SKILLGUARD_BIN" check --input "$TMP_JSON" --format json 2>/dev/null) || true
 
 # Step 3: Parse the decision from JSON output
-DECISION=$(echo "$SCAN_OUTPUT" | grep -o '"decision":"[^"]*"' | head -1 | cut -d'"' -f4)
+DECISION=$(json_field "$SCAN_OUTPUT" '.evaluation.decision')
 
 if [ -z "$DECISION" ]; then
     echo "WARNING: Could not determine safety decision. Proceeding with caution."
@@ -148,7 +161,8 @@ case "$DECISION" in
         ;;
     flag)
         echo "WARNING: Skill ${SKILL_NAME} has been flagged for review."
-        echo "$SCAN_OUTPUT" | grep -o '"reasoning":"[^"]*"' | head -1 | cut -d'"' -f4
+        REASONING=$(json_field "$SCAN_OUTPUT" '.evaluation.reasoning')
+        [ -n "$REASONING" ] && echo "Reason: $REASONING"
         read -rp "Do you want to proceed with installation? [y/N] " CONFIRM
         case "$CONFIRM" in
             [yY]|[yY][eE][sS])
@@ -167,7 +181,8 @@ case "$DECISION" in
         ;;
     deny)
         echo "BLOCKED: Skill ${SKILL_NAME} has been denied by SkillGuard."
-        echo "$SCAN_OUTPUT" | grep -o '"reasoning":"[^"]*"' | head -1 | cut -d'"' -f4
+        REASONING=$(json_field "$SCAN_OUTPUT" '.evaluation.reasoning')
+        [ -n "$REASONING" ] && echo "Reason: $REASONING"
         exit 1
         ;;
     *)

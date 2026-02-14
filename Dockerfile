@@ -12,7 +12,7 @@
 # Pin to a known-good nightly to avoid breakage from compiler updates.
 # We use a base Debian image + rustup instead of rustlang/rust:nightly-*
 # because date-pinned bookworm tags don't exist on Docker Hub.
-FROM debian:bookworm AS builder
+FROM debian:bookworm@sha256:34e7f0ae7c10a61bfbef6e1b2ed205d9b47bb12e90c50696f729a5c7a01cf1f2 AS builder
 
 # Install build dependencies and rustup
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -55,17 +55,24 @@ COPY static/ static/
 RUN touch src/lib.rs src/main.rs && cargo build --release --bin skillguard
 
 # --- Runtime stage ---
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:98f4b71de414932439ac6ac690d7060df1f27161073c5036a7553723881bffbe
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     libssl3 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -r -s /sbin/nologin skillguard
 
 WORKDIR /app
 
 # Copy binary
 COPY --from=builder /build/target/release/skillguard /app/skillguard
+
+# Strip release binary to reduce image size
+RUN strip /app/skillguard
 
 # Copy data directory (registry)
 COPY data/ /app/data/
@@ -73,8 +80,16 @@ COPY data/ /app/data/
 # Pre-generated Dory SRS file (avoids runtime generation which can OOM)
 COPY dory_srs_24_variables.srs /app/dory_srs_24_variables.srs
 
+# Ensure cache directory exists and is writable by skillguard user
+RUN mkdir -p /var/data/skillguard-cache && chown -R skillguard:skillguard /app /var/data/skillguard-cache
+
 # Render sets PORT=10000 for web services
 ENV PORT=10000
 EXPOSE 10000
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD curl -f http://localhost:${PORT}/health || exit 1
+
+USER skillguard
 
 CMD /app/skillguard serve --bind "0.0.0.0:${PORT}" --rate-limit 30

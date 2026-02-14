@@ -137,6 +137,7 @@ fn cmd_serve(
         api_key: api_key.clone(),
         pay_to: pay_to.clone(),
         facilitator_url,
+        ..Default::default()
     };
 
     info!("Starting SkillGuard ZKML classifier service");

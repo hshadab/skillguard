@@ -26,6 +26,7 @@ use crate::model::skill_safety_model;
 /// Maximum trace length for the Jolt prover (2^16 = 65536 steps).
 const MAX_TRACE_LENGTH: usize = 1 << 16;
 
+#[allow(clippy::upper_case_acronyms)]
 type PCS = DoryCommitmentScheme;
 type Transcript = jolt_core::transcripts::KeccakTranscript;
 type F = ark_bn254::Fr;

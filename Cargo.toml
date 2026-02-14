@@ -72,6 +72,9 @@ ark-serialize = { version = "0.5.0", default-features = false, features = ["deri
 default = []
 crawler = []
 
+# Pinned to commit 76bb3a45 on dev/twist-shout.
+# Other git deps (jolt, dory) reference this branch directly — Cargo requires
+# the patch source string to match, so we keep `branch` here.
 [patch.crates-io]
 ark-ff = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
 ark-ec = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }

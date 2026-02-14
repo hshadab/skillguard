@@ -37,6 +37,7 @@ async fn spawn_test_server_full(
         api_key,
         pay_to,
         facilitator_url: "https://facilitator.x402.rs".to_string(),
+        ..Default::default()
     };
     let state = Arc::new(ServerState::new(config));
 
@@ -46,7 +47,7 @@ async fn spawn_test_server_full(
         .route("/api/v1/evaluate/prove", post(prove_evaluate_handler))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
-            skillguard::server::auth_middleware,
+            skillguard::server::middleware::auth_middleware,
         ));
 
     let app = Router::new()
@@ -91,6 +92,7 @@ async fn health_handler(
         zkml_enabled: state.get_prover().is_some(),
         proving_scheme: "Jolt/Dory".to_string(),
         cache_writable: false,
+        pay_to: state.config.pay_to.clone(),
     };
     axum::Json(response)
 }
@@ -701,7 +703,11 @@ fn test_rate_limiter_zero_rpm_means_no_limit() {
     };
     let state = ServerState::new(config);
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let result = rt.block_on(state.get_rate_limiter("127.0.0.1".parse().unwrap()));
+    let result = rt.block_on(skillguard::server::middleware::get_rate_limiter(
+        &state.config,
+        &state.rate_limiters,
+        "127.0.0.1".parse().unwrap(),
+    ));
     assert!(
         result.is_none(),
         "rate_limit_rpm=0 should disable rate limiting"
