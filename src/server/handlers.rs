@@ -197,6 +197,11 @@ pub async fn health_handler(
     axum::Json(response)
 }
 
+/// Unified evaluate endpoint.
+///
+/// Accepts two request formats:
+/// - **By name:** `{ "skill": "skill-slug" }` — fetches from ClawHub, then classifies
+/// - **Full skill:** `{ "skill": { "name": "...", ... } }` — classifies directly
 pub async fn evaluate_handler(
     axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
     axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<SocketAddr>,
@@ -217,19 +222,6 @@ pub async fn evaluate_handler(
             });
         }
     };
-    let eval_request: EvaluateRequest = match serde_json::from_slice(&bytes) {
-        Ok(r) => r,
-        Err(e) => {
-            return axum::Json(ProveEvaluateResponse {
-                success: false,
-                error: Some(format!("Invalid JSON: {}", e)),
-                evaluation: None,
-                processing_time_ms: start.elapsed().as_millis() as u64,
-            });
-        }
-    };
-
-    state.usage.ep_evaluate.fetch_add(1, Ordering::Relaxed);
 
     if let Some(limiter) =
         super::middleware::get_rate_limiter(&state.config, &state.rate_limiters, client_ip).await
@@ -248,38 +240,9 @@ pub async fn evaluate_handler(
         }
     }
 
-    let features = SkillFeatures::extract(&eval_request.skill, eval_request.vt_report.as_ref());
-    let skill_name = eval_request.skill.name.clone();
-
-    let response = classify_and_respond(
-        &state, features, skill_name, start, "evaluate", Some(&bytes),
-    ).await;
-
-    axum::Json(response)
-}
-
-pub async fn evaluate_by_name_handler(
-    axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
-    axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<SocketAddr>,
-    request: axum::extract::Request,
-) -> impl axum::response::IntoResponse {
-    let start = Instant::now();
-    let client_ip = addr.ip();
-
-    let body = request.into_body();
-    let bytes = match axum::body::to_bytes(body, 2 * 1024 * 1024).await {
-        Ok(b) => b,
-        Err(e) => {
-            return axum::Json(ProveEvaluateResponse {
-                success: false,
-                error: Some(format!("Failed to read request body: {}", e)),
-                evaluation: None,
-                processing_time_ms: start.elapsed().as_millis() as u64,
-            });
-        }
-    };
-    let eval_request: EvaluateByNameRequest = match serde_json::from_slice(&bytes) {
-        Ok(r) => r,
+    // Auto-detect request format: if "skill" is a string → name lookup, if object → full skill
+    let parsed: serde_json::Value = match serde_json::from_slice(&bytes) {
+        Ok(v) => v,
         Err(e) => {
             return axum::Json(ProveEvaluateResponse {
                 success: false,
@@ -290,61 +253,79 @@ pub async fn evaluate_by_name_handler(
         }
     };
 
-    state
-        .usage
-        .ep_evaluate_by_name
-        .fetch_add(1, Ordering::Relaxed);
+    if parsed.get("skill").map(|s| s.is_string()).unwrap_or(false) {
+        // Name-based lookup
+        let name_req: EvaluateByNameRequest = match serde_json::from_value(parsed) {
+            Ok(r) => r,
+            Err(e) => {
+                return axum::Json(ProveEvaluateResponse {
+                    success: false,
+                    error: Some(format!("Invalid request: {}", e)),
+                    evaluation: None,
+                    processing_time_ms: start.elapsed().as_millis() as u64,
+                });
+            }
+        };
 
-    if let Some(limiter) =
-        super::middleware::get_rate_limiter(&state.config, &state.rate_limiters, client_ip).await
-    {
-        if limiter.check().is_err() {
-            state.usage.record_error();
-            return axum::Json(ProveEvaluateResponse {
-                success: false,
-                error: Some(format!(
-                    "Rate limit exceeded. Maximum {} requests per minute.",
-                    state.config.rate_limit_rpm
-                )),
-                evaluation: None,
-                processing_time_ms: start.elapsed().as_millis() as u64,
-            });
-        }
+        state
+            .usage
+            .ep_evaluate_by_name
+            .fetch_add(1, Ordering::Relaxed);
+
+        let skill = match state
+            .clawhub_client
+            .fetch_skill(&name_req.skill, name_req.version.as_deref())
+            .await
+        {
+            Ok(s) => s,
+            Err(e) => {
+                state.usage.record_error();
+                return axum::Json(ProveEvaluateResponse {
+                    success: false,
+                    error: Some(format!(
+                        "Failed to fetch skill '{}': {}",
+                        name_req.skill, e
+                    )),
+                    evaluation: None,
+                    processing_time_ms: start.elapsed().as_millis() as u64,
+                });
+            }
+        };
+
+        let features = SkillFeatures::extract(&skill, None);
+        let skill_name = skill.name;
+
+        let response = classify_and_respond(
+            &state, features, skill_name, start, "evaluate", Some(&bytes),
+        ).await;
+
+        axum::Json(response)
+    } else {
+        // Full skill data
+        let eval_request: EvaluateRequest = match serde_json::from_value(parsed) {
+            Ok(r) => r,
+            Err(e) => {
+                return axum::Json(ProveEvaluateResponse {
+                    success: false,
+                    error: Some(format!("Invalid JSON: {}", e)),
+                    evaluation: None,
+                    processing_time_ms: start.elapsed().as_millis() as u64,
+                });
+            }
+        };
+
+        state.usage.ep_evaluate.fetch_add(1, Ordering::Relaxed);
+
+        let features =
+            SkillFeatures::extract(&eval_request.skill, eval_request.vt_report.as_ref());
+        let skill_name = eval_request.skill.name.clone();
+
+        let response = classify_and_respond(
+            &state, features, skill_name, start, "evaluate", Some(&bytes),
+        ).await;
+
+        axum::Json(response)
     }
-
-    let skill = match state
-        .clawhub_client
-        .fetch_skill(&eval_request.skill, eval_request.version.as_deref())
-        .await
-    {
-        Ok(s) => s,
-        Err(e) => {
-            state.usage.record_error();
-            return axum::Json(ProveEvaluateResponse {
-                success: false,
-                error: Some(format!(
-                    "Failed to fetch skill '{}': {}",
-                    eval_request.skill, e
-                )),
-                evaluation: None,
-                processing_time_ms: start.elapsed().as_millis() as u64,
-            });
-        }
-    };
-
-    let features = SkillFeatures::extract(&skill, None);
-    let skill_name = skill.name;
-
-    let response = classify_and_respond(
-        &state,
-        features,
-        skill_name,
-        start,
-        "evaluate_by_name",
-        Some(&bytes),
-    ).await;
-
-    axum::Json(response)
 }
 
 pub async fn verify_handler(

@@ -110,14 +110,10 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
     let x402_enabled = config.pay_to.is_some();
     let state = Arc::new(ServerState::new(config));
 
-    // Build API routes with auth middleware, optionally wrapped in x402 layer.
-    // All classification endpoints automatically generate ZK proofs when the prover is ready.
+    // Single evaluate endpoint — auto-detects name lookup vs full skill data.
+    // All classifications automatically generate ZK proofs when the prover is ready.
     let api_routes = Router::new()
         .route("/api/v1/evaluate", post(handlers::evaluate_handler))
-        .route(
-            "/api/v1/evaluate/name",
-            post(handlers::evaluate_by_name_handler),
-        )
         .layer(axum_mw::from_fn_with_state(
             state.clone(),
             middleware::auth_middleware,
@@ -227,7 +223,7 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
 
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
     info!(bind = %bind_addr, "SkillGuard ZKML server listening");
-    info!("Endpoints: GET / (UI), GET /health, GET /stats, GET /openapi.json, GET /.well-known/ai-plugin.json, POST /api/v1/evaluate, POST /api/v1/evaluate/name, POST /api/v1/verify");
+    info!("Endpoints: GET / (UI), GET /health, GET /stats, GET /openapi.json, GET /.well-known/ai-plugin.json, POST /api/v1/evaluate, POST /api/v1/verify");
     if rate_limit_rpm > 0 {
         info!(rate_limit_rpm, "rate limiting enabled");
     } else {

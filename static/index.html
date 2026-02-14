@@ -410,7 +410,7 @@ footer a:hover { text-decoration: underline; }
 
   <header>
     <h1><span>Skill</span>Guard <span>ZKML</span></h1>
-    <p>Provably correct AI safety &mdash; pay-per-proof via x402 on Base</p>
+    <p>Provably correct agent skill safety &mdash; pay-per-proof via x402 on Base</p>
     <div class="earnings-badge" id="earnings-badge" style="display:none">
       <div class="earnings-label">Earnings to Date</div>
       <div class="earnings-value" id="earnings-value">--</div>
@@ -432,12 +432,12 @@ footer a:hover { text-decoration: underline; }
     <div class="card-title">x402 Payment</div>
     <div class="x402-grid">
       <div class="x402-item">
-        <div class="x402-label">Price per classification</div>
+        <div class="x402-label">Price per provable classification</div>
         <div class="x402-value highlight">$0.001 USDC</div>
       </div>
       <div class="x402-item">
         <div class="x402-label">Includes</div>
-        <div class="x402-value highlight">ZK proof</div>
+        <div class="x402-value highlight">Zero-knowledge machine learning proof</div>
       </div>
       <div class="x402-item">
         <div class="x402-label">Network</div>
@@ -565,7 +565,6 @@ This skill fetches current weather data from a public API and returns a friendly
       </thead>
       <tbody>
         <tr><td>POST</td><td><code>/api/v1/evaluate</code></td><td>API key or x402</td><td class="price">$0.001</td></tr>
-        <tr><td>POST</td><td><code>/api/v1/evaluate/name</code></td><td>API key or x402</td><td class="price">$0.001</td></tr>
         <tr><td>POST</td><td><code>/api/v1/verify</code></td><td>None</td><td class="free">Free</td></tr>
         <tr><td>GET</td><td><code>/health</code></td><td>None</td><td class="free">Free</td></tr>
         <tr><td>GET</td><td><code>/stats</code></td><td>None</td><td class="free">Free</td></tr>
@@ -1498,7 +1497,7 @@ async function signX402Payment(requirements) {
     for (var m = 0; m < btns.length; m++) {
       btns[m].addEventListener('click', function() {
         var slug = this.getAttribute('data-slug');
-        doRequest('/api/v1/evaluate/name', { skill: slug });
+        doRequest('/api/v1/evaluate', { skill: slug });
       });
     }
   }
