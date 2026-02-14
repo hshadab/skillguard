@@ -122,6 +122,7 @@ fn cmd_serve(
     api_key: Option<String>,
     pay_to: Option<String>,
     facilitator_url: String,
+    external_url: Option<String>,
 ) -> Result<()> {
     use skillguard::server::{run_server, ServerConfig};
 
@@ -137,6 +138,7 @@ fn cmd_serve(
         api_key: api_key.clone(),
         pay_to: pay_to.clone(),
         facilitator_url,
+        external_url,
         ..Default::default()
     };
 
@@ -354,6 +356,7 @@ fn main() {
     let pay_to = std::env::var("SKILLGUARD_PAY_TO").ok();
     let facilitator_url = std::env::var("SKILLGUARD_FACILITATOR_URL")
         .unwrap_or_else(|_| "https://facilitator.x402.rs".to_string());
+    let external_url = std::env::var("SKILLGUARD_EXTERNAL_URL").ok();
 
     let result = match cli.command {
         Commands::Serve {
@@ -369,6 +372,7 @@ fn main() {
             api_key,
             pay_to,
             facilitator_url,
+            external_url,
         ),
         Commands::Check {
             input,

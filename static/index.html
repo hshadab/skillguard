@@ -1261,7 +1261,14 @@ async function signX402Payment(requirements) {
             walletReady = Promise.resolve();
           }
 
-          return walletReady.then(function() {
+          return walletReady.then(async function() {
+            // Ensure wallet is on Base (8453) before signing
+            var currentChain = await window.ethereum.request({ method: 'eth_chainId' });
+            if (currentChain !== BASE_CHAIN_ID) {
+              showLoading('Switching to Base network...');
+              await switchToBase();
+              walletState.chainId = BASE_CHAIN_ID;
+            }
             // Check USDC balance before signing
             var requiredAmount = parseInt(requirements.accepts[0].maxAmountRequired || requirements.accepts[0].amount) || 0;
             return fetchUsdcBalance(walletState.address).then(function(bal) {

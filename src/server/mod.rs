@@ -133,9 +133,18 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
         use x402_chain_eip155::{KnownNetworkEip155, V1Eip155Exact};
         use x402_types::networks::USDC;
 
-        let x402 = X402Middleware::try_from(state.config.facilitator_url.as_str())
+        let mut x402 = X402Middleware::try_from(state.config.facilitator_url.as_str())
             .expect("Failed to init x402 middleware")
             .settle_before_execution();
+
+        // Set base URL so resource URLs use https:// behind TLS-terminating proxies
+        if let Some(ref ext_url) = state.config.external_url {
+            x402 = x402.with_base_url(
+                ext_url
+                    .parse()
+                    .expect("Invalid SKILLGUARD_EXTERNAL_URL"),
+            );
+        }
 
         let pay_to: Address = pay_to_addr
             .parse()

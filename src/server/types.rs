@@ -29,6 +29,10 @@ pub struct ServerConfig {
     pub pay_to: Option<String>,
     /// x402 facilitator URL (defaults to free facilitator.x402.rs).
     pub facilitator_url: String,
+    /// External base URL for x402 resource URLs (e.g. "https://skillguard.onrender.com").
+    /// Behind a reverse proxy / TLS terminator, the app sees http:// internally;
+    /// this ensures x402 payment requirements use the correct public https:// URL.
+    pub external_url: Option<String>,
     /// Cache directory for proofs and metrics persistence.
     pub cache_dir: String,
 }
@@ -48,6 +52,7 @@ impl Default for ServerConfig {
             api_key: None,
             pay_to: None,
             facilitator_url: "https://facilitator.x402.rs".to_string(),
+            external_url: None,
             cache_dir: DEFAULT_CACHE_DIR.to_string(),
         }
     }
