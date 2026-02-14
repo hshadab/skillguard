@@ -65,14 +65,17 @@ pub fn new_rate_limiter_cache() -> Mutex<LruCache<IpAddr, Arc<IpRateLimiter>>> {
 // Auth middleware
 // ---------------------------------------------------------------------------
 
-/// Response logging middleware that captures x402 settlement details.
+/// Response middleware that captures x402 settlement details and rejects failed settlements.
 ///
-/// This runs after the x402 middleware and logs the `X-Payment-Response` header
-/// from the facilitator settlement response for debugging and audit purposes.
+/// The x402-axum middleware treats any HTTP 200 from the facilitator as "settled",
+/// even when the JSON body contains `"success": false`. This middleware catches that
+/// case and replaces the response with a 402 error, preventing free-riding.
 pub async fn x402_settlement_logger(
     request: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
+    use axum::response::IntoResponse;
+
     let method = request.method().clone();
     let uri = request.uri().path().to_string();
 
@@ -97,7 +100,7 @@ pub async fn x402_settlement_logger(
                         .and_then(|v| v.as_str())
                         .unwrap_or("unknown");
 
-                    if success == Some(true) {
+                    if success == Some(true) && !tx.is_empty() && tx != "none" {
                         tracing::info!(
                             method = %method,
                             uri = %uri,
@@ -107,8 +110,11 @@ pub async fn x402_settlement_logger(
                             "x402 payment settled on-chain"
                         );
                     } else {
+                        // Settlement failed — the facilitator returned success:false
+                        // but the x402 middleware let it through anyway.
                         let reason = settlement
-                            .get("error_reason")
+                            .get("errorReason")
+                            .or_else(|| settlement.get("error_reason"))
                             .and_then(|v| v.as_str())
                             .unwrap_or("unknown");
                         tracing::warn!(
@@ -116,8 +122,19 @@ pub async fn x402_settlement_logger(
                             uri = %uri,
                             network = %network,
                             reason = %reason,
-                            "x402 settlement FAILED — facilitator returned error"
+                            settlement = %settlement,
+                            "x402 settlement FAILED — blocking response"
                         );
+
+                        return (
+                            axum::http::StatusCode::PAYMENT_REQUIRED,
+                            axum::Json(serde_json::json!({
+                                "success": false,
+                                "error": format!("Payment settlement failed: {}", reason),
+                                "settlement": settlement,
+                            })),
+                        )
+                            .into_response();
                     }
                 }
                 None => {
