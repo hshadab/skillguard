@@ -930,14 +930,14 @@ function randomBytes32() {
   return '0x' + Array.from(arr).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
 }
 
-function parse402Headers(response) {
+async function parse402Response(response) {
+  // V2 protocol: base64 JSON in Payment-Required header
   var raw = response.headers.get('Payment-Required');
-  if (!raw) return null;
-  try {
-    return JSON.parse(atob(raw));
-  } catch (e) {
-    return null;
+  if (raw) {
+    try { return JSON.parse(atob(raw)); } catch (e) { /* fall through to body */ }
   }
+  // V1 protocol: payment requirements in JSON response body
+  try { return await response.json(); } catch (e) { return null; }
 }
 
 async function signX402Payment(requirements) {
@@ -1245,10 +1245,10 @@ async function signX402Payment(requirements) {
     var reqBody = JSON.stringify(data);
 
     fetch(url, { method: 'POST', headers: getHeaders(), body: reqBody })
-      .then(function(r) {
+      .then(async function(r) {
         if (r.status === 401) throw new Error('API key required. Provide a valid key under Advanced.');
         if (r.status === 402) {
-          var requirements = parse402Headers(r);
+          var requirements = await parse402Response(r);
           if (!requirements || !requirements.accepts || !requirements.accepts.length) {
             throw new Error('Payment required but server sent no payment details.');
           }
@@ -1645,9 +1645,9 @@ async function signX402Payment(requirements) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ skill: { name: '_probe', version: '0', author: '_', description: '', skill_md: '_', scripts: [], files: [] } })
-          }).then(function(r) {
+          }).then(async function(r) {
             if (r.status === 402) {
-              var info = parse402Headers(r);
+              var info = await parse402Response(r);
               if (info && info.accepts && info.accepts[0] && info.accepts[0].payTo) {
                 serverPayTo = info.accepts[0].payTo;
                 refreshEarnings();
