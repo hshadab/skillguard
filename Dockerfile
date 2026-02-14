@@ -12,7 +12,7 @@
 # Pin to a known-good nightly to avoid breakage from compiler updates.
 # We use a base Debian image + rustup instead of rustlang/rust:nightly-*
 # because date-pinned bookworm tags don't exist on Docker Hub.
-FROM debian:bookworm@sha256:34e7f0ae7c10a61bfbef6e1b2ed205d9b47bb12e90c50696f729a5c7a01cf1f2 AS builder
+FROM debian:bookworm AS builder
 
 # Install build dependencies and rustup
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -55,12 +55,13 @@ COPY static/ static/
 RUN touch src/lib.rs src/main.rs && cargo build --release --bin skillguard
 
 # --- Runtime stage ---
-FROM debian:bookworm-slim@sha256:98f4b71de414932439ac6ac690d7060df1f27161073c5036a7553723881bffbe
+FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     libssl3 \
     curl \
+    binutils \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
