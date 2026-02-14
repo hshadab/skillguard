@@ -897,6 +897,8 @@ function signX402Payment(requirements) {
   var maxTimeout = accept.maxTimeoutSeconds || 30;
   var validBeforeNum = Math.floor(Date.now() / 1000) + maxTimeout;
   var nonce = randomBytes32();
+  // V1 uses maxAmountRequired, V2 uses amount
+  var paymentAmount = accept.maxAmountRequired || accept.amount;
 
   // EIP-712 typed data for ERC-3009 TransferWithAuthorization
   var typedData = {
@@ -926,7 +928,7 @@ function signX402Payment(requirements) {
     message: {
       from: walletState.address,
       to: accept.payTo,
-      value: String(accept.amount),
+      value: String(paymentAmount),
       validAfter: '0',
       validBefore: String(validBeforeNum),
       nonce: nonce
@@ -937,18 +939,18 @@ function signX402Payment(requirements) {
     method: 'eth_signTypedData_v4',
     params: [walletState.address, JSON.stringify(typedData)]
   }).then(function(signature) {
-    // Build v2 PaymentPayload per x402-types v2 spec:
-    // { x402Version: 2, accepted: PaymentRequirements, payload: ExactEvmPayload, resource?: ResourceInfo }
+    // Build v1 PaymentPayload per x402-types v1 spec:
+    // { x402Version: 1, scheme, network, payload: { signature, authorization } }
     var paymentPayload = {
-      x402Version: 2,
-      accepted: accept,
-      resource: requirements.resource || null,
+      x402Version: 1,
+      scheme: accept.scheme || 'exact',
+      network: accept.network || 'base',
       payload: {
         signature: signature,
         authorization: {
           from: walletState.address,
           to: accept.payTo,
-          value: String(accept.amount),
+          value: String(paymentAmount),
           validAfter: '0',
           validBefore: String(validBeforeNum),
           nonce: nonce
@@ -1213,7 +1215,7 @@ function signX402Payment(requirements) {
 
           return walletReady.then(function() {
             // Check USDC balance before signing
-            var requiredAmount = parseInt(requirements.accepts[0].amount) || 0;
+            var requiredAmount = parseInt(requirements.accepts[0].maxAmountRequired || requirements.accepts[0].amount) || 0;
             return fetchUsdcBalance(walletState.address).then(function(bal) {
               var balUnits = Math.round(parseFloat(bal) * 1e6);
               if (balUnits < requiredAmount) {
@@ -1229,7 +1231,7 @@ function signX402Payment(requirements) {
             return signX402Payment(requirements);
           }).then(function(paymentHeader) {
             var headers = getHeaders();
-            headers['Payment-Signature'] = paymentHeader;
+            headers['X-PAYMENT'] = paymentHeader;
             showLoading(isProve ? 'Classifying with payment...' : 'Classifying with payment...');
             return fetch(url, { method: 'POST', headers: headers, body: reqBody });
           }).then(function(r2) {
