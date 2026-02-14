@@ -789,19 +789,48 @@ function withTimeout(promise, ms, msg) {
   });
 }
 
+function getProvider() {
+  // Return a promise that resolves to window.ethereum, waiting up to 3s for injection
+  if (window.ethereum) return Promise.resolve(window.ethereum);
+  return new Promise(function(resolve, reject) {
+    var resolved = false;
+    window.addEventListener('ethereum#initialized', function() {
+      if (!resolved) { resolved = true; resolve(window.ethereum); }
+    }, { once: true });
+    // Also check via EIP-6963 (multi-wallet standard)
+    window.addEventListener('eip6963:announceProvider', function(e) {
+      if (!resolved && e.detail && e.detail.provider) {
+        resolved = true;
+        resolve(e.detail.provider);
+      }
+    }, { once: true });
+    window.dispatchEvent(new Event('eip6963:requestProvider'));
+    setTimeout(function() {
+      if (!resolved) {
+        resolved = true;
+        if (window.ethereum) resolve(window.ethereum);
+        else reject(new Error('MetaMask not detected. Install the MetaMask browser extension to pay with USDC on Base.'));
+      }
+    }, 3000);
+  });
+}
+
 function connectWallet() {
-  if (!window.ethereum) {
-    return Promise.reject(new Error('MetaMask not detected. Install the MetaMask browser extension to pay with USDC on Base.'));
-  }
   // Update button text while connecting
   var btns = document.querySelectorAll('.btn-connect');
   for (var i = 0; i < btns.length; i++) btns[i].textContent = 'Connecting...';
 
-  return withTimeout(
-    window.ethereum.request({ method: 'eth_requestAccounts' }),
-    30000,
-    'MetaMask did not respond. Open your MetaMask extension and approve the connection request.'
-  )
+  return getProvider().then(function(provider) {
+    // Ensure event listeners are attached
+    if (!window.ethereum) window.ethereum = provider;
+    attachWalletListeners();
+
+    return withTimeout(
+      provider.request({ method: 'eth_requestAccounts' }),
+      30000,
+      'MetaMask did not respond. Open your MetaMask extension and approve the connection request.'
+    );
+  })
     .then(function(accounts) {
       if (!accounts || !accounts.length) throw new Error('No accounts returned by MetaMask.');
       walletState.address = accounts[0];
@@ -855,8 +884,9 @@ function disconnectWallet() {
   updateWalletUI();
 }
 
-// Auto-detect MetaMask events
-if (window.ethereum) {
+// Auto-detect MetaMask events — defer to avoid racing provider initialization
+function attachWalletListeners() {
+  if (!window.ethereum) return;
   window.ethereum.on('accountsChanged', function(accounts) {
     if (accounts.length === 0) {
       disconnectWallet();
@@ -870,6 +900,11 @@ if (window.ethereum) {
     walletState.chainId = chainId;
     updateWalletUI();
   });
+}
+if (window.ethereum) {
+  attachWalletListeners();
+} else {
+  window.addEventListener('ethereum#initialized', attachWalletListeners, { once: true });
 }
 
 /* ── x402 payment helpers ── */
@@ -993,10 +1028,6 @@ function signX402Payment(requirements) {
 
   /* ── Wallet buttons ── */
   function onConnectClick() {
-    if (!window.ethereum) {
-      setOutput('<div class="try-error">MetaMask not detected. Install the MetaMask browser extension to pay with USDC on Base.</div>');
-      return;
-    }
     connectWallet().catch(function(err) {
       if (err && err.code === 4001) {
         setOutput('<div class="try-error">Wallet connection rejected by user.</div>');
@@ -1200,10 +1231,6 @@ function signX402Payment(requirements) {
           if (!requirements || !requirements.accepts || !requirements.accepts.length) {
             throw new Error('Payment required but server sent no payment details.');
           }
-          if (!window.ethereum) {
-            throw new Error('Payment required. Install the MetaMask browser extension to pay with USDC on Base.');
-          }
-
           // Connect wallet if needed
           var walletReady;
           if (!walletState.connected) {
