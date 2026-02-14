@@ -9,7 +9,8 @@
 # --- Builder stage ---
 # Nightly required: arkworks-algebra dev/twist-shout branch uses const generics
 # features that need Rust >= 1.95 nightly.
-FROM rustlang/rust:nightly-bookworm AS builder
+# Pin to a known-good nightly to avoid breakage from compiler updates.
+FROM rustlang/rust:nightly-2026-01-29-bookworm AS builder
 
 WORKDIR /build
 
