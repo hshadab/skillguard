@@ -50,8 +50,9 @@ RUN mkdir -p src \
 COPY src/ src/
 COPY static/ static/
 
-# Touch main.rs to force cargo to re-link even if Docker layer is cached
-RUN touch src/main.rs && cargo build --release --bin skillguard
+# Touch both lib.rs and main.rs to force cargo to recompile the crate
+# (the dummy-source step caches an empty lib; we must invalidate it)
+RUN touch src/lib.rs src/main.rs && cargo build --release --bin skillguard
 
 # --- Runtime stage ---
 FROM debian:bookworm-slim
