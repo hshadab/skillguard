@@ -355,7 +355,7 @@ fn main() {
     let api_key = std::env::var("SKILLGUARD_API_KEY").ok();
     let pay_to = std::env::var("SKILLGUARD_PAY_TO").ok();
     let facilitator_url = std::env::var("SKILLGUARD_FACILITATOR_URL")
-        .unwrap_or_else(|_| "https://facilitator.x402.rs".to_string());
+        .unwrap_or_else(|_| "https://pay.openfacilitator.io".to_string());
     let external_url = std::env::var("SKILLGUARD_EXTERNAL_URL").ok();
 
     let result = match cli.command {

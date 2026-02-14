@@ -437,6 +437,6 @@ mod tests {
             ..Default::default()
         };
         assert!(config.pay_to.is_some());
-        assert_eq!(config.facilitator_url, "https://facilitator.x402.rs");
+        assert_eq!(config.facilitator_url, "https://pay.openfacilitator.io");
     }
 }

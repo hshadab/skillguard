@@ -27,7 +27,7 @@ pub struct ServerConfig {
     /// Wallet address to receive x402 USDC payments on Base.
     /// If None, x402 payment is disabled (API key only).
     pub pay_to: Option<String>,
-    /// x402 facilitator URL (defaults to free facilitator.x402.rs).
+    /// x402 facilitator URL (defaults to free OpenFacilitator).
     pub facilitator_url: String,
     /// External base URL for x402 resource URLs (e.g. "https://skillguard.onrender.com").
     /// Behind a reverse proxy / TLS terminator, the app sees http:// internally;
@@ -51,7 +51,7 @@ impl Default for ServerConfig {
             max_access_log_bytes: 50 * 1024 * 1024, // 50 MB
             api_key: None,
             pay_to: None,
-            facilitator_url: "https://facilitator.x402.rs".to_string(),
+            facilitator_url: "https://pay.openfacilitator.io".to_string(),
             external_url: None,
             cache_dir: DEFAULT_CACHE_DIR.to_string(),
         }
