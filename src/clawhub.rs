@@ -55,26 +55,35 @@ struct SkillListResponse {
     next_cursor: Option<String>,
 }
 
-/// Detail response from `GET /skills/{slug}`.
+/// Top-level response from `GET /skills/{slug}`.
 ///
-/// All fields are used during deserialization and mapped into the `Skill` struct
-/// in `fetch_skill()`.
+/// The API wraps skill fields inside a `"skill"` object, with `latestVersion`,
+/// `owner`, and `moderation` as siblings at the top level.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SkillDetailResponse {
+    skill: SkillDetailInner,
+    #[serde(default)]
+    latest_version: Option<VersionInfo>,
+    #[serde(default)]
+    owner: Option<OwnerInfo>,
+}
+
+/// Inner `"skill"` object in the detail response.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SkillDetailInner {
     slug: String,
     #[serde(default)]
     summary: String,
     #[serde(default)]
     stats: SkillStats,
+    /// Epoch milliseconds
     #[serde(default)]
-    latest_version: Option<VersionInfo>,
+    created_at: Option<u64>,
+    /// Epoch milliseconds
     #[serde(default)]
-    owner: Option<OwnerInfo>,
-    #[serde(default)]
-    created_at: Option<String>,
-    #[serde(default)]
-    updated_at: Option<String>,
+    updated_at: Option<u64>,
 }
 
 /// Owner/author info from the detail endpoint.
@@ -85,10 +94,6 @@ pub struct OwnerInfo {
     pub handle: String,
     #[serde(default)]
     pub display_name: String,
-    #[serde(default)]
-    pub created_at: Option<String>,
-    #[serde(default)]
-    pub total_skills: u64,
 }
 
 /// Client for the ClawHub API.
@@ -159,26 +164,32 @@ impl ClawHubClient {
             .await
             .unwrap_or_default();
 
+        let skill_inner = detail.skill;
         let owner = detail.owner.unwrap_or_default();
         let version_str = version
             .map(|v| v.to_string())
             .or_else(|| detail.latest_version.map(|v| v.version))
             .unwrap_or_else(|| "0.0.0".to_string());
 
+        // Convert epoch milliseconds to ISO-8601 string (or empty if missing)
+        fn epoch_ms_to_string(ms: Option<u64>) -> String {
+            ms.map(|m| format!("{}ms", m)).unwrap_or_default()
+        }
+
         Ok(Skill {
-            name: detail.slug,
+            name: skill_inner.slug,
             version: version_str,
             author: owner.handle.clone(),
-            description: detail.summary,
+            description: skill_inner.summary,
             skill_md,
             scripts: Vec::new(),
             metadata: SkillMetadata {
-                stars: detail.stats.stars,
-                downloads: detail.stats.downloads,
-                created_at: detail.created_at.unwrap_or_default(),
-                updated_at: detail.updated_at.unwrap_or_default(),
-                author_account_created: owner.created_at.unwrap_or_default(),
-                author_total_skills: owner.total_skills,
+                stars: skill_inner.stats.stars,
+                downloads: skill_inner.stats.downloads,
+                created_at: epoch_ms_to_string(skill_inner.created_at),
+                updated_at: epoch_ms_to_string(skill_inner.updated_at),
+                author_account_created: String::new(),
+                author_total_skills: 0,
             },
             files: vec!["SKILL.md".to_string()],
         })
@@ -246,28 +257,29 @@ mod tests {
 
     #[test]
     fn test_skill_detail_response_deserialization() {
+        // Matches the actual ClawHub API response shape
         let json = r#"{
-            "slug": "my-skill",
-            "displayName": "My Skill",
-            "summary": "Does things",
-            "stats": { "stars": 42, "downloads": 1234 },
+            "skill": {
+                "slug": "my-skill",
+                "displayName": "My Skill",
+                "summary": "Does things",
+                "stats": { "stars": 42, "downloads": 1234 },
+                "createdAt": 1735689600000,
+                "updatedAt": 1738368000000
+            },
             "latestVersion": { "version": "2.0.0" },
             "owner": {
                 "handle": "dev123",
-                "displayName": "Dev 123",
-                "createdAt": "2024-06-01T00:00:00Z",
-                "totalSkills": 5
-            },
-            "createdAt": "2025-03-01T00:00:00Z",
-            "updatedAt": "2026-02-01T00:00:00Z"
+                "displayName": "Dev 123"
+            }
         }"#;
 
         let detail: SkillDetailResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(detail.slug, "my-skill");
-        assert_eq!(detail.stats.stars, 42);
+        assert_eq!(detail.skill.slug, "my-skill");
+        assert_eq!(detail.skill.stats.stars, 42);
+        assert_eq!(detail.skill.created_at, Some(1735689600000));
         let owner = detail.owner.unwrap();
         assert_eq!(owner.handle, "dev123");
-        assert_eq!(owner.total_skills, 5);
     }
 
     #[test]
