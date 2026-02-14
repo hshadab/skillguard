@@ -110,16 +110,13 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
     let x402_enabled = config.pay_to.is_some();
     let state = Arc::new(ServerState::new(config));
 
-    // Build API routes with auth middleware, optionally wrapped in x402 layer
+    // Build API routes with auth middleware, optionally wrapped in x402 layer.
+    // All classification endpoints automatically generate ZK proofs when the prover is ready.
     let api_routes = Router::new()
         .route("/api/v1/evaluate", post(handlers::evaluate_handler))
         .route(
             "/api/v1/evaluate/name",
             post(handlers::evaluate_by_name_handler),
-        )
-        .route(
-            "/api/v1/evaluate/prove",
-            post(handlers::prove_evaluate_handler),
         )
         .layer(axum_mw::from_fn_with_state(
             state.clone(),
@@ -150,11 +147,11 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
             .parse()
             .expect("Invalid SKILLGUARD_PAY_TO address");
 
-        // Use dynamic pricing: bypass payment (empty vec) when a valid API key is present,
-        // otherwise require $0.001 USDC for evaluate, $0.005 for prove.
+        // Flat $0.001 USDC per request (1000 base units, 6 decimals).
+        // API key users bypass payment.
         let api_key_for_closure = state.config.api_key.clone();
         api_routes.layer(
-            x402.with_dynamic_price(move |headers, uri, _base_url| {
+            x402.with_dynamic_price(move |headers, _uri, _base_url| {
                 let has_valid_api_key = if let Some(ref expected_key) = api_key_for_closure {
                     headers
                         .get("authorization")
@@ -166,20 +163,11 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
                     false
                 };
 
-                let is_prove = uri.path().contains("/prove");
-
                 async move {
                     if has_valid_api_key {
-                        // API key user: bypass x402 payment
                         vec![]
-                    } else if is_prove {
-                        // Prove endpoint: $0.005 USDC = 5000 base units (6 decimals)
-                        vec![V1Eip155Exact::price_tag(
-                            pay_to,
-                            USDC::base().amount(5000u64),
-                        )]
                     } else {
-                        // Evaluate endpoint: $0.001 USDC = 1000 base units (6 decimals)
+                        // $0.001 USDC = 1000 base units (6 decimals)
                         vec![V1Eip155Exact::price_tag(
                             pay_to,
                             USDC::base().amount(1000u64),
@@ -188,7 +176,7 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
                 }
             })
             .with_description(
-                "SkillGuard ZKML — AI skill safety classification and proving".to_string(),
+                "SkillGuard ZKML — verifiable AI skill safety classification".to_string(),
             ),
         )
     } else {
@@ -239,14 +227,14 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
 
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
     info!(bind = %bind_addr, "SkillGuard ZKML server listening");
-    info!("Endpoints: GET / (UI), GET /health, GET /stats, GET /openapi.json, GET /.well-known/ai-plugin.json, POST /api/v1/evaluate, POST /api/v1/evaluate/name, POST /api/v1/evaluate/prove, POST /api/v1/verify");
+    info!("Endpoints: GET / (UI), GET /health, GET /stats, GET /openapi.json, GET /.well-known/ai-plugin.json, POST /api/v1/evaluate, POST /api/v1/evaluate/name, POST /api/v1/verify");
     if rate_limit_rpm > 0 {
         info!(rate_limit_rpm, "rate limiting enabled");
     } else {
         info!("rate limiting disabled");
     }
     if x402_enabled {
-        info!("x402 payment enabled ($0.001 USDC per evaluation, $0.005 per proof on Base)");
+        info!("x402 payment enabled ($0.001 USDC per request on Base, proofs included)");
     }
     info!(access_log = %access_log);
 

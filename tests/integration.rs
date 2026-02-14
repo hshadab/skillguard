@@ -44,7 +44,6 @@ async fn spawn_test_server_full(
     // Mirror production layout: API routes behind auth middleware
     let api_routes = Router::new()
         .route("/api/v1/evaluate", post(evaluate_handler))
-        .route("/api/v1/evaluate/prove", post(prove_evaluate_handler))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             skillguard::server::middleware::auth_middleware,
@@ -99,29 +98,20 @@ async fn health_handler(
 
 async fn evaluate_handler(
     axum::extract::State(_state): axum::extract::State<Arc<ServerState>>,
-    axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<SocketAddr>,
+    axum::extract::ConnectInfo(_addr): axum::extract::ConnectInfo<SocketAddr>,
     request: axum::extract::Request,
 ) -> impl axum::response::IntoResponse {
-    use skillguard::server::AuthMethod;
-
     let start = std::time::Instant::now();
-    let _client_ip = addr.ip();
-    let auth_method = request
-        .extensions()
-        .get::<AuthMethod>()
-        .copied()
-        .unwrap_or(AuthMethod::Open);
 
     let body = request.into_body();
     let bytes = axum::body::to_bytes(body, 1024 * 1024).await.unwrap();
     let eval_request: EvaluateRequest = match serde_json::from_slice(&bytes) {
         Ok(r) => r,
         Err(e) => {
-            return axum::Json(EvaluateResponse {
+            return axum::Json(ProveEvaluateResponse {
                 success: false,
                 error: Some(format!("Invalid JSON: {}", e)),
                 evaluation: None,
-                basic_evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
             });
         }
@@ -133,106 +123,16 @@ async fn evaluate_handler(
     let result = match skillguard::classify(&feature_vec) {
         Ok(r) => r,
         Err(e) => {
-            return axum::Json(EvaluateResponse {
+            return axum::Json(ProveEvaluateResponse {
                 success: false,
                 error: Some(format!("Classification failed: {}", e)),
                 evaluation: None,
-                basic_evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
             });
         }
     };
 
     let (classification, raw_scores, confidence) = result;
-    let scores = ClassScores::from_raw_scores(&raw_scores);
-    let (decision, reasoning) =
-        skillguard::skill::derive_decision(classification, &scores.to_array());
-
-    match auth_method {
-        AuthMethod::X402 => axum::Json(EvaluateResponse {
-            success: true,
-            error: None,
-            evaluation: None,
-            basic_evaluation: Some(BasicEvaluationResult {
-                skill_name: eval_request.skill.name.clone(),
-                classification: classification.as_str().to_string(),
-                decision: decision.as_str().to_string(),
-            }),
-            processing_time_ms: start.elapsed().as_millis() as u64,
-        }),
-        _ => axum::Json(EvaluateResponse {
-            success: true,
-            error: None,
-            evaluation: Some(EvaluationResult {
-                skill_name: eval_request.skill.name.clone(),
-                classification: classification.as_str().to_string(),
-                decision: decision.as_str().to_string(),
-                confidence,
-                scores,
-                reasoning,
-            }),
-            basic_evaluation: None,
-            processing_time_ms: start.elapsed().as_millis() as u64,
-        }),
-    }
-}
-
-async fn prove_evaluate_handler(
-    axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
-    axum::extract::ConnectInfo(_addr): axum::extract::ConnectInfo<SocketAddr>,
-    request: axum::extract::Request,
-) -> impl axum::response::IntoResponse {
-    use skillguard::server::AuthMethod;
-
-    let start = std::time::Instant::now();
-    let _auth_method = request
-        .extensions()
-        .get::<AuthMethod>()
-        .copied()
-        .unwrap_or(AuthMethod::Open);
-
-    let body = request.into_body();
-    let bytes = axum::body::to_bytes(body, 1024 * 1024).await.unwrap();
-    let eval_request: EvaluateRequest = match serde_json::from_slice(&bytes) {
-        Ok(r) => r,
-        Err(e) => {
-            return axum::Json(ProveEvaluateResponse {
-                success: false,
-                error: Some(format!("Invalid JSON: {}", e)),
-                evaluation: None,
-                processing_time_ms: start.elapsed().as_millis() as u64,
-            });
-        }
-    };
-
-    let prover = match state.get_prover() {
-        Some(p) => p,
-        None => {
-            return axum::Json(ProveEvaluateResponse {
-                success: false,
-                error: Some("ZKML prover not available".to_string()),
-                evaluation: None,
-                processing_time_ms: start.elapsed().as_millis() as u64,
-            });
-        }
-    };
-
-    let features = SkillFeatures::extract(&eval_request.skill, eval_request.vt_report.as_ref());
-    let feature_vec = features.to_normalized_vec();
-
-    let result = match skillguard::classify_with_proof(&prover, &feature_vec) {
-        Ok(r) => r,
-        Err(e) => {
-            return axum::Json(ProveEvaluateResponse {
-                success: false,
-                error: Some(format!("Classification with proof failed: {}", e)),
-                evaluation: None,
-                processing_time_ms: start.elapsed().as_millis() as u64,
-            });
-        }
-    };
-
-    let (classification, raw_scores, confidence, proof_bundle) = result;
     let scores = ClassScores::from_raw_scores(&raw_scores);
     let (decision, reasoning) =
         skillguard::skill::derive_decision(classification, &scores.to_array());
@@ -247,7 +147,7 @@ async fn prove_evaluate_handler(
             confidence,
             scores,
             reasoning,
-            proof: proof_bundle,
+            proof: None,
         }),
         processing_time_ms: start.elapsed().as_millis() as u64,
     })
@@ -492,7 +392,7 @@ async fn test_prove_evaluate_endpoint() {
         return;
     }
 
-    let url = format!("http://{}/api/v1/evaluate/prove", addr);
+    let url = format!("http://{}/api/v1/evaluate", addr);
 
     let skill = serde_json::json!({
         "skill": {
@@ -528,7 +428,7 @@ async fn test_verify_endpoint_valid() {
     }
 
     // First, generate a proof
-    let prove_url = format!("http://{}/api/v1/evaluate/prove", addr);
+    let prove_url = format!("http://{}/api/v1/evaluate", addr);
     let skill = serde_json::json!({
         "skill": {
             "name": "verify-test",
@@ -881,12 +781,7 @@ async fn test_x402_api_key_bypasses_payment() {
 
     let body: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(body["success"], true);
-    // Full response should have evaluation (not basic_evaluation)
-    assert!(body["evaluation"].is_object(), "expected full evaluation");
-    assert!(
-        body["basic_evaluation"].is_null(),
-        "should not have basic_evaluation for API key auth"
-    );
+    assert!(body["evaluation"].is_object(), "expected evaluation object");
 }
 
 #[tokio::test]

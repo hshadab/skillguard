@@ -93,26 +93,7 @@ pub struct EvaluateByNameRequest {
     pub version: Option<String>,
 }
 
-/// Flat evaluation result (no receipts, no proofs)
-#[derive(Debug, Serialize, Deserialize)]
-pub struct EvaluationResult {
-    pub skill_name: String,
-    pub classification: String,
-    pub decision: String,
-    pub confidence: f64,
-    pub scores: ClassScores,
-    pub reasoning: String,
-}
-
-/// Stripped-down evaluation result for x402 payers.
-#[derive(Debug, Serialize)]
-pub struct BasicEvaluationResult {
-    pub skill_name: String,
-    pub classification: String,
-    pub decision: String,
-}
-
-/// Full evaluation result with ZK proof.
+/// Evaluation result with optional ZK proof.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProvedEvaluationResult {
     pub skill_name: String,
@@ -121,7 +102,9 @@ pub struct ProvedEvaluationResult {
     pub confidence: f64,
     pub scores: ClassScores,
     pub reasoning: String,
-    pub proof: crate::prover::ProofBundle,
+    /// ZK proof bundle (present when prover is available).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proof: Option<crate::prover::ProofBundle>,
 }
 
 /// Request to verify a proof.
@@ -138,7 +121,7 @@ pub struct VerifyResponse {
     pub verification_time_ms: u64,
 }
 
-/// Response from the prove+evaluate endpoint.
+/// Unified response for all classification endpoints.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProveEvaluateResponse {
     pub success: bool,
@@ -146,19 +129,6 @@ pub struct ProveEvaluateResponse {
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub evaluation: Option<ProvedEvaluationResult>,
-    pub processing_time_ms: u64,
-}
-
-/// Top-level response
-#[derive(Debug, Serialize)]
-pub struct EvaluateResponse {
-    pub success: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub evaluation: Option<EvaluationResult>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub basic_evaluation: Option<BasicEvaluationResult>,
     pub processing_time_ms: u64,
 }
 

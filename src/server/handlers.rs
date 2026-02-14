@@ -1,4 +1,7 @@
 //! HTTP endpoint handler functions.
+//!
+//! All classification endpoints automatically generate ZK proofs when the
+//! prover is available, returning a unified `ProveEvaluateResponse`.
 
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
@@ -15,28 +18,125 @@ use super::ServerState;
 pub const MAX_BODY_BYTES: usize = 1024 * 1024;
 
 // ---------------------------------------------------------------------------
-// Shared classification logic
+// Shared classification + proving logic
 // ---------------------------------------------------------------------------
 
-fn classify_and_respond(
+/// Classify a skill and generate a ZK proof when the prover is available.
+/// Always returns a `ProveEvaluateResponse` with an optional proof bundle.
+async fn classify_and_respond(
     state: &Arc<ServerState>,
     features: SkillFeatures,
     skill_name: String,
     start: Instant,
     endpoint: &str,
-    auth_method: AuthMethod,
-) -> EvaluateResponse {
+    request_bytes: Option<&[u8]>,
+) -> ProveEvaluateResponse {
     let feature_vec = features.to_normalized_vec();
 
-    let result = match crate::classify(&feature_vec) {
+    // Try to generate a proof if the prover is available
+    let prover = state.get_prover();
+
+    // Check proof cache first (only if we have request bytes and a prover)
+    if prover.is_some() {
+        if let Some(ref bytes) = request_bytes {
+            let cache_key = crate::cache::ProofCache::cache_key(bytes, &state.model_hash);
+            if let Some(cached) = state.proof_cache.get(&cache_key) {
+                if let Some(ref eval) = cached.evaluation {
+                    let cls = crate::skill::SafetyClassification::parse_str(&eval.classification);
+                    let dec = crate::skill::SafetyDecision::parse_str(&eval.decision);
+                    state
+                        .usage
+                        .record(endpoint, &eval.skill_name, cls, dec, eval.confidence, 0);
+                }
+                return cached;
+            }
+        }
+    }
+
+    if let Some(prover) = prover {
+        // Clone feature_vec for the blocking task; keep original for fallback
+        let fv_for_proof = feature_vec.clone();
+        let prove_result = tokio::task::spawn_blocking(move || {
+            crate::classify_with_proof(&prover, &fv_for_proof)
+        })
+        .await;
+
+        match prove_result {
+            Ok(Ok((classification, raw_scores, confidence, proof_bundle))) => {
+                let scores = ClassScores::from_raw_scores(&raw_scores);
+                let (decision, reasoning) =
+                    derive_decision(classification, &scores.to_array());
+                let processing_time_ms = start.elapsed().as_millis() as u64;
+
+                state.usage.record(
+                    endpoint,
+                    &skill_name,
+                    classification,
+                    decision,
+                    confidence,
+                    processing_time_ms,
+                );
+                state
+                    .usage
+                    .total_proofs_generated
+                    .fetch_add(1, Ordering::Relaxed);
+
+                let response = ProveEvaluateResponse {
+                    success: true,
+                    error: None,
+                    evaluation: Some(ProvedEvaluationResult {
+                        skill_name,
+                        classification: classification.as_str().to_string(),
+                        decision: decision.as_str().to_string(),
+                        confidence,
+                        scores,
+                        reasoning,
+                        proof: Some(proof_bundle),
+                    }),
+                    processing_time_ms,
+                };
+
+                // Cache the successful proof response
+                if let Some(ref bytes) = request_bytes {
+                    let cache_key =
+                        crate::cache::ProofCache::cache_key(bytes, &state.model_hash);
+                    state.proof_cache.put(&cache_key, &response);
+                }
+
+                response
+            }
+            Ok(Err(e)) => {
+                // Proving failed — fall back to classification without proof
+                tracing::warn!("Proof generation failed, returning classification only: {}", e);
+                classify_without_proof(state, &feature_vec, skill_name, start, endpoint)
+            }
+            Err(e) => {
+                tracing::warn!("Proving task panicked, returning classification only: {}", e);
+                classify_without_proof(state, &feature_vec, skill_name, start, endpoint)
+            }
+        }
+    } else {
+        // No prover available — classify without proof
+        classify_without_proof(state, &feature_vec, skill_name, start, endpoint)
+    }
+}
+
+/// Classify without proof (fallback when prover is unavailable).
+fn classify_without_proof(
+    state: &Arc<ServerState>,
+    feature_vec: &[i32],
+    skill_name: String,
+    start: Instant,
+    endpoint: &str,
+) -> ProveEvaluateResponse {
+    let result = match crate::classify(feature_vec) {
         Ok(r) => r,
         Err(e) => {
             state.usage.record_error();
-            return EvaluateResponse {
+            return ProveEvaluateResponse {
                 success: false,
                 error: Some(format!("Classification failed: {}", e)),
                 evaluation: None,
-                basic_evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
             };
         }
@@ -45,7 +145,6 @@ fn classify_and_respond(
     let (classification, raw_scores, confidence) = result;
     let scores = ClassScores::from_raw_scores(&raw_scores);
     let (decision, reasoning) = derive_decision(classification, &scores.to_array());
-
     let processing_time_ms = start.elapsed().as_millis() as u64;
 
     state.usage.record(
@@ -57,32 +156,19 @@ fn classify_and_respond(
         processing_time_ms,
     );
 
-    match auth_method {
-        AuthMethod::X402 => EvaluateResponse {
-            success: true,
-            error: None,
-            evaluation: None,
-            basic_evaluation: Some(BasicEvaluationResult {
-                skill_name,
-                classification: classification.as_str().to_string(),
-                decision: decision.as_str().to_string(),
-            }),
-            processing_time_ms,
-        },
-        _ => EvaluateResponse {
-            success: true,
-            error: None,
-            evaluation: Some(EvaluationResult {
-                skill_name,
-                classification: classification.as_str().to_string(),
-                decision: decision.as_str().to_string(),
-                confidence,
-                scores,
-                reasoning,
-            }),
-            basic_evaluation: None,
-            processing_time_ms,
-        },
+    ProveEvaluateResponse {
+        success: true,
+        error: None,
+        evaluation: Some(ProvedEvaluationResult {
+            skill_name,
+            classification: classification.as_str().to_string(),
+            decision: decision.as_str().to_string(),
+            confidence,
+            scores,
+            reasoning,
+            proof: None,
+        }),
+        processing_time_ms,
     }
 }
 
@@ -118,21 +204,15 @@ pub async fn evaluate_handler(
 ) -> impl axum::response::IntoResponse {
     let start = Instant::now();
     let client_ip = addr.ip();
-    let auth_method = request
-        .extensions()
-        .get::<AuthMethod>()
-        .copied()
-        .unwrap_or(AuthMethod::Open);
 
     let body = request.into_body();
     let bytes = match axum::body::to_bytes(body, 2 * 1024 * 1024).await {
         Ok(b) => b,
         Err(e) => {
-            return axum::Json(EvaluateResponse {
+            return axum::Json(ProveEvaluateResponse {
                 success: false,
                 error: Some(format!("Failed to read request body: {}", e)),
                 evaluation: None,
-                basic_evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
             });
         }
@@ -140,11 +220,10 @@ pub async fn evaluate_handler(
     let eval_request: EvaluateRequest = match serde_json::from_slice(&bytes) {
         Ok(r) => r,
         Err(e) => {
-            return axum::Json(EvaluateResponse {
+            return axum::Json(ProveEvaluateResponse {
                 success: false,
                 error: Some(format!("Invalid JSON: {}", e)),
                 evaluation: None,
-                basic_evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
             });
         }
@@ -157,14 +236,13 @@ pub async fn evaluate_handler(
     {
         if limiter.check().is_err() {
             state.usage.record_error();
-            return axum::Json(EvaluateResponse {
+            return axum::Json(ProveEvaluateResponse {
                 success: false,
                 error: Some(format!(
                     "Rate limit exceeded. Maximum {} requests per minute.",
                     state.config.rate_limit_rpm
                 )),
                 evaluation: None,
-                basic_evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
             });
         }
@@ -173,8 +251,9 @@ pub async fn evaluate_handler(
     let features = SkillFeatures::extract(&eval_request.skill, eval_request.vt_report.as_ref());
     let skill_name = eval_request.skill.name.clone();
 
-    let response =
-        classify_and_respond(&state, features, skill_name, start, "evaluate", auth_method);
+    let response = classify_and_respond(
+        &state, features, skill_name, start, "evaluate", Some(&bytes),
+    ).await;
 
     axum::Json(response)
 }
@@ -186,21 +265,15 @@ pub async fn evaluate_by_name_handler(
 ) -> impl axum::response::IntoResponse {
     let start = Instant::now();
     let client_ip = addr.ip();
-    let auth_method = request
-        .extensions()
-        .get::<AuthMethod>()
-        .copied()
-        .unwrap_or(AuthMethod::Open);
 
     let body = request.into_body();
     let bytes = match axum::body::to_bytes(body, 2 * 1024 * 1024).await {
         Ok(b) => b,
         Err(e) => {
-            return axum::Json(EvaluateResponse {
+            return axum::Json(ProveEvaluateResponse {
                 success: false,
                 error: Some(format!("Failed to read request body: {}", e)),
                 evaluation: None,
-                basic_evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
             });
         }
@@ -208,11 +281,10 @@ pub async fn evaluate_by_name_handler(
     let eval_request: EvaluateByNameRequest = match serde_json::from_slice(&bytes) {
         Ok(r) => r,
         Err(e) => {
-            return axum::Json(EvaluateResponse {
+            return axum::Json(ProveEvaluateResponse {
                 success: false,
                 error: Some(format!("Invalid JSON: {}", e)),
                 evaluation: None,
-                basic_evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
             });
         }
@@ -228,14 +300,13 @@ pub async fn evaluate_by_name_handler(
     {
         if limiter.check().is_err() {
             state.usage.record_error();
-            return axum::Json(EvaluateResponse {
+            return axum::Json(ProveEvaluateResponse {
                 success: false,
                 error: Some(format!(
                     "Rate limit exceeded. Maximum {} requests per minute.",
                     state.config.rate_limit_rpm
                 )),
                 evaluation: None,
-                basic_evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
             });
         }
@@ -249,14 +320,13 @@ pub async fn evaluate_by_name_handler(
         Ok(s) => s,
         Err(e) => {
             state.usage.record_error();
-            return axum::Json(EvaluateResponse {
+            return axum::Json(ProveEvaluateResponse {
                 success: false,
                 error: Some(format!(
                     "Failed to fetch skill '{}': {}",
                     eval_request.skill, e
                 )),
                 evaluation: None,
-                basic_evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
             });
         }
@@ -271,174 +341,8 @@ pub async fn evaluate_by_name_handler(
         skill_name,
         start,
         "evaluate_by_name",
-        auth_method,
-    );
-
-    axum::Json(response)
-}
-
-pub async fn prove_evaluate_handler(
-    axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
-    axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<SocketAddr>,
-    request: axum::extract::Request,
-) -> impl axum::response::IntoResponse {
-    let start = Instant::now();
-    let client_ip = addr.ip();
-    let auth_method = request
-        .extensions()
-        .get::<AuthMethod>()
-        .copied()
-        .unwrap_or(AuthMethod::Open);
-
-    // Reject unauthenticated requests when auth is configured
-    if auth_method == AuthMethod::Open
-        && (state.config.api_key.is_some() || state.config.pay_to.is_some())
-    {
-        return axum::Json(ProveEvaluateResponse {
-            success: false,
-            error: Some("Authentication required. Provide an API key or pay via x402.".to_string()),
-            evaluation: None,
-            processing_time_ms: start.elapsed().as_millis() as u64,
-        });
-    }
-
-    let body = request.into_body();
-    let bytes = match axum::body::to_bytes(body, 2 * 1024 * 1024).await {
-        Ok(b) => b,
-        Err(e) => {
-            return axum::Json(ProveEvaluateResponse {
-                success: false,
-                error: Some(format!("Failed to read request body: {}", e)),
-                evaluation: None,
-                processing_time_ms: start.elapsed().as_millis() as u64,
-            });
-        }
-    };
-    let eval_request: EvaluateRequest = match serde_json::from_slice(&bytes) {
-        Ok(r) => r,
-        Err(e) => {
-            return axum::Json(ProveEvaluateResponse {
-                success: false,
-                error: Some(format!("Invalid JSON: {}", e)),
-                evaluation: None,
-                processing_time_ms: start.elapsed().as_millis() as u64,
-            });
-        }
-    };
-
-    state.usage.ep_prove.fetch_add(1, Ordering::Relaxed);
-
-    if let Some(limiter) =
-        super::middleware::get_rate_limiter(&state.config, &state.rate_limiters, client_ip).await
-    {
-        if limiter.check().is_err() {
-            state.usage.record_error();
-            return axum::Json(ProveEvaluateResponse {
-                success: false,
-                error: Some(format!(
-                    "Rate limit exceeded. Maximum {} requests per minute.",
-                    state.config.rate_limit_rpm
-                )),
-                evaluation: None,
-                processing_time_ms: start.elapsed().as_millis() as u64,
-            });
-        }
-    }
-
-    let prover = match state.get_prover() {
-        Some(p) => p,
-        None => {
-            state.usage.record_error();
-            return axum::Json(ProveEvaluateResponse {
-                success: false,
-                error: Some("ZKML prover not available".to_string()),
-                evaluation: None,
-                processing_time_ms: start.elapsed().as_millis() as u64,
-            });
-        }
-    };
-
-    // Check proof cache before doing expensive proving
-    let cache_key = crate::cache::ProofCache::cache_key(&bytes, &state.model_hash);
-    if let Some(cached) = state.proof_cache.get(&cache_key) {
-        // Still record usage metrics for cached responses
-        if let Some(ref eval) = cached.evaluation {
-            let cls = crate::skill::SafetyClassification::parse_str(&eval.classification);
-            let dec = crate::skill::SafetyDecision::parse_str(&eval.decision);
-            state
-                .usage
-                .record("prove", &eval.skill_name, cls, dec, eval.confidence, 0);
-        }
-        return axum::Json(cached);
-    }
-
-    let features = SkillFeatures::extract(&eval_request.skill, eval_request.vt_report.as_ref());
-    let feature_vec = features.to_normalized_vec();
-    let skill_name = eval_request.skill.name.clone();
-
-    // Run the CPU-bound prover in a blocking thread to avoid starving the async runtime
-    let prove_result =
-        tokio::task::spawn_blocking(move || crate::classify_with_proof(&prover, &feature_vec))
-            .await;
-
-    let result = match prove_result {
-        Ok(Ok(r)) => r,
-        Ok(Err(e)) => {
-            state.usage.record_error();
-            return axum::Json(ProveEvaluateResponse {
-                success: false,
-                error: Some(format!("Classification with proof failed: {}", e)),
-                evaluation: None,
-                processing_time_ms: start.elapsed().as_millis() as u64,
-            });
-        }
-        Err(e) => {
-            state.usage.record_error();
-            return axum::Json(ProveEvaluateResponse {
-                success: false,
-                error: Some(format!("Proving task panicked: {}", e)),
-                evaluation: None,
-                processing_time_ms: start.elapsed().as_millis() as u64,
-            });
-        }
-    };
-
-    let (classification, raw_scores, confidence, proof_bundle) = result;
-    let scores = ClassScores::from_raw_scores(&raw_scores);
-    let (decision, reasoning) = derive_decision(classification, &scores.to_array());
-
-    let processing_time_ms = start.elapsed().as_millis() as u64;
-
-    state.usage.record(
-        "prove",
-        &skill_name,
-        classification,
-        decision,
-        confidence,
-        processing_time_ms,
-    );
-    state
-        .usage
-        .total_proofs_generated
-        .fetch_add(1, Ordering::Relaxed);
-
-    let response = ProveEvaluateResponse {
-        success: true,
-        error: None,
-        evaluation: Some(ProvedEvaluationResult {
-            skill_name,
-            classification: classification.as_str().to_string(),
-            decision: decision.as_str().to_string(),
-            confidence,
-            scores,
-            reasoning,
-            proof: proof_bundle,
-        }),
-        processing_time_ms,
-    };
-
-    // Cache the successful proof response
-    state.proof_cache.put(&cache_key, &response);
+        Some(&bytes),
+    ).await;
 
     axum::Json(response)
 }

@@ -164,9 +164,7 @@ footer a:hover { text-decoration: underline; }
 }
 .try-buttons button:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-classify { background: var(--accent); color: #fff; }
-.btn-prove { background: var(--safe); color: #0a0e17; }
 .btn-classify:hover:not(:disabled) { opacity: 0.85; }
-.btn-prove:hover:not(:disabled) { opacity: 0.85; }
 
 .advanced-toggle {
   background: none; border: none; color: var(--text-muted); font-size: 0.8rem;
@@ -434,12 +432,12 @@ footer a:hover { text-decoration: underline; }
     <div class="card-title">x402 Payment</div>
     <div class="x402-grid">
       <div class="x402-item">
-        <div class="x402-label">Price per evaluation</div>
+        <div class="x402-label">Price per classification</div>
         <div class="x402-value highlight">$0.001 USDC</div>
       </div>
       <div class="x402-item">
-        <div class="x402-label">Price per proof</div>
-        <div class="x402-value highlight">$0.005 USDC</div>
+        <div class="x402-label">Includes</div>
+        <div class="x402-value highlight">ZK proof</div>
       </div>
       <div class="x402-item">
         <div class="x402-label">Network</div>
@@ -447,7 +445,7 @@ footer a:hover { text-decoration: underline; }
       </div>
       <div class="x402-item">
         <div class="x402-label">Protocol</div>
-        <div class="x402-value">HTTP 402 / x402 v2</div>
+        <div class="x402-value">HTTP 402 / x402</div>
       </div>
     </div>
   </div>
@@ -527,8 +525,7 @@ This skill fetches current weather data from a public API and returns a friendly
         </div>
         <div class="form-errors" id="form-errors" role="alert"><ul></ul></div>
         <div class="try-buttons">
-          <button class="btn-classify" id="btn-classify" type="button" aria-label="Classify skill">Classify</button>
-          <button class="btn-prove" id="btn-prove" type="button" aria-label="Classify skill and generate ZK proof">Classify + Prove</button>
+          <button class="btn-classify" id="btn-classify" type="button" aria-label="Classify skill with ZK proof">Classify</button>
         </div>
       </div>
     </div>
@@ -569,7 +566,6 @@ This skill fetches current weather data from a public API and returns a friendly
       <tbody>
         <tr><td>POST</td><td><code>/api/v1/evaluate</code></td><td>API key or x402</td><td class="price">$0.001</td></tr>
         <tr><td>POST</td><td><code>/api/v1/evaluate/name</code></td><td>API key or x402</td><td class="price">$0.001</td></tr>
-        <tr><td>POST</td><td><code>/api/v1/evaluate/prove</code></td><td>API key or x402</td><td class="price">$0.005</td></tr>
         <tr><td>POST</td><td><code>/api/v1/verify</code></td><td>None</td><td class="free">Free</td></tr>
         <tr><td>GET</td><td><code>/health</code></td><td>None</td><td class="free">Free</td></tr>
         <tr><td>GET</td><td><code>/stats</code></td><td>None</td><td class="free">Free</td></tr>
@@ -1174,21 +1170,6 @@ async function signX402Payment(requirements) {
     return html;
   }
 
-  function renderBasicResult(ev, timeMs, paidViaX402) {
-    var cls = classColor(ev.classification);
-    var html = '<div class="result-card">';
-    html += '<div class="result-header">';
-    html += '<span class="result-badge ' + cls + '">' + escHtml(ev.classification) + '</span>';
-    html += '<span class="result-decision">Decision: <strong>' + escHtml(ev.decision) + '</strong></span>';
-    if (paidViaX402) {
-      html += '<span class="payment-badge">Paid via x402</span>';
-    }
-    html += '</div>';
-    html += '<div style="margin-top:8px;font-size:0.8rem;color:var(--text-muted)">Basic evaluation (x402 payment). Use an API key for full scores.</div>';
-    html += '<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted)">Processed in ' + timeMs + ' ms</div>';
-    html += '</div>';
-    return html;
-  }
 
   function safeJson(r) {
     return r.text().then(function(text) {
@@ -1205,8 +1186,6 @@ async function signX402Payment(requirements) {
       if (d.evaluation) {
         var proof = d.evaluation.proof || null;
         html = renderResult(d.evaluation, proof, d.processing_time_ms, paidViaX402);
-      } else if (d.basic_evaluation) {
-        html = renderBasicResult(d.basic_evaluation, d.processing_time_ms, paidViaX402);
       } else {
         html = '<div class="try-error">Unexpected response format.</div>';
       }
@@ -1232,12 +1211,9 @@ async function signX402Payment(requirements) {
         return;
       }
     }
-    var isProve = url.indexOf('/prove') !== -1;
-    showLoading(isProve ? 'Classifying and generating ZK proof...' : 'Classifying...');
+    showLoading('Classifying with ZK proof...');
     var btnC = $('btn-classify');
-    var btnP = $('btn-prove');
     if (btnC) btnC.disabled = true;
-    if (btnP) btnP.disabled = true;
     // Disable all quick classify buttons
     var qcBtns = document.querySelectorAll('.btn-quick-classify');
     for (var i = 0; i < qcBtns.length; i++) qcBtns[i].disabled = true;
@@ -1287,7 +1263,7 @@ async function signX402Payment(requirements) {
           }).then(function(paymentHeader) {
             var headers = getHeaders();
             headers['X-PAYMENT'] = paymentHeader;
-            showLoading(isProve ? 'Classifying with payment...' : 'Classifying with payment...');
+            showLoading('Classifying with ZK proof (paid via x402)...');
             return fetch(url, { method: 'POST', headers: headers, body: reqBody });
           }).then(function(r2) {
             if (!r2.ok && r2.status !== 200) {
@@ -1298,7 +1274,13 @@ async function signX402Payment(requirements) {
                 throw new Error(msg);
               });
             }
-            return handleResponse(r2, true);
+            return handleResponse(r2, true).then(function() {
+              // Refresh wallet balance after successful x402 payment
+              if (walletState.connected) {
+                fetchUsdcBalance(walletState.address);
+              }
+              refreshEarnings();
+            });
           });
         }
         return handleResponse(r, false);
@@ -1312,7 +1294,6 @@ async function signX402Payment(requirements) {
       })
       .finally(function() {
         if (btnC) btnC.disabled = false;
-        if (btnP) btnP.disabled = false;
         var qcBtns2 = document.querySelectorAll('.btn-quick-classify');
         for (var j = 0; j < qcBtns2.length; j++) qcBtns2[j].disabled = false;
       });
@@ -1348,10 +1329,6 @@ async function signX402Payment(requirements) {
   $('btn-classify').addEventListener('click', function() {
     if (!validateForm()) return;
     doRequest('/api/v1/evaluate');
-  });
-  $('btn-prove').addEventListener('click', function() {
-    if (!validateForm()) return;
-    doRequest('/api/v1/evaluate/prove');
   });
 
   /* ── Skill Index ── */
