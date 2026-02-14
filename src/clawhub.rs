@@ -123,9 +123,14 @@ impl ClawHubClient {
     /// Fetch a single skill by name, mapping the API response into the `Skill` struct.
     ///
     /// Fetches both the skill detail and the SKILL.md content.
+    /// Accepts both plain slugs (`4claw`) and `author/slug` format (`openclaw/4claw`);
+    /// only the slug portion is sent to the ClawHub API.
     pub async fn fetch_skill(&self, name: &str, version: Option<&str>) -> Result<Skill> {
+        // Strip optional author prefix (e.g. "openclaw/4claw" → "4claw")
+        let slug = name.rsplit('/').next().unwrap_or(name);
+
         // Fetch skill details
-        let detail_url = format!("{}/skills/{}", self.base_url, name);
+        let detail_url = format!("{}/skills/{}", self.base_url, slug);
         let detail: SkillDetailResponse = self
             .client
             .get(&detail_url)
@@ -139,7 +144,7 @@ impl ClawHubClient {
             .wrap_err("Failed to parse skill detail JSON")?;
 
         // Fetch SKILL.md content
-        let mut content_url = format!("{}/skills/{}/file?path=SKILL.md", self.base_url, name);
+        let mut content_url = format!("{}/skills/{}/file?path=SKILL.md", self.base_url, slug);
         if let Some(v) = version {
             content_url.push_str(&format!("&version={}", v));
         }
