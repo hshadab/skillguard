@@ -277,6 +277,14 @@ footer a:hover { text-decoration: underline; }
   padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;
   background: rgba(59,130,246,0.15); color: var(--accent); margin-left: 4px;
 }
+.payment-badge.payment-link {
+  text-decoration: none; cursor: pointer;
+  background: rgba(34,197,94,0.15); color: #22c55e;
+}
+.payment-badge.payment-link:hover { background: rgba(34,197,94,0.25); }
+.payment-badge.payment-failed {
+  background: rgba(239,68,68,0.15); color: #ef4444;
+}
 
 /* Mode tabs */
 .mode-tabs {
@@ -1139,7 +1147,7 @@ async function signX402Payment(requirements) {
     return html;
   }
 
-  function renderResult(ev, proofBundle, timeMs, paidViaX402) {
+  function renderResult(ev, proofBundle, timeMs, paidViaX402, settlement) {
     var cls = classColor(ev.classification);
     var html = '<div class="result-card">';
     html += '<div class="result-header">';
@@ -1149,7 +1157,15 @@ async function signX402Payment(requirements) {
       html += '<span class="result-confidence">Confidence: <strong>' + pct(ev.confidence) + '</strong></span>';
     }
     if (paidViaX402) {
-      html += '<span class="payment-badge">Paid via x402</span>';
+      if (settlement && settlement.success && settlement.transaction) {
+        var txHash = settlement.transaction;
+        var shortTx = txHash.slice(0, 10) + '...' + txHash.slice(-8);
+        html += '<a href="https://basescan.org/tx/' + escHtml(txHash) + '" target="_blank" rel="noopener" class="payment-badge payment-link">&#x2714; x402 settled &middot; ' + shortTx + '</a>';
+      } else if (settlement && !settlement.success) {
+        html += '<span class="payment-badge payment-failed">&#x2718; x402 settlement failed</span>';
+      } else {
+        html += '<span class="payment-badge">Paid via x402</span>';
+      }
     }
     html += '</div>';
     if (ev.scores) html += renderScores(ev.scores);
@@ -1157,14 +1173,16 @@ async function signX402Payment(requirements) {
       html += '<div style="margin-top:10px;font-size:0.82rem;color:var(--text-secondary)"><strong>Reasoning:</strong> ' + escHtml(ev.reasoning) + '</div>';
     }
     if (proofBundle) {
+      var sizeKB = (proofBundle.proof_size_bytes / 1024).toFixed(1);
+      var proveSec = (proofBundle.proving_time_ms / 1000).toFixed(2);
       html += '<div class="proof-meta">';
-      html += '<span>Proof size: <code>' + proofBundle.proof_size_bytes.toLocaleString() + ' bytes</code></span>';
-      html += '<span>Proving time: <code>' + proofBundle.proving_time_ms.toLocaleString() + ' ms</code></span>';
+      html += '<span>Proof size: <code>' + sizeKB + ' KB</code></span>';
+      html += '<span>Proving time: <code>' + proveSec + 's</code></span>';
       html += '</div>';
       html += '<button class="proof-toggle">Show raw proof JSON</button>';
       html += '<div class="proof-raw" style="display:none">' + escHtml(JSON.stringify(proofBundle, null, 2)) + '</div>';
     }
-    html += '<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted)">Processed in ' + timeMs + ' ms</div>';
+    html += '<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted)">Processed in ' + (timeMs / 1000).toFixed(2) + 's</div>';
     html += '</div>';
     return html;
   }
@@ -1177,14 +1195,23 @@ async function signX402Payment(requirements) {
     });
   }
 
+  function parseSettlementHeader(response) {
+    // X-Payment-Response is base64-encoded JSON from the facilitator
+    var raw = response.headers.get('X-Payment-Response');
+    if (!raw) return null;
+    try { return JSON.parse(atob(raw)); } catch (e) { return null; }
+  }
+
   function handleResponse(r, paidViaX402) {
+    // Capture settlement info before consuming response body
+    var settlement = paidViaX402 ? parseSettlementHeader(r) : null;
     return safeJson(r).then(function(d) {
       if (!d) throw new Error('Server returned empty response (HTTP ' + r.status + ').');
       if (!r.ok || !d.success) throw new Error(d.error || 'Request failed (HTTP ' + r.status + ')');
       var html;
       if (d.evaluation) {
         var proof = d.evaluation.proof || null;
-        html = renderResult(d.evaluation, proof, d.processing_time_ms, paidViaX402);
+        html = renderResult(d.evaluation, proof, d.processing_time_ms, paidViaX402, settlement);
       } else {
         html = '<div class="try-error">Unexpected response format.</div>';
       }

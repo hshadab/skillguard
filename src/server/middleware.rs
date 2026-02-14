@@ -65,6 +65,83 @@ pub fn new_rate_limiter_cache() -> Mutex<LruCache<IpAddr, Arc<IpRateLimiter>>> {
 // Auth middleware
 // ---------------------------------------------------------------------------
 
+/// Response logging middleware that captures x402 settlement details.
+///
+/// This runs after the x402 middleware and logs the `X-Payment-Response` header
+/// from the facilitator settlement response for debugging and audit purposes.
+pub async fn x402_settlement_logger(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let method = request.method().clone();
+    let uri = request.uri().path().to_string();
+
+    let response = next.run(request).await;
+
+    if let Some(payment_response) = response.headers().get("X-Payment-Response") {
+        if let Ok(header_str) = payment_response.to_str() {
+            // Decode base64-encoded settlement JSON
+            match base64_decode_json(header_str) {
+                Some(settlement) => {
+                    let success = settlement.get("success").and_then(|v| v.as_bool());
+                    let tx = settlement
+                        .get("transaction")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("none");
+                    let network = settlement
+                        .get("network")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown");
+                    let payer = settlement
+                        .get("payer")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown");
+
+                    if success == Some(true) {
+                        tracing::info!(
+                            method = %method,
+                            uri = %uri,
+                            tx_hash = %tx,
+                            network = %network,
+                            payer = %payer,
+                            "x402 payment settled on-chain"
+                        );
+                    } else {
+                        let reason = settlement
+                            .get("error_reason")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown");
+                        tracing::warn!(
+                            method = %method,
+                            uri = %uri,
+                            network = %network,
+                            reason = %reason,
+                            "x402 settlement FAILED — facilitator returned error"
+                        );
+                    }
+                }
+                None => {
+                    tracing::warn!(
+                        method = %method,
+                        uri = %uri,
+                        raw_header = %header_str,
+                        "x402 payment response header could not be decoded"
+                    );
+                }
+            }
+        }
+    }
+
+    response
+}
+
+/// Decode a base64-encoded JSON string into a serde_json::Value.
+fn base64_decode_json(b64: &str) -> Option<serde_json::Value> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
 /// Bearer token authentication middleware.
 ///
 /// When both `api_key` and `pay_to` are configured:

@@ -179,6 +179,9 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
         api_routes
     };
 
+    // Log x402 settlement details on responses
+    let api_routes = api_routes.layer(axum_mw::from_fn(middleware::x402_settlement_logger));
+
     // CORS layer — allow any origin for public API access from browsers
     let cors = CorsLayer::new()
         .allow_origin(Any)
