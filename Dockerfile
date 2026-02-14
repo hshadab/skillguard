@@ -46,9 +46,9 @@ RUN mkdir -p src \
     && cargo build --release --bin skillguard || true \
     && rm -rf src
 
-# Copy real source and static assets
+# Copy Rust source only (NOT static/ — those are served from disk at runtime,
+# so changes to static files won't invalidate this expensive build layer)
 COPY src/ src/
-COPY static/ static/
 
 # Touch both lib.rs and main.rs to force cargo to recompile the crate
 # (the dummy-source step caches an empty lib; we must invalidate it)
@@ -80,6 +80,10 @@ COPY data/ /app/data/
 
 # Pre-generated Dory SRS file (avoids runtime generation which can OOM)
 COPY dory_srs_24_variables.srs /app/dory_srs_24_variables.srs
+
+# Copy static files last — changes here only rebuild from this layer onward,
+# so frontend edits deploy in seconds instead of triggering a full Rust recompile.
+COPY static/ /app/static/
 
 # Ensure cache directory exists and is writable by skillguard user
 RUN mkdir -p /var/data/skillguard-cache && chown -R skillguard:skillguard /app /var/data/skillguard-cache
