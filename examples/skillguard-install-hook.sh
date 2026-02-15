@@ -60,7 +60,7 @@ if [ -n "$SKILLGUARD_API_URL" ]; then
 
     SCAN_OUTPUT=$(curl "${CURL_ARGS[@]}" \
         -d "$REQUEST_BODY" \
-        "${SKILLGUARD_API_URL}/api/v1/evaluate/name") || {
+        "${SKILLGUARD_API_URL}/api/v1/evaluate") || {
         echo "WARNING: Failed to reach SkillGuard API. Proceeding with caution."
         exit 0
     }

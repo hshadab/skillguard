@@ -19,7 +19,7 @@ if (!PRIVATE_KEY) {
   process.exit(1);
 }
 
-const BASE_URL = process.env.SKILLGUARD_URL || "http://localhost:8402";
+const BASE_URL = process.env.SKILLGUARD_URL || "http://localhost:8080";
 const EVALUATE_URL = `${BASE_URL}/api/v1/evaluate`;
 
 // ── Wallet setup ───────────────────────────────────────────────────────────
@@ -85,7 +85,7 @@ try {
   }
 
   // Display result
-  const ev = data.basic_evaluation || data.evaluation;
+  const ev = data.evaluation;
   if (!ev) {
     console.error("Unexpected response format:", JSON.stringify(data, null, 2));
     process.exit(1);

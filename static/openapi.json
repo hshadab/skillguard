@@ -400,11 +400,10 @@
       },
       "EndpointStats": {
         "type": "object",
-        "required": ["evaluate", "evaluate_by_name", "prove", "verify", "stats"],
+        "required": ["evaluate", "evaluate_by_name", "verify", "stats"],
         "properties": {
           "evaluate": { "type": "integer" },
           "evaluate_by_name": { "type": "integer" },
-          "prove": { "type": "integer" },
           "verify": { "type": "integer" },
           "stats": { "type": "integer" }
         }

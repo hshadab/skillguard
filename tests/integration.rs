@@ -215,7 +215,6 @@ async fn stats_handler(
         endpoints: EndpointStats {
             evaluate: 0,
             evaluate_by_name: 0,
-            prove: 0,
             verify: 0,
             stats: 0,
         },

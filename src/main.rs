@@ -114,6 +114,7 @@ enum Commands {
     },
 }
 
+#[allow(clippy::too_many_arguments)]
 fn cmd_serve(
     bind: String,
     rate_limit: u32,

@@ -348,7 +348,6 @@ mod tests {
             endpoints: EndpointStats {
                 evaluate: 60,
                 evaluate_by_name: 35,
-                prove: 10,
                 verify: 5,
                 stats: 5,
             },

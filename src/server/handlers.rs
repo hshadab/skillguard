@@ -38,7 +38,7 @@ async fn classify_and_respond(
 
     // Check proof cache first (only if we have request bytes and a prover)
     if prover.is_some() {
-        if let Some(ref bytes) = request_bytes {
+        if let Some(bytes) = request_bytes {
             let cache_key = crate::cache::ProofCache::cache_key(bytes, &state.model_hash);
             if let Some(cached) = state.proof_cache.get(&cache_key) {
                 if let Some(ref eval) = cached.evaluation {
@@ -97,7 +97,7 @@ async fn classify_and_respond(
                 };
 
                 // Cache the successful proof response
-                if let Some(ref bytes) = request_bytes {
+                if let Some(bytes) = request_bytes {
                     let cache_key =
                         crate::cache::ProofCache::cache_key(bytes, &state.model_hash);
                     state.proof_cache.put(&cache_key, &response);
@@ -395,7 +395,6 @@ pub async fn stats_handler(
         endpoints: EndpointStats {
             evaluate: state.usage.ep_evaluate.load(Ordering::Relaxed),
             evaluate_by_name: state.usage.ep_evaluate_by_name.load(Ordering::Relaxed),
-            prove: state.usage.ep_prove.load(Ordering::Relaxed),
             verify: state.usage.ep_verify.load(Ordering::Relaxed),
             stats: state.usage.ep_stats.load(Ordering::Relaxed),
         },

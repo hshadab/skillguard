@@ -75,9 +75,6 @@ COPY --from=builder /build/target/release/skillguard /app/skillguard
 # Strip release binary to reduce image size
 RUN strip /app/skillguard
 
-# Copy data directory (registry)
-COPY data/ /app/data/
-
 # Pre-generated Dory SRS file (avoids runtime generation which can OOM)
 COPY dory_srs_24_variables.srs /app/dory_srs_24_variables.srs
 

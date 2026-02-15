@@ -30,7 +30,6 @@ pub struct UsageMetrics {
 
     pub ep_evaluate: AtomicU64,
     pub ep_evaluate_by_name: AtomicU64,
-    pub ep_prove: AtomicU64,
     pub ep_verify: AtomicU64,
     pub ep_stats: AtomicU64,
 
@@ -72,7 +71,6 @@ impl UsageMetrics {
             flag: AtomicU64::new(0),
             ep_evaluate: AtomicU64::new(0),
             ep_evaluate_by_name: AtomicU64::new(0),
-            ep_prove: AtomicU64::new(0),
             ep_verify: AtomicU64::new(0),
             ep_stats: AtomicU64::new(0),
             total_proofs_generated: AtomicU64::new(0),
@@ -188,7 +186,6 @@ impl UsageMetrics {
             "flag": self.flag.load(Ordering::Relaxed),
             "ep_evaluate": self.ep_evaluate.load(Ordering::Relaxed),
             "ep_evaluate_by_name": self.ep_evaluate_by_name.load(Ordering::Relaxed),
-            "ep_prove": self.ep_prove.load(Ordering::Relaxed),
             "ep_verify": self.ep_verify.load(Ordering::Relaxed),
             "ep_stats": self.ep_stats.load(Ordering::Relaxed),
             "total_proofs_generated": self.total_proofs_generated.load(Ordering::Relaxed),

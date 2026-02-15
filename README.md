@@ -12,7 +12,7 @@
 
 SkillGuard is a safety classifier for AI agent skills. It answers a simple question: **"Is this skill safe to install?"**
 
-AI agents on platforms like [OpenClaw](https://openclaw.org) can install community-created "skills" — small packages of code and instructions that give an agent new abilities (calling APIs, writing files, running scripts, etc.). Some skills might be malicious: they could steal credentials, open reverse shells, or trick the AI into leaking secrets.
+AI agents on platforms like [OpenClaw](https://openclaw.ai) can install community-created "skills" — small packages of code and instructions that give an agent new abilities (calling APIs, writing files, running scripts, etc.). Some skills might be malicious: they could steal credentials, open reverse shells, or trick the AI into leaking secrets.
 
 SkillGuard inspects each skill and classifies it as **SAFE**, **CAUTION**, **DANGEROUS**, or **MALICIOUS**. It then makes a decision: **ALLOW**, **FLAG**, or **DENY**.
 
@@ -168,7 +168,7 @@ The classifier extracts 22 features from each skill:
 |----------|-------------|---------|
 | `SKILLGUARD_API_KEY` | Bearer token for API authentication. If unset, all endpoints are open. | (none) |
 | `SKILLGUARD_PAY_TO` | Ethereum address to receive x402 USDC payments on Base. | (none) |
-| `SKILLGUARD_FACILITATOR_URL` | x402 facilitator URL. | `https://pay.openfacilitator.io` |
+| `SKILLGUARD_FACILITATOR_URL` | x402 facilitator URL. Production Render deployment overrides to `https://facilitator.x402.rs`. | `https://pay.openfacilitator.io` |
 | `SKILLGUARD_EXTERNAL_URL` | Public base URL (for x402 resource URLs behind TLS proxies). | (none) |
 | `SKILLGUARD_SKIP_PROVER` | Set to `1` to disable the ZKML prover. | `0` |
 | `RUST_LOG` | Log level filter. | `info` |
@@ -180,7 +180,7 @@ The classifier extracts 22 features from each skill:
 - [Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas) — ZKML proving stack
 - [Jolt](https://github.com/a16z/jolt) — SNARK VM by a16z
 - [x402 Protocol](https://www.x402.org/) — HTTP 402 payment protocol
-- [OpenClaw](https://openclaw.org) — Open framework for AI agent skills
+- [OpenClaw](https://openclaw.ai) — Open framework for AI agent skills
 - [ClawHub](https://clawhub.ai) — Registry for OpenClaw skills
 - [Novanet](https://novanet.xyz) — Verifiable inference network
 

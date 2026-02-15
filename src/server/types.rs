@@ -184,7 +184,6 @@ pub struct DecisionStats {
 pub struct EndpointStats {
     pub evaluate: u64,
     pub evaluate_by_name: u64,
-    pub prove: u64,
     pub verify: u64,
     pub stats: u64,
 }
