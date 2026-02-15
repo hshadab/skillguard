@@ -1158,6 +1158,9 @@ async function signX402Payment(requirements) {
 
 // Try It form logic
 (function() {
+  /* ── Track current skill source URL for linking in results ── */
+  var currentSkillUrl = null;
+
   /* ── Tab switching ── */
   var tabSearch = $('tab-search');
   var tabCustom = $('tab-custom');
@@ -1290,7 +1293,7 @@ async function signX402Payment(requirements) {
     return html;
   }
 
-  function renderResult(ev, proofBundle, timeMs, paidViaX402, settlement) {
+  function renderResult(ev, proofBundle, timeMs, paidViaX402, settlement, sourceUrl) {
     var cls = classColor(ev.classification);
     // Compute top-class probability from scores
     var topProb = 0;
@@ -1334,6 +1337,9 @@ async function signX402Payment(requirements) {
     if (ev.scores) html += renderScores(ev.scores);
     if (ev.reasoning) {
       html += '<div style="margin-top:10px;font-size:0.82rem;color:var(--text-secondary)"><strong>Reasoning:</strong> ' + escHtml(ev.reasoning) + '</div>';
+    }
+    if (sourceUrl) {
+      html += '<div style="margin-top:10px"><a href="' + escHtml(sourceUrl) + '" target="_blank" rel="noopener" style="font-size:0.82rem;color:var(--accent);text-decoration:none">View skill source on GitHub &#x2197;</a></div>';
     }
     if (proofBundle) {
       var sizeKB = (proofBundle.proof_size_bytes / 1024).toFixed(1);
@@ -1404,7 +1410,7 @@ async function signX402Payment(requirements) {
       var html;
       if (d.evaluation) {
         var proof = d.evaluation.proof;
-        html = renderResult(d.evaluation, proof, d.processing_time_ms, paidViaX402, settlement);
+        html = renderResult(d.evaluation, proof, d.processing_time_ms, paidViaX402, settlement, currentSkillUrl);
       } else {
         html = '<div class="try-error">Unexpected response format.</div>';
       }
@@ -1548,6 +1554,7 @@ async function signX402Payment(requirements) {
   /* ── Custom mode buttons ── */
   $('btn-classify').addEventListener('click', function() {
     if (!validateForm()) return;
+    currentSkillUrl = null;
     doRequest(CONFIG.evaluateEndpoint);
   });
 
@@ -1726,7 +1733,7 @@ async function signX402Payment(requirements) {
       var sk = filtered[k];
       html += '<div class="skill-result-item">' +
         '<div class="skill-result-info">' +
-          '<div class="skill-result-name">' + escHtml(sk.name) + '<span class="author">' + escHtml(sk.author) + '</span></div>' +
+          '<div class="skill-result-name"><a href="' + escHtml(sk.url) + '" target="_blank" rel="noopener" style="color:inherit;text-decoration:none" title="View source on GitHub">' + escHtml(sk.name) + ' <span style="font-size:0.7rem;color:var(--text-muted)">&#x2197;</span></a><span class="author">' + escHtml(sk.author) + '</span></div>' +
           (sk.description ? '<div class="skill-result-desc">' + escHtml(sk.description) + '</div>' : '') +
         '</div>' +
         '<div class="skill-result-meta">' +
@@ -1742,6 +1749,11 @@ async function signX402Payment(requirements) {
     for (var m = 0; m < btns.length; m++) {
       btns[m].addEventListener('click', function() {
         var slug = this.getAttribute('data-slug');
+        // Look up GitHub URL from skill index
+        currentSkillUrl = null;
+        for (var si = 0; si < skillIndex.length; si++) {
+          if (skillIndex[si].name === slug) { currentSkillUrl = skillIndex[si].url; break; }
+        }
         doRequest(CONFIG.evaluateEndpoint, { skill: slug });
       });
     }
@@ -1792,6 +1804,7 @@ async function signX402Payment(requirements) {
     }
 
     var rawUrl = githubUrlToRaw(fetchUrl);
+    currentSkillUrl = url;
 
     // Extract name and author from URL
     var stripped = url.replace(/^https?:\/\/github\.com\//, '');
