@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SkillGuard — Verified Agent Skill Analysis</title>
+<title>SkillGuard — Cryptographic Guardrails for Agent Skills</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -46,6 +46,41 @@ header h1 span { color: var(--accent); }
 header .subtitle { color: var(--text-secondary); margin-top: 8px; font-size: 0.92rem; line-height: 1.5; }
 header .subtitle a { color: var(--accent); text-decoration: none; }
 header .subtitle a:hover { text-decoration: underline; }
+header .tagline { color: var(--text-muted); margin-top: 6px; font-size: 0.8rem; letter-spacing: 0.03em; }
+header .tagline a { color: var(--accent); text-decoration: none; }
+header .tagline a:hover { text-decoration: underline; }
+
+/* How It Works */
+.how-it-works { margin-bottom: 20px; }
+.how-it-works .card-title { margin-bottom: 6px; }
+.how-intro {
+  color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; margin-bottom: 16px;
+}
+.how-intro strong { color: var(--text-primary); }
+.how-steps {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; position: relative;
+}
+.how-step {
+  text-align: center; padding: 12px 8px; position: relative;
+}
+.how-step-num {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--accent); color: #fff; font-size: 0.82rem; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; margin-bottom: 8px;
+}
+.how-step-title { font-size: 0.8rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+.how-step-desc { font-size: 0.72rem; color: var(--text-secondary); line-height: 1.45; }
+.how-step-arrow {
+  position: absolute; right: -8px; top: 22px; color: var(--text-muted); font-size: 1rem;
+}
+.how-step:last-child .how-step-arrow { display: none; }
+.how-cert {
+  margin-top: 14px; padding: 10px 14px;
+  background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2);
+  border-radius: var(--radius); font-size: 0.8rem; color: var(--text-secondary);
+  text-align: center; line-height: 1.5;
+}
+.how-cert strong { color: var(--text-primary); }
 .earnings-badge {
   position: absolute; right: 0; top: 50%; transform: translateY(-50%);
   background: var(--bg-card); border: 1px solid var(--border);
@@ -413,6 +448,11 @@ footer a:hover { text-decoration: underline; }
   .header-logo { height: 26px; }
   header h1 { font-size: 1.5rem; }
   header .subtitle { font-size: 0.82rem; }
+  header .tagline { font-size: 0.72rem; }
+  .how-steps { grid-template-columns: 1fr; gap: 0; }
+  .how-step { text-align: left; padding: 8px 0 8px 44px; position: relative; }
+  .how-step-num { position: absolute; left: 0; top: 8px; }
+  .how-step-arrow { display: none; }
   .x402-grid { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .try-form .row { flex-direction: column; gap: 12px; }
@@ -440,8 +480,10 @@ footer a:hover { text-decoration: underline; }
       <h1><span>Skill</span>Guard</h1>
     </div>
     <div class="subtitle">
-      Cryptographically verified agent skill analysis guardrails<br>
-      Available via x402 and powered by <a href="https://github.com/ICME-Lab/jolt-atlas" target="_blank" rel="noopener">Jolt Atlas</a> zero-knowledge machine learning
+      Cryptographic guardrails for agent skills. <strong style="color:var(--malicious)">Don't trust.</strong> Verify.
+    </div>
+    <div class="tagline">
+      Powered by <a href="https://github.com/ICME-Lab/jolt-atlas" target="_blank" rel="noopener">Jolt Atlas</a> zkML &middot; Paid via <a href="https://www.x402.org/" target="_blank" rel="noopener">x402</a> on Base
     </div>
     <div class="earnings-badge" id="earnings-badge" style="display:none">
       <div class="earnings-label">Earnings to Date</div>
@@ -449,6 +491,51 @@ footer a:hover { text-decoration: underline; }
       <div class="earnings-addr" id="earnings-addr"></div>
     </div>
   </header>
+
+  <!-- How It Works -->
+  <div class="card how-it-works">
+    <div class="card-title">How It Works</div>
+    <div class="how-intro">
+      Before an agent can transact, it installs skills — packages of code that give it new abilities.
+      This is the <strong>agent skill supply chain</strong>. If a malicious skill enters the supply chain,
+      every downstream action is compromised: stolen credentials, exfiltrated data, unauthorized transactions.
+      SkillGuard is the cryptographic checkpoint at the boundary.
+    </div>
+    <div class="how-steps">
+      <div class="how-step">
+        <div class="how-step-num">1</div>
+        <div class="how-step-title">Skill submitted</div>
+        <div class="how-step-desc">Developer publishes a skill to ClawHub, or submits data directly via API</div>
+        <span class="how-step-arrow">&rarr;</span>
+      </div>
+      <div class="how-step">
+        <div class="how-step-num">2</div>
+        <div class="how-step-title">Features extracted</div>
+        <div class="how-step-desc">22 security signals analyzed: shell exec, reverse shells, credential access, obfuscation, exfiltration</div>
+        <span class="how-step-arrow">&rarr;</span>
+      </div>
+      <div class="how-step">
+        <div class="how-step-num">3</div>
+        <div class="how-step-title">Classified with proof</div>
+        <div class="how-step-desc">Neural network classifies the skill. Jolt Atlas generates a ~53 KB SNARK proof of the computation</div>
+        <span class="how-step-arrow">&rarr;</span>
+      </div>
+      <div class="how-step">
+        <div class="how-step-num">4</div>
+        <div class="how-step-title">Anyone verifies</div>
+        <div class="how-step-desc">The proof can be independently verified in milliseconds — no trust in SkillGuard required</div>
+        <span class="how-step-arrow">&rarr;</span>
+      </div>
+      <div class="how-step">
+        <div class="how-step-num">5</div>
+        <div class="how-step-title">Decision enforced</div>
+        <div class="how-step-desc">ALLOW, FLAG, or DENY. The proof becomes a tamperproof safety certificate for the skill</div>
+      </div>
+    </div>
+    <div class="how-cert">
+      Like an SSL certificate for agent skills: every classification comes with a cryptographic proof that the safety decision was computed correctly. Anyone can verify. No one can forge.
+    </div>
+  </div>
 
   <!-- Server Status -->
   <div class="card">
