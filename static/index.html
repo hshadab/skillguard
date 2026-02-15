@@ -50,9 +50,18 @@ header .tagline { color: var(--text-muted); margin-top: 6px; font-size: 0.8rem; 
 header .tagline a { color: var(--accent); text-decoration: none; }
 header .tagline a:hover { text-decoration: underline; }
 
-/* How It Works */
+/* How It Works (collapsible) */
 .how-it-works { margin-bottom: 20px; }
-.how-it-works .card-title { margin-bottom: 6px; }
+.how-it-works summary {
+  cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px;
+}
+.how-it-works summary::-webkit-details-marker { display: none; }
+.how-it-works summary .card-title { margin-bottom: 0; }
+.how-it-works summary .toggle-icon {
+  font-size: 0.7rem; color: var(--text-muted); transition: transform 0.2s;
+}
+.how-it-works[open] summary .toggle-icon { transform: rotate(90deg); }
+.how-it-works .how-body { padding-top: 14px; }
 .how-intro {
   color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; margin-bottom: 16px;
 }
@@ -480,7 +489,7 @@ footer a:hover { text-decoration: underline; }
       <h1><span>Skill</span>Guard</h1>
     </div>
     <div class="subtitle">
-      Cryptographic guardrails for agent skills. <strong style="color:var(--malicious)">Don't trust.</strong> Verify.
+      Cryptographic safety certificates for <a href="https://openclaw.org" target="_blank" rel="noopener">OpenClaw</a> agent skills. Anyone can verify. No one can forge.
     </div>
     <div class="tagline">
       Powered by <a href="https://github.com/ICME-Lab/jolt-atlas" target="_blank" rel="noopener">Jolt Atlas</a> zkML &middot; Paid via <a href="https://www.x402.org/" target="_blank" rel="noopener">x402</a> on Base
@@ -492,50 +501,55 @@ footer a:hover { text-decoration: underline; }
     </div>
   </header>
 
-  <!-- How It Works -->
-  <div class="card how-it-works">
-    <div class="card-title">How It Works</div>
-    <div class="how-intro">
-      Before an agent can transact, it installs skills — packages of code that give it new abilities.
-      This is the <strong>agent skill supply chain</strong>. If a malicious skill enters the supply chain,
-      every downstream action is compromised: stolen credentials, exfiltrated data, unauthorized transactions.
-      SkillGuard is the cryptographic checkpoint at the boundary.
+  <!-- How It Works (collapsible) -->
+  <details class="card how-it-works">
+    <summary>
+      <span class="toggle-icon">&#9654;</span>
+      <span class="card-title">How It Works</span>
+    </summary>
+    <div class="how-body">
+      <div class="how-intro">
+        Before an agent can transact, it installs skills — packages of code that give it new abilities.
+        This is the <strong>agent skill supply chain</strong>. If a malicious skill enters the supply chain,
+        every downstream action is compromised: stolen credentials, exfiltrated data, unauthorized transactions.
+        SkillGuard is the cryptographic checkpoint at the boundary.
+      </div>
+      <div class="how-steps">
+        <div class="how-step">
+          <div class="how-step-num">1</div>
+          <div class="how-step-title">Skill submitted</div>
+          <div class="how-step-desc">Developer publishes a skill to ClawHub, or submits data directly via API</div>
+          <span class="how-step-arrow">&rarr;</span>
+        </div>
+        <div class="how-step">
+          <div class="how-step-num">2</div>
+          <div class="how-step-title">Features extracted</div>
+          <div class="how-step-desc">22 security signals analyzed: shell exec, reverse shells, credential access, obfuscation, exfiltration</div>
+          <span class="how-step-arrow">&rarr;</span>
+        </div>
+        <div class="how-step">
+          <div class="how-step-num">3</div>
+          <div class="how-step-title">Classified with proof</div>
+          <div class="how-step-desc">Neural network classifies the skill. Jolt Atlas generates a ~53 KB SNARK proof of the computation</div>
+          <span class="how-step-arrow">&rarr;</span>
+        </div>
+        <div class="how-step">
+          <div class="how-step-num">4</div>
+          <div class="how-step-title">Anyone verifies</div>
+          <div class="how-step-desc">The proof can be independently verified in milliseconds — no trust in SkillGuard required</div>
+          <span class="how-step-arrow">&rarr;</span>
+        </div>
+        <div class="how-step">
+          <div class="how-step-num">5</div>
+          <div class="how-step-title">Decision enforced</div>
+          <div class="how-step-desc">ALLOW, FLAG, or DENY. The proof becomes a tamperproof safety certificate for the skill</div>
+        </div>
+      </div>
+      <div class="how-cert">
+        Every classification is backed by a <strong>zero-knowledge proof</strong> — a cryptographic receipt that the neural network ran correctly on the claimed inputs. The proof reveals the decision but not the model weights. Verification takes milliseconds, on any hardware.
+      </div>
     </div>
-    <div class="how-steps">
-      <div class="how-step">
-        <div class="how-step-num">1</div>
-        <div class="how-step-title">Skill submitted</div>
-        <div class="how-step-desc">Developer publishes a skill to ClawHub, or submits data directly via API</div>
-        <span class="how-step-arrow">&rarr;</span>
-      </div>
-      <div class="how-step">
-        <div class="how-step-num">2</div>
-        <div class="how-step-title">Features extracted</div>
-        <div class="how-step-desc">22 security signals analyzed: shell exec, reverse shells, credential access, obfuscation, exfiltration</div>
-        <span class="how-step-arrow">&rarr;</span>
-      </div>
-      <div class="how-step">
-        <div class="how-step-num">3</div>
-        <div class="how-step-title">Classified with proof</div>
-        <div class="how-step-desc">Neural network classifies the skill. Jolt Atlas generates a ~53 KB SNARK proof of the computation</div>
-        <span class="how-step-arrow">&rarr;</span>
-      </div>
-      <div class="how-step">
-        <div class="how-step-num">4</div>
-        <div class="how-step-title">Anyone verifies</div>
-        <div class="how-step-desc">The proof can be independently verified in milliseconds — no trust in SkillGuard required</div>
-        <span class="how-step-arrow">&rarr;</span>
-      </div>
-      <div class="how-step">
-        <div class="how-step-num">5</div>
-        <div class="how-step-title">Decision enforced</div>
-        <div class="how-step-desc">ALLOW, FLAG, or DENY. The proof becomes a tamperproof safety certificate for the skill</div>
-      </div>
-    </div>
-    <div class="how-cert">
-      Like an SSL certificate for agent skills: every classification comes with a cryptographic proof that the safety decision was computed correctly. Anyone can verify. No one can forge.
-    </div>
-  </div>
+  </details>
 
   <!-- Server Status -->
   <div class="card">
