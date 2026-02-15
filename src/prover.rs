@@ -84,7 +84,7 @@ impl ProverState {
     ///
     /// Returns the proof bundle and the raw model output (4 scores).
     pub fn prove_inference(&self, features: &[i32]) -> Result<(ProofBundle, [i32; 4])> {
-        let input = Tensor::new(Some(features), &[1, 22])
+        let input = Tensor::new(Some(features), &[1, 28])
             .map_err(|e| eyre::eyre!("Tensor error: {:?}", e))?;
 
         let start = Instant::now();
@@ -189,7 +189,7 @@ mod tests {
         let state = ProverState::initialize().unwrap();
 
         // Safe skill features
-        let mut features = vec![0i32; 22];
+        let mut features = vec![0i32; 28];
         features[16] = 100; // downloads
 
         let (bundle, raw_scores) = state.prove_inference(&features).unwrap();
@@ -208,7 +208,7 @@ mod tests {
     fn test_tampered_proof_fails() {
         let state = ProverState::initialize().unwrap();
 
-        let features = vec![0i32; 22];
+        let features = vec![0i32; 28];
         let (mut bundle, _) = state.prove_inference(&features).unwrap();
 
         // Tamper with the proof by flipping a byte

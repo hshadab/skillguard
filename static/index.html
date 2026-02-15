@@ -524,7 +524,7 @@ footer a:hover { text-decoration: underline; }
         <div class="how-step">
           <div class="how-step-num">2</div>
           <div class="how-step-title">Features extracted</div>
-          <div class="how-step-desc">22 security signals analyzed: shell exec, reverse shells, credential access, obfuscation, exfiltration</div>
+          <div class="how-step-desc">28 security signals analyzed: shell exec, reverse shells, credential access, obfuscation, entropy, exfiltration</div>
           <span class="how-step-arrow">&rarr;</span>
         </div>
         <div class="how-step">
@@ -676,7 +676,7 @@ This skill fetches current weather data from a public API and returns a friendly
       </div>
       <div class="x402-item">
         <div class="x402-label">Model Size</div>
-        <div class="x402-value">1,924 params (22-32-32-4)</div>
+        <div class="x402-value">2,116 params (28-32-32-4)</div>
       </div>
       <div class="x402-item">
         <div class="x402-label">Proofs Generated</div>
@@ -791,7 +791,7 @@ function checkHealth() {
       $('status-text').textContent = 'Online';
       var uptime = formatUptime(d.uptime_seconds);
       var hash = d.model_hash.length > 20 ? d.model_hash.slice(0, 20) + '...' : d.model_hash;
-      var zkml = d.zkml_enabled ? 'ZKML: On' : 'ZKML: Off';
+      var zkml = d.zkml_enabled ? 'ZKML: Ready' : 'ZKML: Initializing';
       $('status-meta').innerHTML =
         '<span>Version: <code>' + escHtml(d.version) + '</code></span>' +
         '<span>Model: <code>' + escHtml(hash) + '</code></span>' +
@@ -1365,7 +1365,7 @@ async function signX402Payment(requirements) {
       if (!r.ok || !d.success) throw new Error(d.error || 'Request failed (HTTP ' + r.status + ')');
       var html;
       if (d.evaluation) {
-        var proof = d.evaluation.proof || null;
+        var proof = d.evaluation.proof;
         html = renderResult(d.evaluation, proof, d.processing_time_ms, paidViaX402, settlement);
       } else {
         html = '<div class="try-error">Unexpected response format.</div>';

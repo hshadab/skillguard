@@ -93,7 +93,7 @@ pub struct EvaluateByNameRequest {
     pub version: Option<String>,
 }
 
-/// Evaluation result with optional ZK proof.
+/// Evaluation result with ZK proof.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProvedEvaluationResult {
     pub skill_name: String,
@@ -102,9 +102,8 @@ pub struct ProvedEvaluationResult {
     pub confidence: f64,
     pub scores: ClassScores,
     pub reasoning: String,
-    /// ZK proof bundle (present when prover is available).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub proof: Option<crate::prover::ProofBundle>,
+    /// ZK proof bundle — every classification includes a cryptographic proof.
+    pub proof: crate::prover::ProofBundle,
 }
 
 /// Request to verify a proof.

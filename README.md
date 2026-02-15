@@ -20,9 +20,9 @@ What makes SkillGuard different from a regular classifier is that every classifi
 
 ### How It Works
 
-1. **Feature extraction** — SkillGuard reads the skill's documentation, scripts, and metadata, then extracts 22 numeric features that capture security-relevant signals (shell execution calls, reverse shell patterns, credential access, obfuscation techniques, author reputation, download counts, etc.).
+1. **Feature extraction** — SkillGuard reads the skill's documentation, scripts, and metadata, then extracts 28 numeric features that capture security-relevant signals (shell execution calls, reverse shell patterns, credential access, obfuscation techniques, entropy analysis, author reputation, download counts, etc.).
 
-2. **Neural network classification** — The 22 features feed into a small neural network (3-layer MLP, 1,924 parameters) that outputs probabilities for each safety class. All arithmetic uses fixed-point integers so the computation is deterministic and provable.
+2. **Neural network classification** — The 28 features feed into a small neural network (3-layer MLP, 2,116 parameters) that outputs probabilities for each safety class. All arithmetic uses fixed-point integers so the computation is deterministic and provable.
 
 3. **Zero-knowledge machine learning proof** — The entire neural network forward pass runs inside a SNARK virtual machine ([Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas)). This produces a ~53 KB cryptographic proof that the classification was computed correctly. The proof reveals the inputs and outputs but not the model weights.
 
@@ -59,7 +59,7 @@ SKILLGUARD_PAY_TO=0xYourBaseWallet ./target/release/skillguard serve --bind 0.0.
 
 ### Classify a Skill
 
-There is a single endpoint that handles all classifications. It automatically generates a zkML proof when the prover is ready.
+There is a single endpoint that handles all classifications. Every response includes a zkML proof.
 
 **By name** (fetches from [ClawHub](https://clawhub.ai)):
 ```bash
@@ -106,7 +106,7 @@ skillguard check --input SKILL.md --prove --format json
 
 | Method | Path | Auth | Price | Description |
 |--------|------|------|-------|-------------|
-| POST | `/api/v1/evaluate` | API key or x402 | $0.001 USDC | Classify a skill (auto-detects name lookup vs full data, includes zkML proof when prover is ready) |
+| POST | `/api/v1/evaluate` | API key or x402 | $0.001 USDC | Classify a skill with mandatory zkML proof (auto-detects name lookup vs full data) |
 | POST | `/api/v1/verify` | None | Free | Verify a zkML proof |
 | GET | `/health` | None | Free | Health check (includes `zkml_enabled`, `pay_to`) |
 | GET | `/stats` | None | Free | Usage statistics and proof counts |
@@ -117,7 +117,7 @@ The `/api/v1/evaluate` endpoint accepts two request formats:
 - **Name lookup:** `{"skill": "skill-slug"}` — fetches skill data from ClawHub, then classifies
 - **Full skill data:** `{"skill": {"name": "...", "version": "...", ...}}` — classifies directly
 
-Both formats return the same response with classification, confidence, scores, reasoning, and an optional zkML proof bundle.
+Both formats return the same response with classification, confidence, scores, reasoning, and a zkML proof bundle. The proof is mandatory — if the prover is still initializing, the endpoint returns an error until it is ready.
 
 ---
 
@@ -125,7 +125,7 @@ Both formats return the same response with classification, confidence, scores, r
 
 | Component | Details |
 |-----------|---------|
-| Model | 3-layer MLP: 22 inputs, 2x32 hidden (ReLU), 4 outputs. 1,924 parameters. Fixed-point integer arithmetic. |
+| Model | 3-layer MLP: 28 inputs, 2x32 hidden (ReLU), 4 outputs. 2,116 parameters. Fixed-point integer arithmetic. |
 | Proving | [Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas) SNARK with Dory commitment (BN254 curve). ~53 KB proofs, ~4s proving time. |
 | Payment | [x402](https://www.x402.org/) HTTP 402 protocol. $0.001 USDC on Base. [OpenFacilitator](https://openfacilitator.io). |
 | Server | Axum async HTTP. LRU per-IP rate limiting (IPv6 /64 aggregation), constant-time API key auth, CORS, graceful shutdown, JSONL access logging. |
@@ -133,20 +133,20 @@ Both formats return the same response with classification, confidence, scores, r
 
 ### Feature List
 
-The classifier extracts 22 features from each skill:
+The classifier extracts 28 features from each skill:
 
 | # | Feature | What It Measures |
 |---|---------|-----------------|
-| 1 | `shell_exec_count` | Shell/process execution calls (exec, spawn, subprocess) |
-| 2 | `network_call_count` | HTTP/network requests (fetch, curl, wget, axios) |
+| 1 | `shell_exec_count` | Shell/process execution calls (exec, spawn, subprocess, Process.Start, Runtime.exec, etc.) |
+| 2 | `network_call_count` | HTTP/network requests (fetch, curl, wget, axios, reqwest, aiohttp, httpx) |
 | 3 | `fs_write_count` | File system writes (writeFile, `>`, `>>`) |
 | 4 | `env_access_count` | Environment variable access (process.env, os.environ) |
 | 5 | `credential_patterns` | Mentions of API keys, passwords, secrets, tokens |
 | 6 | `external_download` | Downloads executables or archives from URLs |
-| 7 | `obfuscation_score` | Obfuscation techniques (eval, atob, base64, new Function) |
+| 7 | `obfuscation_score` | Obfuscation techniques (eval, atob, base64, String.fromCharCode, marshal.loads) |
 | 8 | `privilege_escalation` | Sudo, chmod 777, chown root |
-| 9 | `persistence_mechanisms` | Crontab, systemd, launchd, autostart entries |
-| 10 | `data_exfiltration_patterns` | POST/PUT to external URLs, webhooks |
+| 9 | `persistence_mechanisms` | Crontab, systemd, launchd, autostart, registry Run keys, init.d |
+| 10 | `data_exfiltration_patterns` | POST/PUT to external URLs, webhooks, DNS exfil, netcat piping |
 | 11 | `skill_md_line_count` | Lines of documentation |
 | 12 | `script_file_count` | Number of script files |
 | 13 | `dependency_count` | Package install / import statements |
@@ -157,8 +157,14 @@ The classifier extracts 22 features from each skill:
 | 18 | `has_virustotal_report` | Whether a VirusTotal report was provided |
 | 19 | `vt_malicious_flags` | Combined VirusTotal malicious + suspicious flags |
 | 20 | `password_protected_archives` | Bundled password-protected zip/rar/7z files |
-| 21 | `reverse_shell_patterns` | Reverse shell patterns (nc -e, socat, /dev/tcp/) |
-| 22 | `llm_secret_exposure` | Instructions that trick the AI into leaking secrets |
+| 21 | `reverse_shell_patterns` | Reverse shell patterns (nc -e, socat, /dev/tcp/, pty.spawn, ruby -rsocket) |
+| 22 | `llm_secret_exposure` | Instructions that trick the AI into leaking secrets or prompt injection |
+| 23 | `entropy_score` | Shannon entropy of script bytes (high = encrypted/encoded) |
+| 24 | `non_ascii_ratio` | Ratio of non-ASCII bytes (catches homoglyphs, encoded payloads) |
+| 25 | `max_line_length` | Longest script line (long = minified/obfuscated) |
+| 26 | `comment_ratio` | Comment lines / total lines (malware rarely has comments) |
+| 27 | `domain_count` | Unique external domains referenced |
+| 28 | `string_obfuscation_score` | Hex escapes + join() + chr() pattern counts |
 
 ---
 

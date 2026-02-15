@@ -83,7 +83,7 @@
       "post": {
         "operationId": "evaluateSkill",
         "summary": "Classify a skill",
-        "description": "Single endpoint for all skill classifications. Accepts two request formats:\n\n1. **Name lookup:** `{\"skill\": \"skill-slug\"}` — fetches skill data from ClawHub, then classifies.\n2. **Full skill data:** `{\"skill\": {\"name\": \"...\", ...}}` — classifies the provided skill directly.\n\nBoth formats return the same response. A zkML proof is automatically included when the prover is ready.",
+        "description": "Single endpoint for all skill classifications. Every response includes a mandatory zkML proof.\n\nAccepts two request formats:\n\n1. **Name lookup:** `{\"skill\": \"skill-slug\"}` — fetches skill data from ClawHub, then classifies.\n2. **Full skill data:** `{\"skill\": {\"name\": \"...\", ...}}` — classifies the provided skill directly.\n\nBoth formats return the same response with classification, scores, reasoning, and a zkML proof bundle. If the prover is still initializing, the endpoint returns an error until it is ready.",
         "x-x402-pricing": {
           "amount": "0.001",
           "currency": "USDC",
@@ -130,7 +130,7 @@
         },
         "responses": {
           "200": {
-            "description": "Classification result with optional zkML proof",
+            "description": "Classification result with zkML proof",
             "content": {
               "application/json": {
                 "schema": {
@@ -297,8 +297,8 @@
       },
       "EvaluationResult": {
         "type": "object",
-        "description": "Classification result with optional zkML proof.",
-        "required": ["skill_name", "classification", "decision", "confidence", "scores", "reasoning"],
+        "description": "Classification result with mandatory zkML proof.",
+        "required": ["skill_name", "classification", "decision", "confidence", "scores", "reasoning", "proof"],
         "properties": {
           "skill_name": { "type": "string" },
           "classification": { "type": "string", "enum": ["SAFE", "CAUTION", "DANGEROUS", "MALICIOUS"] },
@@ -307,11 +307,8 @@
           "scores": { "$ref": "#/components/schemas/ClassScores" },
           "reasoning": { "type": "string" },
           "proof": {
-            "oneOf": [
-              { "$ref": "#/components/schemas/ProofBundle" },
-              { "type": "null" }
-            ],
-            "description": "zkML proof bundle. Present when the prover is ready; null or omitted otherwise."
+            "$ref": "#/components/schemas/ProofBundle",
+            "description": "zkML proof bundle — every successful classification includes a cryptographic proof."
           }
         }
       },

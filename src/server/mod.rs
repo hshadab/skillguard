@@ -1,6 +1,6 @@
 //! HTTP server for the SkillGuard ZKML classifier service.
 //!
-//! Provides REST API endpoints for skill safety evaluation with optional
+//! Provides REST API endpoints for skill safety evaluation with mandatory
 //! ZKML proof generation via Jolt Atlas.
 //!
 //! Features:
@@ -111,7 +111,7 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
     let state = Arc::new(ServerState::new(config));
 
     // Single evaluate endpoint — auto-detects name lookup vs full skill data.
-    // All classifications automatically generate ZK proofs when the prover is ready.
+    // Every classification includes a mandatory ZK proof.
     let api_routes = Router::new()
         .route("/api/v1/evaluate", post(handlers::evaluate_handler))
         .layer(axum_mw::from_fn_with_state(
@@ -256,16 +256,16 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
                 }
                 Ok(Ok(Err(e))) => {
                     warn!(
-                        "ZKML prover initialization failed: {}. Prove endpoints disabled.",
+                        "ZKML prover initialization failed: {}. Evaluate endpoint will return errors until prover is available.",
                         e
                     );
                 }
                 Ok(Err(_)) => {
-                    warn!("ZKML prover initialization panicked. Prove endpoints disabled.");
+                    warn!("ZKML prover initialization panicked. Evaluate endpoint will return errors until prover is available.");
                 }
                 Err(e) => {
                     warn!(
-                        "ZKML prover init task failed: {}. Prove endpoints disabled.",
+                        "ZKML prover init task failed: {}. Evaluate endpoint will return errors until prover is available.",
                         e
                     );
                 }

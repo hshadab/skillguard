@@ -27,8 +27,8 @@ The following techniques may bypass SkillGuard's detection:
 
 - **Regex-based**: Feature extraction uses regex patterns, which cannot understand program semantics. Obfuscation that breaks regex matching will evade detection.
 - **Static analysis only**: SkillGuard does not execute skills. Behavior that only manifests at runtime is not detected.
-- **Fixed feature set**: The classifier uses 22 features. Attack vectors outside these dimensions produce no signal.
-- **Model accuracy**: ~90% decision accuracy on the validation set. Approximately 1 in 10 skills may receive an incorrect decision.
+- **Fixed feature set**: The classifier uses 28 features. Attack vectors outside these dimensions produce no signal.
+- **Model accuracy**: 100% decision accuracy on the synthetic validation set. Real-world accuracy may vary.
 
 ### What SkillGuard Does Detect
 

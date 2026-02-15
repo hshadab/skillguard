@@ -1,7 +1,8 @@
 //! HTTP endpoint handler functions.
 //!
-//! All classification endpoints automatically generate ZK proofs when the
-//! prover is available, returning a unified `ProveEvaluateResponse`.
+//! Every classification request generates a mandatory ZK proof. If the prover
+//! is not yet initialized or proving fails, the endpoint returns an error
+//! rather than an unproved classification.
 
 use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
@@ -21,8 +22,11 @@ pub const MAX_BODY_BYTES: usize = 1024 * 1024;
 // Shared classification + proving logic
 // ---------------------------------------------------------------------------
 
-/// Classify a skill and generate a ZK proof when the prover is available.
-/// Always returns a `ProveEvaluateResponse` with an optional proof bundle.
+/// Classify a skill and generate a ZK proof.
+///
+/// The prover is mandatory — if it is not yet initialized or proving fails,
+/// the endpoint returns `success: false` with an error message instead of
+/// falling back to an unproved classification.
 async fn classify_and_respond(
     state: &Arc<ServerState>,
     features: SkillFeatures,
@@ -33,142 +37,106 @@ async fn classify_and_respond(
 ) -> ProveEvaluateResponse {
     let feature_vec = features.to_normalized_vec();
 
-    // Try to generate a proof if the prover is available
-    let prover = state.get_prover();
-
-    // Check proof cache first (only if we have request bytes and a prover)
-    if prover.is_some() {
-        if let Some(bytes) = request_bytes {
-            let cache_key = crate::cache::ProofCache::cache_key(bytes, &state.model_hash);
-            if let Some(cached) = state.proof_cache.get(&cache_key) {
-                if let Some(ref eval) = cached.evaluation {
-                    let cls = crate::skill::SafetyClassification::parse_str(&eval.classification);
-                    let dec = crate::skill::SafetyDecision::parse_str(&eval.decision);
-                    state
-                        .usage
-                        .record(endpoint, &eval.skill_name, cls, dec, eval.confidence, 0);
-                }
-                return cached;
-            }
-        }
-    }
-
-    if let Some(prover) = prover {
-        // Clone feature_vec for the blocking task; keep original for fallback
-        let fv_for_proof = feature_vec.clone();
-        let prove_result = tokio::task::spawn_blocking(move || {
-            crate::classify_with_proof(&prover, &fv_for_proof)
-        })
-        .await;
-
-        match prove_result {
-            Ok(Ok((classification, raw_scores, confidence, proof_bundle))) => {
-                let scores = ClassScores::from_raw_scores(&raw_scores);
-                let (decision, reasoning) =
-                    derive_decision(classification, &scores.to_array());
-                let processing_time_ms = start.elapsed().as_millis() as u64;
-
-                state.usage.record(
-                    endpoint,
-                    &skill_name,
-                    classification,
-                    decision,
-                    confidence,
-                    processing_time_ms,
-                );
-                state
-                    .usage
-                    .total_proofs_generated
-                    .fetch_add(1, Ordering::Relaxed);
-
-                let response = ProveEvaluateResponse {
-                    success: true,
-                    error: None,
-                    evaluation: Some(ProvedEvaluationResult {
-                        skill_name,
-                        classification: classification.as_str().to_string(),
-                        decision: decision.as_str().to_string(),
-                        confidence,
-                        scores,
-                        reasoning,
-                        proof: Some(proof_bundle),
-                    }),
-                    processing_time_ms,
-                };
-
-                // Cache the successful proof response
-                if let Some(bytes) = request_bytes {
-                    let cache_key =
-                        crate::cache::ProofCache::cache_key(bytes, &state.model_hash);
-                    state.proof_cache.put(&cache_key, &response);
-                }
-
-                response
-            }
-            Ok(Err(e)) => {
-                // Proving failed — fall back to classification without proof
-                tracing::warn!("Proof generation failed, returning classification only: {}", e);
-                classify_without_proof(state, &feature_vec, skill_name, start, endpoint)
-            }
-            Err(e) => {
-                tracing::warn!("Proving task panicked, returning classification only: {}", e);
-                classify_without_proof(state, &feature_vec, skill_name, start, endpoint)
-            }
-        }
-    } else {
-        // No prover available — classify without proof
-        classify_without_proof(state, &feature_vec, skill_name, start, endpoint)
-    }
-}
-
-/// Classify without proof (fallback when prover is unavailable).
-fn classify_without_proof(
-    state: &Arc<ServerState>,
-    feature_vec: &[i32],
-    skill_name: String,
-    start: Instant,
-    endpoint: &str,
-) -> ProveEvaluateResponse {
-    let result = match crate::classify(feature_vec) {
-        Ok(r) => r,
-        Err(e) => {
+    let prover = match state.get_prover() {
+        Some(p) => p,
+        None => {
             state.usage.record_error();
             return ProveEvaluateResponse {
                 success: false,
-                error: Some(format!("Classification failed: {}", e)),
+                error: Some(
+                    "ZKML prover is still initializing. Please retry in a few seconds.".into(),
+                ),
                 evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
             };
         }
     };
 
-    let (classification, raw_scores, confidence) = result;
-    let scores = ClassScores::from_raw_scores(&raw_scores);
-    let (decision, reasoning) = derive_decision(classification, &scores.to_array());
-    let processing_time_ms = start.elapsed().as_millis() as u64;
+    // Check proof cache first
+    if let Some(bytes) = request_bytes {
+        let cache_key = crate::cache::ProofCache::cache_key(bytes, &state.model_hash);
+        if let Some(cached) = state.proof_cache.get(&cache_key) {
+            if let Some(ref eval) = cached.evaluation {
+                let cls = crate::skill::SafetyClassification::parse_str(&eval.classification);
+                let dec = crate::skill::SafetyDecision::parse_str(&eval.decision);
+                state
+                    .usage
+                    .record(endpoint, &eval.skill_name, cls, dec, eval.confidence, 0);
+            }
+            return cached;
+        }
+    }
 
-    state.usage.record(
-        endpoint,
-        &skill_name,
-        classification,
-        decision,
-        confidence,
-        processing_time_ms,
-    );
+    let fv_for_proof = feature_vec.clone();
+    let prove_result = tokio::task::spawn_blocking(move || {
+        crate::classify_with_proof(&prover, &fv_for_proof)
+    })
+    .await;
 
-    ProveEvaluateResponse {
-        success: true,
-        error: None,
-        evaluation: Some(ProvedEvaluationResult {
-            skill_name,
-            classification: classification.as_str().to_string(),
-            decision: decision.as_str().to_string(),
-            confidence,
-            scores,
-            reasoning,
-            proof: None,
-        }),
-        processing_time_ms,
+    match prove_result {
+        Ok(Ok((classification, raw_scores, confidence, proof_bundle))) => {
+            let scores = ClassScores::from_raw_scores(&raw_scores);
+            let (decision, reasoning) =
+                derive_decision(classification, &scores.to_array());
+            let processing_time_ms = start.elapsed().as_millis() as u64;
+
+            state.usage.record(
+                endpoint,
+                &skill_name,
+                classification,
+                decision,
+                confidence,
+                processing_time_ms,
+            );
+            state
+                .usage
+                .total_proofs_generated
+                .fetch_add(1, Ordering::Relaxed);
+
+            let response = ProveEvaluateResponse {
+                success: true,
+                error: None,
+                evaluation: Some(ProvedEvaluationResult {
+                    skill_name,
+                    classification: classification.as_str().to_string(),
+                    decision: decision.as_str().to_string(),
+                    confidence,
+                    scores,
+                    reasoning,
+                    proof: proof_bundle,
+                }),
+                processing_time_ms,
+            };
+
+            // Cache the successful proof response
+            if let Some(bytes) = request_bytes {
+                let cache_key =
+                    crate::cache::ProofCache::cache_key(bytes, &state.model_hash);
+                state.proof_cache.put(&cache_key, &response);
+            }
+
+            response
+        }
+        Ok(Err(e)) => {
+            tracing::error!("Proof generation failed: {}", e);
+            state.usage.record_error();
+            ProveEvaluateResponse {
+                success: false,
+                error: Some(format!("Proof generation failed: {}", e)),
+                evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            }
+        }
+        Err(e) => {
+            tracing::error!("Proving task panicked: {}", e);
+            state.usage.record_error();
+            ProveEvaluateResponse {
+                success: false,
+                error: Some(format!("Proving task panicked: {}", e)),
+                evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            }
+        }
     }
 }
 

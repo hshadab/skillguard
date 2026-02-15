@@ -3,7 +3,7 @@
 //! This module defines the types for representing skills from ClawHub
 //! and extracting safety-relevant features for the skill safety classifier.
 //!
-//! Feature extraction produces a 22-element vector. Each feature is normalized
+//! Feature extraction produces a 28-element vector. Each feature is normalized
 //! to [0, 128] using empirically chosen thresholds (documented inline in
 //! [`SkillFeatures::to_normalized_vec`]). VirusTotal integration combines both
 //! `malicious_count` and `suspicious_count` (weighted at 0.5) into a single
@@ -12,11 +12,14 @@
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
+use std::collections::HashSet;
+
 use crate::patterns::{
-    count_matches, ARCHIVE_RE, CARGO_ADD_RE, CREDENTIAL_RE, CURL_DOWNLOAD_RE, ENV_ACCESS_RE,
-    EXFILTRATION_RE, EXTERNAL_DOWNLOAD_RE, FS_WRITE_RE, IMPORT_RE, LLM_SECRET_EXPOSURE_RE,
-    NETWORK_CALL_RE, NPM_INSTALL_RE, OBFUSCATION_RE, PERSISTENCE_RE, PIP_INSTALL_RE, PRIV_ESC_RE,
-    REQUIRE_RE, REVERSE_SHELL_RE, SHELL_EXEC_RE,
+    count_matches, ARCHIVE_RE, CARGO_ADD_RE, CHR_CALL_RE, CREDENTIAL_RE, CURL_DOWNLOAD_RE,
+    DOMAIN_RE, ENV_ACCESS_RE, EXFILTRATION_RE, EXTERNAL_DOWNLOAD_RE, FS_WRITE_RE,
+    HEX_ESCAPE_RE, IMPORT_RE, JOIN_CALL_RE, LLM_SECRET_EXPOSURE_RE, NETWORK_CALL_RE,
+    NPM_INSTALL_RE, OBFUSCATION_RE, PERSISTENCE_RE, PIP_INSTALL_RE, PRIV_ESC_RE, REQUIRE_RE,
+    REVERSE_SHELL_RE, SHELL_EXEC_RE,
 };
 
 // ---------------------------------------------------------------------------
@@ -193,7 +196,7 @@ pub fn derive_decision(
 // Feature extraction
 // ---------------------------------------------------------------------------
 
-/// The 22-dimensional feature vector for skill safety classification
+/// The 28-dimensional feature vector for skill safety classification
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillFeatures {
     pub shell_exec_count: u32,
@@ -218,6 +221,18 @@ pub struct SkillFeatures {
     pub password_protected_archives: bool,
     pub reverse_shell_patterns: u32,
     pub llm_secret_exposure: bool,
+    /// Shannon entropy of script bytes (high = encrypted/encoded)
+    pub entropy_score: f32,
+    /// Ratio of non-ASCII bytes (catches homoglyphs, encoded payloads)
+    pub non_ascii_ratio: f32,
+    /// Longest script line (long = minified/obfuscated)
+    pub max_line_length: u32,
+    /// Comment lines / total lines (malware rarely has comments)
+    pub comment_ratio: f32,
+    /// Unique external domains referenced
+    pub domain_count: u32,
+    /// Hex escapes + join() + chr() pattern counts
+    pub string_obfuscation_score: u32,
 }
 
 impl SkillFeatures {
@@ -264,6 +279,53 @@ impl SkillFeatures {
         let has_archive = skill.files.iter().any(|f| ARCHIVE_RE.is_match(f));
         let password_in_md = skill.skill_md.to_lowercase().contains("password");
 
+        // Compute entropy of script bytes (Shannon entropy)
+        let entropy_score = Self::shannon_entropy(script_text.as_bytes());
+
+        // Compute non-ASCII ratio
+        let non_ascii_count = script_text.bytes().filter(|&b| b > 127).count();
+        let non_ascii_ratio = if script_text.is_empty() {
+            0.0
+        } else {
+            non_ascii_count as f32 / script_text.len() as f32
+        };
+
+        // Max line length
+        let max_line_length = script_text.lines().map(|l| l.len()).max().unwrap_or(0) as u32;
+
+        // Comment ratio
+        let total_lines = script_text.lines().count();
+        let comment_lines = script_text
+            .lines()
+            .filter(|l| {
+                let t = l.trim();
+                t.starts_with('#')
+                    || t.starts_with("//")
+                    || t.starts_with("/*")
+                    || t.starts_with('*')
+                    || t.starts_with("--")
+                    || t.starts_with("REM ")
+            })
+            .count();
+        let comment_ratio = if total_lines == 0 {
+            0.0
+        } else {
+            comment_lines as f32 / total_lines as f32
+        };
+
+        // Domain count — unique external domains
+        let domains: HashSet<&str> = DOMAIN_RE
+            .captures_iter(&all_text)
+            .filter_map(|cap| cap.get(1).map(|m| m.as_str()))
+            .collect();
+        let domain_count = domains.len() as u32;
+
+        // String obfuscation score — hex escapes + join() + chr()
+        let hex_count = HEX_ESCAPE_RE.find_iter(&script_text).count() as u32;
+        let join_count = JOIN_CALL_RE.find_iter(&script_text).count() as u32;
+        let chr_count = CHR_CALL_RE.find_iter(&script_text).count() as u32;
+        let string_obfuscation_score = hex_count + join_count + chr_count;
+
         Self {
             shell_exec_count: count_matches(&script_text, &SHELL_EXEC_RE),
             network_call_count: count_matches(&all_text, &NETWORK_CALL_RE),
@@ -294,7 +356,33 @@ impl SkillFeatures {
             llm_secret_exposure: LLM_SECRET_EXPOSURE_RE
                 .iter()
                 .any(|re| re.is_match(&skill.skill_md)),
+            entropy_score,
+            non_ascii_ratio,
+            max_line_length,
+            comment_ratio,
+            domain_count,
+            string_obfuscation_score,
         }
+    }
+
+    /// Compute Shannon entropy of a byte slice.
+    fn shannon_entropy(data: &[u8]) -> f32 {
+        if data.is_empty() {
+            return 0.0;
+        }
+        let mut counts = [0u32; 256];
+        for &b in data {
+            counts[b as usize] += 1;
+        }
+        let len = data.len() as f32;
+        let mut entropy = 0.0f32;
+        for &c in &counts {
+            if c > 0 {
+                let p = c as f32 / len;
+                entropy -= p * p.log2();
+            }
+        }
+        entropy
     }
 
     fn count_dependencies(text: &str) -> u32 {
@@ -320,6 +408,10 @@ impl SkillFeatures {
 
         let clip_scale = |val: u32, max: u32| -> i32 {
             ((val.min(max) as f32 / max as f32) * SCALE as f32) as i32
+        };
+
+        let clip_scale_f32 = |val: f32, max: f32| -> i32 {
+            ((val.min(max) / max) * SCALE as f32) as i32
         };
 
         let log_scale = |val: u64, max_log: f32| -> i32 {
@@ -358,6 +450,12 @@ impl SkillFeatures {
             bool_scale(self.password_protected_archives), // 19 — binary: archive + password mention
             clip_scale(self.reverse_shell_patterns, 5), // 20 — any match is suspicious; >5 is definitive
             bool_scale(self.llm_secret_exposure), // 21 — binary: instructions leak secrets or not
+            clip_scale_f32(self.entropy_score, 8.0), // 22 — Shannon entropy max ~8 for random bytes
+            clip_scale_f32(self.non_ascii_ratio, 0.5), // 23 — >50% non-ASCII is highly suspicious
+            clip_scale(self.max_line_length, 1000), // 24 — >1000 chars per line = minified/obfuscated
+            clip_scale_f32(self.comment_ratio, 1.0), // 25 — ratio [0,1], 1.0 = all comments
+            clip_scale(self.domain_count, 20),       // 26 — >20 unique domains is unusual
+            clip_scale(self.string_obfuscation_score, 10), // 27 — hex+join+chr combo count
         ]
     }
 }
@@ -542,7 +640,7 @@ Instructions here.
         let features = SkillFeatures::extract(&skill, None);
         let normalized = features.to_normalized_vec();
 
-        assert_eq!(normalized.len(), 22);
+        assert_eq!(normalized.len(), 28);
         for &val in &normalized {
             assert!((0..=128).contains(&val), "Value {} out of range", val);
         }
