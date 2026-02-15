@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "SkillGuard ZKML",
+    "title": "SkillGuard",
     "version": "0.1.0",
-    "description": "Verifiable AI safety classifier for OpenClaw skills. Evaluates skill metadata and scripts to produce a safety classification (SAFE, CAUTION, DANGEROUS, MALICIOUS) with optional SNARK proof via Jolt/Dory.",
+    "description": "Cryptographically verified agent skill analysis guardrails. Evaluates AI agent skills and produces a safety classification (SAFE, CAUTION, DANGEROUS, MALICIOUS) with a zero-knowledge proof via Jolt/Dory SNARK.",
     "license": {
       "name": "MIT",
       "url": "https://github.com/hshadab/skillguard/blob/main/LICENSE"
@@ -16,8 +16,8 @@
     }
   ],
   "x-x402": {
-    "description": "Paid endpoints accept x402 payment as an alternative to an API key. Send a 402 payment header with USDC on Base to access basic evaluation results without an API key.",
-    "facilitator": "https://facilitator.x402.rs",
+    "description": "Paid endpoints accept x402 payment as an alternative to an API key. Send a 402 payment header with USDC on Base to access evaluation results.",
+    "facilitator": "https://pay.openfacilitator.io",
     "token": "USDC",
     "network": "Base (EIP-155 chain 8453)"
   },
@@ -26,7 +26,7 @@
       "get": {
         "operationId": "getDashboard",
         "summary": "HTML dashboard",
-        "description": "Returns the embedded web UI showing service status and usage stats.",
+        "description": "Returns the embedded web UI for classifying skills and viewing results.",
         "responses": {
           "200": {
             "description": "HTML page",
@@ -82,8 +82,8 @@
     "/api/v1/evaluate": {
       "post": {
         "operationId": "evaluateSkill",
-        "summary": "Evaluate a skill's safety",
-        "description": "Classify a skill by sending its full metadata, scripts, and optional VirusTotal report. Returns a safety classification with confidence scores. API-key holders receive full results; x402 payers receive basic results.",
+        "summary": "Classify a skill",
+        "description": "Single endpoint for all skill classifications. Accepts two request formats:\n\n1. **Name lookup:** `{\"skill\": \"skill-slug\"}` — fetches skill data from ClawHub, then classifies.\n2. **Full skill data:** `{\"skill\": {\"name\": \"...\", ...}}` — classifies the provided skill directly.\n\nBoth formats return the same response. A ZK proof is automatically included when the prover is ready.",
         "x-x402-pricing": {
           "amount": "0.001",
           "currency": "USDC",
@@ -98,14 +98,39 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/EvaluateRequest"
+                "oneOf": [
+                  { "$ref": "#/components/schemas/EvaluateByNameRequest" },
+                  { "$ref": "#/components/schemas/EvaluateFullRequest" }
+                ],
+                "examples": {
+                  "byName": {
+                    "summary": "Lookup by ClawHub slug",
+                    "value": {
+                      "skill": "4claw"
+                    }
+                  },
+                  "fullData": {
+                    "summary": "Full skill data",
+                    "value": {
+                      "skill": {
+                        "name": "hello-world",
+                        "version": "1.0.0",
+                        "author": "dev",
+                        "description": "A safe greeting skill",
+                        "skill_md": "# Hello World\nSays hello to the user.",
+                        "scripts": [],
+                        "files": []
+                      }
+                    }
+                  }
+                }
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Evaluation result",
+            "description": "Classification result with optional ZK proof",
             "content": {
               "application/json": {
                 "schema": {
@@ -118,101 +143,7 @@
             "description": "Missing or invalid API key (when x402 is not available)"
           },
           "402": {
-            "description": "Payment required (x402)"
-          },
-          "429": {
-            "description": "Rate limit exceeded"
-          }
-        }
-      }
-    },
-    "/api/v1/evaluate/name": {
-      "post": {
-        "operationId": "evaluateSkillByName",
-        "summary": "Evaluate a skill by ClawHub name",
-        "description": "Look up a skill on ClawHub by slug (and optional version), then classify it. Returns the same response shape as /api/v1/evaluate.",
-        "x-x402-pricing": {
-          "amount": "0.001",
-          "currency": "USDC",
-          "network": "Base"
-        },
-        "security": [
-          { "BearerAuth": [] },
-          { "x402Payment": [] }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EvaluateByNameRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Evaluation result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EvaluateResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key (when x402 is not available)"
-          },
-          "402": {
-            "description": "Payment required (x402)"
-          },
-          "429": {
-            "description": "Rate limit exceeded"
-          }
-        }
-      }
-    },
-    "/api/v1/evaluate/prove": {
-      "post": {
-        "operationId": "evaluateSkillWithProof",
-        "summary": "Evaluate with ZK proof",
-        "description": "Classify a skill and generate a Jolt/Dory SNARK proof of the MLP forward pass. The proof can be independently verified via /api/v1/verify.",
-        "x-x402-pricing": {
-          "amount": "0.005",
-          "currency": "USDC",
-          "network": "Base"
-        },
-        "security": [
-          { "BearerAuth": [] },
-          { "x402Payment": [] }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EvaluateRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Evaluation result with proof",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProveEvaluateResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key (when x402 is not available)"
-          },
-          "402": {
-            "description": "Payment required (x402)"
+            "description": "Payment required (x402) or payment settlement failed"
           },
           "429": {
             "description": "Rate limit exceeded"
@@ -255,13 +186,13 @@
       "BearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "API key passed as a Bearer token. Grants full evaluation results."
+        "description": "API key passed as a Bearer token."
       },
       "x402Payment": {
         "type": "apiKey",
         "in": "header",
         "name": "X-PAYMENT",
-        "description": "x402 USDC payment header on Base. Grants basic evaluation results (classification + decision only)."
+        "description": "x402 USDC payment header on Base. $0.001 per request."
       }
     },
     "schemas": {
@@ -316,8 +247,21 @@
           "analysis_date": { "type": "string", "default": "" }
         }
       },
-      "EvaluateRequest": {
+      "EvaluateByNameRequest": {
         "type": "object",
+        "description": "Look up a skill on ClawHub by slug, then classify it.",
+        "required": ["skill"],
+        "properties": {
+          "skill": { "type": "string", "description": "Skill name (slug) on ClawHub" },
+          "version": {
+            "type": "string",
+            "description": "Optional version (defaults to latest)"
+          }
+        }
+      },
+      "EvaluateFullRequest": {
+        "type": "object",
+        "description": "Classify a skill from full metadata and scripts.",
         "required": ["skill"],
         "properties": {
           "skill": { "$ref": "#/components/schemas/Skill" },
@@ -326,17 +270,6 @@
               { "$ref": "#/components/schemas/VTReport" },
               { "type": "null" }
             ]
-          }
-        }
-      },
-      "EvaluateByNameRequest": {
-        "type": "object",
-        "required": ["skill"],
-        "properties": {
-          "skill": { "type": "string", "description": "Skill name (slug) on ClawHub" },
-          "version": {
-            "type": "string",
-            "description": "Optional version (defaults to latest)"
           }
         }
       },
@@ -351,26 +284,35 @@
           "MALICIOUS": { "type": "number" }
         }
       },
+      "ProofBundle": {
+        "type": "object",
+        "description": "ZK proof bundle from Jolt/Dory SNARK proving the neural network forward pass.",
+        "required": ["proof_b64", "program_io", "proof_size_bytes", "proving_time_ms"],
+        "properties": {
+          "proof_b64": { "type": "string", "description": "Base64-encoded SNARK proof bytes" },
+          "program_io": { "description": "Program I/O as JSON (inputs and outputs visible to verifier)" },
+          "proof_size_bytes": { "type": "integer" },
+          "proving_time_ms": { "type": "integer" }
+        }
+      },
       "EvaluationResult": {
         "type": "object",
+        "description": "Classification result with optional ZK proof.",
         "required": ["skill_name", "classification", "decision", "confidence", "scores", "reasoning"],
         "properties": {
           "skill_name": { "type": "string" },
           "classification": { "type": "string", "enum": ["SAFE", "CAUTION", "DANGEROUS", "MALICIOUS"] },
-          "decision": { "type": "string", "enum": ["allow", "deny", "flag"] },
+          "decision": { "type": "string", "enum": ["ALLOW", "DENY", "FLAG"] },
           "confidence": { "type": "number" },
           "scores": { "$ref": "#/components/schemas/ClassScores" },
-          "reasoning": { "type": "string" }
-        }
-      },
-      "BasicEvaluationResult": {
-        "type": "object",
-        "description": "Stripped-down result returned to x402 payers.",
-        "required": ["skill_name", "classification", "decision"],
-        "properties": {
-          "skill_name": { "type": "string" },
-          "classification": { "type": "string", "enum": ["SAFE", "CAUTION", "DANGEROUS", "MALICIOUS"] },
-          "decision": { "type": "string", "enum": ["allow", "deny", "flag"] }
+          "reasoning": { "type": "string" },
+          "proof": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/ProofBundle" },
+              { "type": "null" }
+            ],
+            "description": "ZK proof bundle. Present when the prover is ready; null or omitted otherwise."
+          }
         }
       },
       "EvaluateResponse": {
@@ -380,40 +322,6 @@
           "success": { "type": "boolean" },
           "error": { "type": "string" },
           "evaluation": { "$ref": "#/components/schemas/EvaluationResult" },
-          "basic_evaluation": { "$ref": "#/components/schemas/BasicEvaluationResult" },
-          "processing_time_ms": { "type": "integer" }
-        }
-      },
-      "ProofBundle": {
-        "type": "object",
-        "required": ["proof_b64", "program_io", "proof_size_bytes", "proving_time_ms"],
-        "properties": {
-          "proof_b64": { "type": "string", "description": "Base64-encoded SNARK proof bytes" },
-          "program_io": { "description": "Program I/O as JSON (inputs/outputs visible to verifier)" },
-          "proof_size_bytes": { "type": "integer" },
-          "proving_time_ms": { "type": "integer" }
-        }
-      },
-      "ProvedEvaluationResult": {
-        "type": "object",
-        "required": ["skill_name", "classification", "decision", "confidence", "scores", "reasoning", "proof"],
-        "properties": {
-          "skill_name": { "type": "string" },
-          "classification": { "type": "string", "enum": ["SAFE", "CAUTION", "DANGEROUS", "MALICIOUS"] },
-          "decision": { "type": "string", "enum": ["allow", "deny", "flag"] },
-          "confidence": { "type": "number" },
-          "scores": { "$ref": "#/components/schemas/ClassScores" },
-          "reasoning": { "type": "string" },
-          "proof": { "$ref": "#/components/schemas/ProofBundle" }
-        }
-      },
-      "ProveEvaluateResponse": {
-        "type": "object",
-        "required": ["success", "processing_time_ms"],
-        "properties": {
-          "success": { "type": "boolean" },
-          "error": { "type": "string" },
-          "evaluation": { "$ref": "#/components/schemas/ProvedEvaluationResult" },
           "processing_time_ms": { "type": "integer" }
         }
       },
@@ -443,7 +351,11 @@
           "uptime_seconds": { "type": "integer" },
           "zkml_enabled": { "type": "boolean", "description": "Whether the ZKML prover is initialized and available" },
           "proving_scheme": { "type": "string", "description": "Polynomial commitment scheme (e.g. Jolt/Dory)" },
-          "cache_writable": { "type": "boolean", "description": "Whether the proof cache directory is writable" }
+          "cache_writable": { "type": "boolean", "description": "Whether the proof cache directory is writable" },
+          "pay_to": {
+            "type": "string",
+            "description": "Ethereum address receiving x402 payments (null if x402 is disabled)"
+          }
         }
       },
       "StatsResponse": {

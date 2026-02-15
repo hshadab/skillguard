@@ -1,63 +1,123 @@
-# SkillGuard ZKML
+# SkillGuard
 
-> Powered by [Jolt Atlas zkML](https://github.com/ICME-Lab/jolt-atlasc)
+> Cryptographically verified agent skill analysis guardrails, powered by [Jolt Atlas ZKML](https://github.com/ICME-Lab/jolt-atlas)
 
 [![CI](https://github.com/hshadab/skillguard/actions/workflows/ci.yml/badge.svg)](https://github.com/hshadab/skillguard/actions/workflows/ci.yml)
-
-Provably correct AI safety classifications with agentic commerce. A verifiable skill safety classifier that produces cryptographic SNARK proofs via [Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas) and accepts pay-per-request via [x402](https://www.x402.org/) on Base.
 
 **Live:** [https://skillguard.onrender.com](https://skillguard.onrender.com)
 
 ---
 
-## How It Works (Plain English)
+## What Is This?
 
-SkillGuard answers a simple question: **"Is this AI agent skill safe to run?"**
+SkillGuard is a safety classifier for AI agent skills. It answers a simple question: **"Is this skill safe to install?"**
 
-AI agents on platforms like [OpenClaw](https://openclaw.org) can install community-created "skills" -- small packages of code and instructions that give an agent new abilities. Some of those skills might be malicious: they could steal credentials, open reverse shells, or trick the AI into leaking secrets. SkillGuard is the safety checkpoint.
+AI agents on platforms like [OpenClaw](https://openclaw.org) can install community-created "skills" — small packages of code and instructions that give an agent new abilities (calling APIs, writing files, running scripts, etc.). Some skills might be malicious: they could steal credentials, open reverse shells, or trick the AI into leaking secrets.
 
-Here is what happens when a skill is submitted for evaluation:
+SkillGuard inspects each skill and classifies it as **SAFE**, **CAUTION**, **DANGEROUS**, or **MALICIOUS**. It then makes a decision: **ALLOW**, **FLAG**, or **DENY**.
 
-### Step 1: Feature Extraction
+What makes SkillGuard different from a regular classifier is that every classification comes with a **zero-knowledge proof** — a cryptographic certificate proving the classification was computed correctly by a specific model. Anyone can verify this proof without trusting the SkillGuard operator and without seeing the model's internal weights.
 
-SkillGuard reads the skill's documentation (`SKILL.md`), scripts, and metadata, then extracts 22 numeric features that capture security-relevant signals. These include things like:
+### How It Works
 
-- How many shell execution calls does the code make?
-- Does it download external executables?
-- Are there reverse shell patterns (`nc -e`, `/dev/tcp/`)?
-- Does it access environment variables or credential-like strings?
-- Does the documentation try to trick an LLM into leaking secrets?
-- How old is the author's account? How many downloads does the skill have?
+1. **Feature extraction** — SkillGuard reads the skill's documentation, scripts, and metadata, then extracts 22 numeric features that capture security-relevant signals (shell execution calls, reverse shell patterns, credential access, obfuscation techniques, author reputation, download counts, etc.).
 
-Each feature is normalized to a 0-128 integer scale. A brand-new author with zero downloads and a script full of `eval()` calls will produce very different numbers than a well-known author with thousands of downloads and clean documentation.
+2. **Neural network classification** — The 22 features feed into a small neural network (3-layer MLP, 1,924 parameters) that outputs probabilities for each safety class. All arithmetic uses fixed-point integers so the computation is deterministic and provable.
 
-### Step 2: Neural Network Classification
+3. **Zero-knowledge proof** — The entire neural network forward pass runs inside a SNARK virtual machine ([Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas)). This produces a ~53 KB cryptographic proof that the classification was computed correctly. The proof reveals the inputs and outputs but not the model weights.
 
-The 22 features feed into a small neural network (a 3-layer MLP with 1,924 parameters). The network has been trained on labeled examples of safe, cautious, dangerous, and malicious skills. It outputs 4 raw scores -- one for each safety class.
+4. **Verification** — Anyone can verify a proof by posting it to `/api/v1/verify`. Verification is free, takes milliseconds, and requires no API key.
 
-All arithmetic is done in **fixed-point integers** (no floating point). This is important for the next step: you can't prove floating-point computations inside a SNARK because floating point is non-deterministic across platforms. Integer math is identical everywhere.
+5. **Payment** — SkillGuard uses the [x402 protocol](https://www.x402.org/) for pay-per-request pricing. AI agents or users pay $0.001 USDC on Base per classification. Payment is settled on-chain via `transferWithAuthorization`. API key holders bypass payment.
 
-The raw scores go through a softmax function to produce probabilities (e.g., 72% SAFE, 15% CAUTION, 10% DANGEROUS, 3% MALICIOUS). The highest class wins. A confidence margin is computed from the gap between the top two scores.
+---
 
-### Step 3: Zero-Knowledge Proof (Optional)
+## Quick Start
 
-This is the part that makes SkillGuard different from a regular classifier.
+### Build
 
-When you call the `/api/v1/evaluate/prove` endpoint, the MLP forward pass runs inside a **SNARK virtual machine** ([Jolt](https://github.com/a16z/jolt)). Jolt traces every arithmetic operation the neural network performs, then produces a cryptographic proof that all the multiplications, additions, and ReLU activations were done correctly.
+```bash
+git clone https://github.com/hshadab/skillguard.git
+cd skillguard
+cargo build --release
+```
 
-The proof says: *"Given these 22 input features, this specific model (identified by its SHA-256 hash) produced these 4 output scores. Here is a ~53 KB proof that you can verify in milliseconds."*
+Requires Rust nightly (arkworks const generics dependency).
 
-What the proof does **not** reveal: the model's internal weights. The verifier sees the inputs, the outputs, and the proof -- but not how the model arrived at its answer. This is the "zero-knowledge" property.
+### Serve
 
-The proving scheme is **Dory** (a polynomial commitment scheme based on bilinear pairings on the BN254 curve). Dory uses a structured reference string (SRS) that is generated once and bundled with the deployment. Proving takes about 4 seconds on a single CPU core.
+```bash
+# Start the server (ZKML prover initializes in background)
+./target/release/skillguard serve --bind 0.0.0.0:8080
 
-### Step 4: Verification
+# With API key authentication
+SKILLGUARD_API_KEY=your-secret-key ./target/release/skillguard serve --bind 0.0.0.0:8080
 
-Anyone can verify a proof by posting it to `/api/v1/verify`. Verification is free, requires no API key, and runs in milliseconds. This means a downstream agent, a marketplace, or an auditor can independently confirm that a classification was computed honestly -- without trusting SkillGuard's operator and without re-running the model.
+# With x402 payments enabled (USDC on Base)
+SKILLGUARD_PAY_TO=0xYourBaseWallet ./target/release/skillguard serve --bind 0.0.0.0:8080
+```
 
-### Step 5: Payment (Optional)
+### Classify a Skill
 
-SkillGuard supports the [x402 protocol](https://www.x402.org/), which lets AI agents pay per request using USDC on Base. An agent that doesn't have an API key can pay $0.001 for a classification or $0.005 for a classification with proof. Payment is settled on-chain. API key holders bypass payment entirely.
+There is a single endpoint that handles all classifications. It automatically generates a ZK proof when the prover is ready.
+
+**By name** (fetches from [ClawHub](https://clawhub.ai)):
+```bash
+curl -X POST https://skillguard.onrender.com/api/v1/evaluate \
+  -H 'Content-Type: application/json' \
+  -d '{"skill": "4claw"}'
+```
+
+**With full skill data:**
+```bash
+curl -X POST https://skillguard.onrender.com/api/v1/evaluate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "skill": {
+      "name": "hello-world",
+      "version": "1.0.0",
+      "author": "dev",
+      "description": "A safe greeting skill",
+      "skill_md": "# Hello World\nSays hello to the user.",
+      "scripts": [],
+      "files": []
+    }
+  }'
+```
+
+### Verify a Proof
+
+```bash
+curl -X POST https://skillguard.onrender.com/api/v1/verify \
+  -H 'Content-Type: application/json' \
+  -d '{"proof_b64": "...", "program_io": {...}}'
+```
+
+### CLI
+
+```bash
+# Classify a local SKILL.md file with proof
+skillguard check --input SKILL.md --prove --format json
+```
+
+---
+
+## API Reference
+
+| Method | Path | Auth | Price | Description |
+|--------|------|------|-------|-------------|
+| POST | `/api/v1/evaluate` | API key or x402 | $0.001 USDC | Classify a skill (auto-detects name lookup vs full data, includes ZK proof when prover is ready) |
+| POST | `/api/v1/verify` | None | Free | Verify a ZK proof |
+| GET | `/health` | None | Free | Health check (includes `zkml_enabled`, `pay_to`) |
+| GET | `/stats` | None | Free | Usage statistics and proof counts |
+| GET | `/openapi.json` | None | Free | OpenAPI 3.1 specification |
+| GET | `/` | None | Free | Web dashboard |
+
+The `/api/v1/evaluate` endpoint accepts two request formats:
+- **Name lookup:** `{"skill": "skill-slug"}` — fetches skill data from ClawHub, then classifies
+- **Full skill data:** `{"skill": {"name": "...", "version": "...", ...}}` — classifies directly
+
+Both formats return the same response with classification, confidence, scores, reasoning, and an optional ZK proof bundle.
 
 ---
 
@@ -65,15 +125,15 @@ SkillGuard supports the [x402 protocol](https://www.x402.org/), which lets AI ag
 
 | Component | Details |
 |-----------|---------|
-| Model | 3-layer MLP: 22 inputs, 2x32 hidden (ReLU), 4 outputs. 1,924 parameters. Fixed-point arithmetic (scale=7, all weights are i32). |
-| Proving | [Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas) SNARK with Dory commitment scheme (BN254 curve, Keccak transcript). ~53 KB proofs, ~4s proving time. |
-| Payment | [x402](https://www.x402.org/) HTTP 402 protocol. USDC on Base (eip155:8453). CDP facilitator. |
-| Server | Axum async HTTP server. LRU per-IP rate limiting, constant-time API key auth, CORS, graceful shutdown, JSONL access logging, persistent metrics. |
-| Runtime | Docker on Render. Rust nightly (required by arkworks const generics). Pre-generated Dory SRS bundled in image. |
+| Model | 3-layer MLP: 22 inputs, 2x32 hidden (ReLU), 4 outputs. 1,924 parameters. Fixed-point integer arithmetic. |
+| Proving | [Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas) SNARK with Dory commitment (BN254 curve). ~53 KB proofs, ~4s proving time. |
+| Payment | [x402](https://www.x402.org/) HTTP 402 protocol. $0.001 USDC on Base. [OpenFacilitator](https://openfacilitator.io). |
+| Server | Axum async HTTP. LRU per-IP rate limiting (IPv6 /64 aggregation), constant-time API key auth, CORS, graceful shutdown, JSONL access logging. |
+| Runtime | Docker on Render. Rust nightly. Pre-generated Dory SRS bundled in image. |
 
 ### Feature List
 
-The classifier extracts these 22 features from each skill:
+The classifier extracts 22 features from each skill:
 
 | # | Feature | What It Measures |
 |---|---------|-----------------|
@@ -102,106 +162,27 @@ The classifier extracts these 22 features from each skill:
 
 ---
 
-## Quick Start
-
-### Build
-
-```bash
-git clone https://github.com/hshadab/skillguard.git
-cd skillguard
-cargo build --release
-```
-
-Requires Rust nightly (arkworks const generics dependency).
-
-### Serve
-
-```bash
-# Start the server (ZKML prover initializes at startup)
-./target/release/skillguard serve --bind 0.0.0.0:8080
-
-# With API key authentication
-SKILLGUARD_API_KEY=your-secret-key ./target/release/skillguard serve --bind 0.0.0.0:8080
-
-# With x402 payments enabled
-SKILLGUARD_PAY_TO=0xYourBaseWallet ./target/release/skillguard serve --bind 0.0.0.0:8080
-```
-
-### Classify (no proof)
-
-```bash
-curl -X POST http://localhost:8080/api/v1/evaluate \
-  -H 'Content-Type: application/json' \
-  -d '{"skill": {"name": "hello", "version": "1.0.0", "author": "dev", "description": "test", "skill_md": "# Hello", "scripts": [], "files": []}}'
-```
-
-### Classify + Prove
-
-```bash
-curl -X POST http://localhost:8080/api/v1/evaluate/prove \
-  -H 'Content-Type: application/json' \
-  -d '{"skill": {"name": "hello", "version": "1.0.0", "author": "dev", "description": "test", "skill_md": "# Hello", "scripts": [], "files": []}}'
-```
-
-### Verify
-
-```bash
-# Submit the proof_b64 and program_io from the prove response
-curl -X POST http://localhost:8080/api/v1/verify \
-  -H 'Content-Type: application/json' \
-  -d '{"proof_b64": "...", "program_io": {...}}'
-```
-
-### CLI
-
-```bash
-skillguard check --input SKILL.md --prove --format json
-```
-
----
-
-## API Reference
-
-| Method | Path | Auth | Price | Description |
-|--------|------|------|-------|-------------|
-| POST | `/api/v1/evaluate` | API key or x402 | $0.001 USDC | Classification only |
-| POST | `/api/v1/evaluate/name` | API key or x402 | $0.001 USDC | Classification by ClawHub name |
-| POST | `/api/v1/evaluate/prove` | API key or x402 | $0.005 USDC | Classification + ZK proof |
-| POST | `/api/v1/verify` | None | Free | Verify a proof |
-| GET | `/health` | None | Free | Health check (includes `zkml_enabled`) |
-| GET | `/stats` | None | Free | Usage statistics + proof counts |
-| GET | `/openapi.json` | None | Free | OpenAPI 3.1 specification |
-| GET | `/` | None | Free | Web dashboard |
-
----
-
 ## Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `SKILLGUARD_API_KEY` | Bearer token for API authentication. If unset, all endpoints are open. | (none) |
 | `SKILLGUARD_PAY_TO` | Ethereum address to receive x402 USDC payments on Base. | (none) |
-| `SKILLGUARD_FACILITATOR_URL` | x402 facilitator URL. | `https://facilitator.x402.rs` |
-| `SKILLGUARD_SKIP_PROVER` | Set to `1` to disable the ZKML prover (saves memory). Prove endpoints return an error. | `0` |
+| `SKILLGUARD_FACILITATOR_URL` | x402 facilitator URL. | `https://pay.openfacilitator.io` |
+| `SKILLGUARD_EXTERNAL_URL` | Public base URL (for x402 resource URLs behind TLS proxies). | (none) |
+| `SKILLGUARD_SKIP_PROVER` | Set to `1` to disable the ZKML prover. | `0` |
 | `RUST_LOG` | Log level filter. | `info` |
-
----
-
-## Why ZKML + Agentic Commerce
-
-- **Trust without access**: Agents can verify a classification was computed correctly without seeing the model weights or re-running inference.
-- **Composable verification**: Proofs are portable. A downstream agent can verify a safety classification without trusting the classifier operator.
-- **Pay-per-use**: No accounts needed. Agents pay per request via x402, settled on-chain in USDC on Base.
-- **Deterministic reproducibility**: The model hash (`sha256:...`) identifies exactly which model produced a classification. Combined with the proof, this gives full auditability.
 
 ---
 
 ## Links
 
-- [Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas) -- ZKML proving stack
-- [Jolt](https://github.com/a16z/jolt) -- SNARK VM by a16z
-- [x402 Protocol](https://www.x402.org/) -- HTTP 402 payment protocol
-- [OpenClaw](https://openclaw.org) -- Open framework for AI agent skills
+- [Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas) — ZKML proving stack
+- [Jolt](https://github.com/a16z/jolt) — SNARK VM by a16z
+- [x402 Protocol](https://www.x402.org/) — HTTP 402 payment protocol
+- [OpenClaw](https://openclaw.org) — Open framework for AI agent skills
+- [ClawHub](https://clawhub.ai) — Registry for OpenClaw skills
+- [Novanet](https://novanet.xyz) — Verifiable inference network
 
 ---
 
