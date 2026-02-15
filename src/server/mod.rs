@@ -187,9 +187,11 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
             "X-Payment-Response"
                 .parse::<axum::http::HeaderName>()
                 .unwrap(),
+            "X-Proof-Count".parse::<axum::http::HeaderName>().unwrap(),
         ]);
 
     // Public routes (no auth required)
+    let proof_count_state = state.clone();
     let app = Router::new()
         .route("/", get(crate::ui::index_handler))
         .route("/health", get(handlers::health_handler))
@@ -199,8 +201,25 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
             "/.well-known/ai-plugin.json",
             get(crate::ui::ai_plugin_handler),
         )
+        .route("/.well-known/llms.txt", get(crate::ui::llms_txt_handler))
         .route("/api/v1/verify", post(handlers::verify_handler))
         .merge(api_routes)
+        .layer(axum_mw::from_fn(
+            move |req, next: axum::middleware::Next| {
+                let s = proof_count_state.clone();
+                async move {
+                    let mut resp = next.run(req).await;
+                    let count = s
+                        .usage
+                        .total_proofs_generated
+                        .load(std::sync::atomic::Ordering::Relaxed);
+                    if let Ok(val) = axum::http::HeaderValue::from_str(&count.to_string()) {
+                        resp.headers_mut().insert("X-Proof-Count", val);
+                    }
+                    resp
+                }
+            },
+        ))
         .layer(cors)
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .with_state(state.clone());
@@ -219,7 +238,7 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
 
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
     info!(bind = %bind_addr, "SkillGuard ZKML server listening");
-    info!("Endpoints: GET / (UI), GET /health, GET /stats, GET /openapi.json, GET /.well-known/ai-plugin.json, POST /api/v1/evaluate, POST /api/v1/verify");
+    info!("Endpoints: GET / (UI), GET /health, GET /stats, GET /openapi.json, GET /.well-known/ai-plugin.json, GET /.well-known/llms.txt, POST /api/v1/evaluate, POST /api/v1/verify");
     if rate_limit_rpm > 0 {
         info!(rate_limit_rpm, "rate limiting enabled");
     } else {

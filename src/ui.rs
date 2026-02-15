@@ -48,3 +48,8 @@ pub async fn ai_plugin_handler() -> Result<impl IntoResponse, StatusCode> {
     let body = read_static("ai-plugin.json")?;
     Ok(([("content-type", "application/json")], body))
 }
+
+pub async fn llms_txt_handler() -> Result<impl IntoResponse, StatusCode> {
+    let body = read_static("llms.txt")?;
+    Ok(([("content-type", "text/plain; charset=utf-8")], body))
+}

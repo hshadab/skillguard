@@ -3,7 +3,7 @@
   "info": {
     "title": "SkillGuard: SSL for Agent Skills",
     "version": "0.1.0",
-    "description": "SSL for Agent Skills — every classification is a verifiable certificate. SkillGuard evaluates AI agent skill metadata and scripts, producing a safety classification (SAFE, CAUTION, DANGEROUS, MALICIOUS) backed by a zero-knowledge machine learning proof via Jolt/Dory SNARK. Like SSL proves server identity, SkillGuard proofs prove classification integrity.",
+    "description": "SSL for Agent Skills — every classification is a verifiable certificate. SkillGuard evaluates AI agent skill metadata and scripts, producing a safety classification (SAFE, CAUTION, DANGEROUS, MALICIOUS) backed by a zero-knowledge machine learning proof via Jolt/Dory SNARK. Like SSL proves server identity, SkillGuard proofs prove classification integrity.\n\nQuick start: `curl -X POST https://skillguard.onrender.com/api/v1/evaluate -H 'Content-Type: application/json' -d '{\"skill\": \"4claw\"}'`\n\nAgent discovery: GET /.well-known/ai-plugin.json | LLM info: GET /.well-known/llms.txt",
     "license": {
       "name": "MIT",
       "url": "https://github.com/hshadab/skillguard/blob/main/LICENSE"
@@ -107,6 +107,23 @@
             "content": {
               "application/json": {
                 "schema": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/llms.txt": {
+      "get": {
+        "operationId": "getLlmsTxt",
+        "summary": "LLM-readable API description",
+        "description": "Returns a plain-text description of the SkillGuard API optimized for LLM consumption. Includes endpoints, request formats, pricing, and examples.",
+        "responses": {
+          "200": {
+            "description": "Plain text API description",
+            "content": {
+              "text/plain": {
+                "schema": { "type": "string" }
               }
             }
           }

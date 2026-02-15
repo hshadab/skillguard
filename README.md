@@ -122,6 +122,7 @@ skillguard check --input SKILL.md --prove --format json
 | GET | `/stats` | None | Free | Usage statistics and proof counts |
 | GET | `/openapi.json` | None | Free | OpenAPI 3.1 specification |
 | GET | `/.well-known/ai-plugin.json` | None | Free | AI agent discovery manifest |
+| GET | `/.well-known/llms.txt` | None | Free | LLM-readable API description |
 | GET | `/` | None | Free | Web dashboard |
 
 The `/api/v1/evaluate` endpoint accepts two request formats:
