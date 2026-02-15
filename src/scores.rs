@@ -15,11 +15,22 @@ pub struct ClassScores {
     pub malicious: f64,
 }
 
+/// Softmax temperature — lower values produce sharper (more decisive) distributions.
+/// The model's fixed-point arithmetic compresses logit ranges through 3 layers of /128
+/// rescaling, so raw score differences are small. A temperature below 1.0 compensates
+/// by amplifying those differences before softmax.
+const SOFTMAX_TEMPERATURE: f64 = 0.25;
+
 impl ClassScores {
     pub fn from_raw_scores(raw: &[i32; 4]) -> Self {
-        // Convert raw i32 scores to normalized probabilities using softmax
-        // Scale down to avoid overflow: divide by 128 (the scale factor)
-        let scaled: Vec<f64> = raw.iter().map(|&x| (x as f64) / 128.0).collect();
+        // Apply softmax with temperature scaling to raw i32 logits.
+        // Raw scores are used directly (no /128 — the model already rescales internally).
+        // Temperature < 1.0 sharpens the distribution so small logit gaps become
+        // meaningful probability differences.
+        let scaled: Vec<f64> = raw
+            .iter()
+            .map(|&x| (x as f64) / SOFTMAX_TEMPERATURE)
+            .collect();
         let max_val = scaled.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
         let exp_vals: Vec<f64> = scaled.iter().map(|&x| (x - max_val).exp()).collect();
         let total: f64 = exp_vals.iter().sum();
@@ -62,16 +73,33 @@ mod tests {
 
     #[test]
     fn test_softmax_dominant() {
-        // 128/128 = 1.0 after scaling, so softmax(1.0, 0, 0, 0) has ~0.42 for first class
+        // With temperature 0.25, a raw score gap of 128 produces a very sharp distribution
         let scores = ClassScores::from_raw_scores(&[128, 0, 0, 0]);
         assert!(
-            scores.safe > scores.caution
-                && scores.safe > scores.dangerous
-                && scores.safe > scores.malicious,
-            "SAFE should be the highest class: {:?}",
+            scores.safe > 0.99,
+            "SAFE should dominate with large gap: {:?}",
             scores
         );
         let total = scores.safe + scores.caution + scores.dangerous + scores.malicious;
         assert!((total - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_softmax_small_gap_still_separates() {
+        // Even a gap of 5 (typical model output) should produce meaningful separation
+        let scores = ClassScores::from_raw_scores(&[35, 40, 38, 37]);
+        assert!(
+            scores.caution > scores.safe
+                && scores.caution > scores.dangerous
+                && scores.caution > scores.malicious,
+            "CAUTION (40) should be highest: {:?}",
+            scores
+        );
+        // With temperature 0.25, a gap of 2-5 should produce >40% for the top class
+        assert!(
+            scores.caution > 0.40,
+            "Top class should be >40%: {:?}",
+            scores
+        );
     }
 }

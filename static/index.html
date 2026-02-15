@@ -1295,26 +1295,21 @@ async function signX402Payment(requirements) {
 
   function renderResult(ev, proofBundle, timeMs, paidViaX402, settlement, sourceUrl) {
     var cls = classColor(ev.classification);
-    // Compute top-class probability from scores
-    var topProb = 0;
-    if (ev.scores) {
-      var clsKey = ev.classification.toUpperCase();
-      topProb = ev.scores[clsKey] || 0;
-    }
-    var certaintyMargin = (typeof ev.confidence === 'number') ? ev.confidence : 0;
-    var marginPct = (certaintyMargin * 100).toFixed(1);
-    var isLowCertainty = certaintyMargin < 0.20;
+    // ev.confidence is the top-class softmax probability (0.0–1.0)
+    var confidence = (typeof ev.confidence === 'number') ? ev.confidence : 0;
+    var confPct = (confidence * 100).toFixed(1);
+    var isLowCertainty = confidence < 0.40;
 
     var html = '<div class="result-card">';
     html += '<div class="result-header">';
-    html += '<span class="result-badge ' + cls + '">' + escHtml(ev.classification) + ' (' + pct(topProb) + ')</span>';
+    html += '<span class="result-badge ' + cls + '">' + escHtml(ev.classification) + ' (' + confPct + '%)</span>';
     html += '<span class="result-decision">Decision: <strong>' + escHtml(ev.decision) + '</strong></span>';
     if (typeof ev.confidence === 'number') {
       var tierLabel, tierColor;
-      if (certaintyMargin >= 0.50) { tierLabel = 'High'; tierColor = 'var(--safe)'; }
-      else if (certaintyMargin >= 0.20) { tierLabel = 'Moderate'; tierColor = 'var(--caution)'; }
+      if (confidence >= 0.60) { tierLabel = 'High'; tierColor = 'var(--safe)'; }
+      else if (confidence >= 0.40) { tierLabel = 'Moderate'; tierColor = 'var(--caution)'; }
       else { tierLabel = 'Low'; tierColor = 'var(--dangerous)'; }
-      html += '<span class="result-confidence" style="color:' + tierColor + '">Certainty: <strong>' + tierLabel + '</strong> <span style="font-size:0.78rem;color:var(--text-muted)">(' + marginPct + '% margin)</span></span>';
+      html += '<span class="result-confidence" style="color:' + tierColor + '">Confidence: <strong>' + tierLabel + '</strong> <span style="font-size:0.78rem;color:var(--text-muted)">(' + confPct + '%)</span></span>';
     }
     if (paidViaX402) {
       if (settlement && settlement.success && settlement.transaction) {
@@ -1331,7 +1326,7 @@ async function signX402Payment(requirements) {
     if (isLowCertainty) {
       html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.2);border-radius:var(--radius);font-size:0.8rem;color:var(--text-secondary);line-height:1.5">' +
         'The model could not clearly distinguish between safety classes. ' +
-        'The top class (<strong style="color:var(--text-primary)">' + escHtml(ev.classification) + '</strong> at ' + pct(topProb) + ') only narrowly leads. ' +
+        'The top class (<strong style="color:var(--text-primary)">' + escHtml(ev.classification) + '</strong> at ' + confPct + '%) only narrowly leads. ' +
         'This skill has been <strong style="color:var(--text-primary)">' + escHtml(ev.decision.toLowerCase()) + (ev.decision === 'FLAG' ? 'ged' : ev.decision === 'DENY' ? 'ied' : 'ed') + '</strong> for review.</div>';
     }
     if (ev.scores) html += renderScores(ev.scores);

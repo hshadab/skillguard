@@ -57,23 +57,17 @@ pub fn classify(features: &[i32]) -> Result<(SafetyClassification, [i32; 4], f64
     let raw_scores: [i32; 4] = [data[0], data[1], data[2], data[3]];
 
     // Find best class
-    let (best_idx, &best_val) = data
+    let (best_idx, _) = data
         .iter()
         .enumerate()
         .max_by_key(|(_, v)| *v)
         .ok_or_else(|| eyre::eyre!("Empty classifier output"))?;
 
-    // Calculate confidence as margin over runner-up
-    let runner_up = data
-        .iter()
-        .enumerate()
-        .filter(|(i, _)| *i != best_idx)
-        .map(|(_, v)| *v)
-        .max()
-        .unwrap_or(0);
-
-    let margin = (best_val - runner_up).abs();
-    let confidence = (margin as f64 / 128.0).min(1.0);
+    // Confidence = top-class softmax probability (with temperature scaling).
+    // This is more intuitive than the old margin-based metric: it directly
+    // represents how likely the model thinks its top pick is correct.
+    let scores = crate::scores::ClassScores::from_raw_scores(&raw_scores);
+    let confidence = scores.to_array()[best_idx];
 
     let classification = SafetyClassification::from_index(best_idx);
 
@@ -94,22 +88,14 @@ pub fn classify_with_proof(
     }
 
     let data = &raw_scores;
-    let (best_idx, &best_val) = data
+    let (best_idx, _) = data
         .iter()
         .enumerate()
         .max_by_key(|(_, v)| *v)
         .ok_or_else(|| eyre::eyre!("Empty classifier output"))?;
 
-    let runner_up = data
-        .iter()
-        .enumerate()
-        .filter(|(i, _)| *i != best_idx)
-        .map(|(_, v)| *v)
-        .max()
-        .unwrap_or(0);
-
-    let margin = (best_val - runner_up).abs();
-    let confidence = (margin as f64 / 128.0).min(1.0);
+    let scores = crate::scores::ClassScores::from_raw_scores(&raw_scores);
+    let confidence = scores.to_array()[best_idx];
 
     let classification = SafetyClassification::from_index(best_idx);
 
