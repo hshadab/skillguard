@@ -494,7 +494,7 @@ footer a:hover { text-decoration: underline; }
       Powered by <a href="https://github.com/ICME-Lab/jolt-atlas" target="_blank" rel="noopener">Jolt Atlas</a> zero-knowledge machine learning proofs &middot; Paid via <a href="https://www.x402.org/" target="_blank" rel="noopener">x402</a> on Base
     </div>
     <div class="proof-counter-badge" id="proof-counter-badge">
-      <div class="proof-counter-label">zkML Skill Guardrail Proofs Generated:</div>
+      <div class="proof-counter-label">zkML Proofs Generated:</div>
       <div class="proof-counter-value" id="proof-counter-value">0</div>
     </div>
   </header>
@@ -619,7 +619,7 @@ footer a:hover { text-decoration: underline; }
       <div class="url-detect" id="url-detect">
         <div class="url-detect-label">GitHub URL detected</div>
         <div id="url-detect-preview" style="font-size:0.8rem;color:var(--text-secondary);word-break:break-all;margin-bottom:6px"></div>
-        <button class="btn-fetch-classify" id="btn-fetch-classify" type="button">Fetch &amp; Classify</button>
+        <button class="btn-fetch-classify" id="btn-fetch-classify" type="button">Fetch &amp; Classify + Prove</button>
       </div>
     </div>
 
@@ -1709,7 +1709,7 @@ async function signX402Payment(requirements) {
         '</div>' +
         '<div class="skill-result-meta">' +
           '<span class="category-badge">' + escHtml(sk.category) + '</span>' +
-          '<button class="btn-quick-classify" data-slug="' + escHtml(sk.name) + '">Classify</button>' +
+          '<button class="btn-quick-classify" data-slug="' + escHtml(sk.name) + '">Classify + Prove</button>' +
         '</div>' +
       '</div>';
     }
