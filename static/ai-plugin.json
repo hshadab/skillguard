@@ -1,0 +1,12 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "SkillGuard: SSL for Agent Skills",
+  "name_for_model": "skillguard",
+  "description_for_human": "Verifiable AI skill safety classification with zero-knowledge ML proofs",
+  "description_for_model": "Classify AI agent skills as SAFE/CAUTION/DANGEROUS/MALICIOUS with mandatory cryptographic zkML proof. POST skill data to /api/v1/evaluate ($0.001 USDC via x402 on Base). Verify proofs free at POST /api/v1/verify. Every response includes a SNARK proof certifying the classification was computed correctly.",
+  "auth": { "type": "none" },
+  "api": { "type": "openapi", "url": "https://skillguard.onrender.com/openapi.json" },
+  "logo_url": "https://cdn.prod.website-files.com/65d52b07d5bc41614daa723f/665df12739c532f45b665fe7_logo-novanet.svg",
+  "contact_email": "",
+  "legal_info_url": ""
+}

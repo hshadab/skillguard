@@ -58,28 +58,42 @@ impl UsageMetrics {
             .unwrap_or(0);
 
         let metrics_path = Path::new(cache_dir).join("metrics.json");
+        let metrics_path_str = metrics_path.to_string_lossy().to_string();
+
+        // Attempt to restore persisted metrics from a previous run
+        let restored = std::fs::read(&metrics_path)
+            .ok()
+            .and_then(|data| serde_json::from_slice::<serde_json::Value>(&data).ok());
+
+        let v = |field: &str| -> u64 {
+            restored
+                .as_ref()
+                .and_then(|j| j.get(field))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0)
+        };
 
         Self {
-            total_requests: AtomicU64::new(0),
-            total_errors: AtomicU64::new(0),
-            safe: AtomicU64::new(0),
-            caution: AtomicU64::new(0),
-            dangerous: AtomicU64::new(0),
-            malicious: AtomicU64::new(0),
-            allow: AtomicU64::new(0),
-            deny: AtomicU64::new(0),
-            flag: AtomicU64::new(0),
-            ep_evaluate: AtomicU64::new(0),
-            ep_evaluate_by_name: AtomicU64::new(0),
-            ep_verify: AtomicU64::new(0),
-            ep_stats: AtomicU64::new(0),
-            total_proofs_generated: AtomicU64::new(0),
-            total_proofs_verified: AtomicU64::new(0),
+            total_requests: AtomicU64::new(v("total_requests")),
+            total_errors: AtomicU64::new(v("total_errors")),
+            safe: AtomicU64::new(v("safe")),
+            caution: AtomicU64::new(v("caution")),
+            dangerous: AtomicU64::new(v("dangerous")),
+            malicious: AtomicU64::new(v("malicious")),
+            allow: AtomicU64::new(v("allow")),
+            deny: AtomicU64::new(v("deny")),
+            flag: AtomicU64::new(v("flag")),
+            ep_evaluate: AtomicU64::new(v("ep_evaluate")),
+            ep_evaluate_by_name: AtomicU64::new(v("ep_evaluate_by_name")),
+            ep_verify: AtomicU64::new(v("ep_verify")),
+            ep_stats: AtomicU64::new(v("ep_stats")),
+            total_proofs_generated: AtomicU64::new(v("total_proofs_generated")),
+            total_proofs_verified: AtomicU64::new(v("total_proofs_verified")),
             access_log: std::sync::Mutex::new(file),
             access_log_path: access_log_path.to_string(),
             access_log_bytes: AtomicU64::new(current_size),
             max_access_log_bytes,
-            metrics_path: metrics_path.to_string_lossy().to_string(),
+            metrics_path: metrics_path_str,
         }
     }
 

@@ -39,10 +39,11 @@ body {
 .container { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
 
 header { text-align: center; margin-bottom: 32px; position: relative; }
-.header-brand { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.header-top { text-align: left; margin-bottom: 8px; }
 .header-logo { height: 32px; width: auto; }
 header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
 header h1 span { color: var(--accent); }
+.title-sub { font-weight: 400; color: var(--text-secondary); font-size: 0.65em; }
 header .subtitle { color: var(--text-secondary); margin-top: 8px; font-size: 0.92rem; line-height: 1.5; }
 header .subtitle a { color: var(--accent); text-decoration: none; }
 header .subtitle a:hover { text-decoration: underline; }
@@ -90,26 +91,22 @@ header .tagline a:hover { text-decoration: underline; }
   text-align: center; line-height: 1.5;
 }
 .how-cert strong { color: var(--text-primary); }
-.earnings-badge {
+.proof-counter-badge {
   position: absolute; right: 0; top: 50%; transform: translateY(-50%);
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--radius-lg); padding: 10px 16px; text-align: right;
   min-width: 140px;
 }
-.earnings-label {
+.proof-counter-label {
   font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;
   letter-spacing: 0.06em; font-weight: 600; margin-bottom: 2px;
 }
-.earnings-value {
+.proof-counter-value {
   font-size: 1.2rem; font-weight: 700; color: var(--safe);
   font-family: 'SF Mono', 'Fira Code', monospace;
 }
-.earnings-addr {
-  font-size: 0.65rem; color: var(--text-muted);
-  font-family: 'SF Mono', 'Fira Code', monospace; margin-top: 2px;
-}
 @media (max-width: 700px) {
-  .earnings-badge {
+  .proof-counter-badge {
     position: static; transform: none; margin: 10px auto 0; text-align: center;
   }
 }
@@ -456,7 +453,6 @@ footer a:hover { text-decoration: underline; }
 
 @media (max-width: 600px) {
   .container { padding: 16px 12px; }
-  .header-brand { gap: 10px; }
   .header-logo { height: 26px; }
   header h1 { font-size: 1.5rem; }
   header .subtitle { font-size: 0.82rem; }
@@ -487,20 +483,19 @@ footer a:hover { text-decoration: underline; }
 <div class="container">
 
   <header>
-    <div class="header-brand">
+    <div class="header-top">
       <img src="https://cdn.prod.website-files.com/65d52b07d5bc41614daa723f/665df12739c532f45b665fe7_logo-novanet.svg" alt="Novanet" class="header-logo">
-      <h1><span>Skill</span>Guard</h1>
     </div>
+    <h1><span>Skill</span>Guard<span class="title-sub">: SSL for Agent Skills</span></h1>
     <div class="subtitle">
       Unforgeable cryptographic safety guardrails for OpenClaw agent skills.
     </div>
     <div class="tagline">
       Powered by <a href="https://github.com/ICME-Lab/jolt-atlas" target="_blank" rel="noopener">Jolt Atlas</a> zero-knowledge machine learning proofs &middot; Paid via <a href="https://www.x402.org/" target="_blank" rel="noopener">x402</a> on Base
     </div>
-    <div class="earnings-badge" id="earnings-badge" style="display:none">
-      <div class="earnings-label">Earnings to Date</div>
-      <div class="earnings-value" id="earnings-value">--</div>
-      <div class="earnings-addr" id="earnings-addr"></div>
+    <div class="proof-counter-badge" id="proof-counter-badge">
+      <div class="proof-counter-label">zkML Skill Guardrail Proofs Generated:</div>
+      <div class="proof-counter-value" id="proof-counter-value">0</div>
     </div>
   </header>
 
@@ -544,7 +539,7 @@ footer a:hover { text-decoration: underline; }
         </div>
         <div class="how-step">
           <div class="how-step-num">5</div>
-          <div class="how-step-title">Decision enforced</div>
+          <div class="how-step-title">Classification made</div>
           <div class="how-step-desc">ALLOW, FLAG, or DENY. The proof becomes a tamperproof safety certificate for the skill</div>
         </div>
       </div>
@@ -660,7 +655,7 @@ This skill fetches current weather data from a public API and returns a friendly
         </div>
         <div class="form-errors" id="form-errors" role="alert"><ul></ul></div>
         <div class="try-buttons">
-          <button class="btn-classify" id="btn-classify" type="button" aria-label="Classify skill with zkML proof">Classify</button>
+          <button class="btn-classify" id="btn-classify" type="button" aria-label="Classify skill and generate zkML proof">Classify + Prove</button>
         </div>
       </div>
     </div>
@@ -682,11 +677,11 @@ This skill fetches current weather data from a public API and returns a friendly
       </div>
       <div class="x402-item">
         <div class="x402-label">Proofs Generated</div>
-        <div class="x402-value" id="st-proofs-gen">-</div>
+        <div class="x402-value" id="st-proofs-gen">0</div>
       </div>
       <div class="x402-item">
         <div class="x402-label">Proofs Verified</div>
-        <div class="x402-value" id="st-proofs-ver">-</div>
+        <div class="x402-value" id="st-proofs-ver">0</div>
       </div>
     </div>
   </div>
@@ -703,6 +698,8 @@ This skill fetches current weather data from a public API and returns a friendly
         <tr><td>POST</td><td><code>/api/v1/verify</code></td><td>None</td><td class="free">Free</td></tr>
         <tr><td>GET</td><td><code>/health</code></td><td>None</td><td class="free">Free</td></tr>
         <tr><td>GET</td><td><code>/stats</code></td><td>None</td><td class="free">Free</td></tr>
+        <tr><td>GET</td><td><code>/openapi.json</code></td><td>None</td><td class="free">Free</td></tr>
+        <tr><td>GET</td><td><code>/.well-known/ai-plugin.json</code></td><td>None</td><td class="free">Free</td></tr>
       </tbody>
     </table>
   </div>
@@ -780,7 +777,6 @@ var CONFIG = {
   baseExplorerUrl: 'https://basescan.org',
   healthIntervalMs: 30000,
   statsIntervalMs: 10000,
-  earningsIntervalMs: 30000,
   skillCacheTtlMs: 3600000
 };
 
@@ -841,6 +837,7 @@ function loadStats() {
 
       $('st-proofs-gen').textContent = d.proofs.total_generated;
       $('st-proofs-ver').textContent = d.proofs.total_verified;
+      $('proof-counter-value').textContent = d.proofs.total_generated;
 
       var cls = d.classifications;
       var total = cls.safe + cls.caution + cls.dangerous + cls.malicious;
@@ -1413,7 +1410,7 @@ async function signX402Payment(requirements) {
         return;
       }
     }
-    showLoading('Classifying with zkML proof...');
+    showLoading('Classifying + generating zkML proof...');
     var btnC = $('btn-classify');
     if (btnC) btnC.disabled = true;
     // Disable all quick classify buttons
@@ -1481,7 +1478,6 @@ async function signX402Payment(requirements) {
               if (walletState.connected) {
                 fetchUsdcBalance(walletState.address);
               }
-              refreshEarnings();
             });
           });
         }
@@ -1816,63 +1812,8 @@ async function signX402Payment(requirements) {
       });
   });
 
-  /* ── Server earnings (pay-to wallet balance) ── */
-  var serverPayTo = null;
-
-  function refreshEarnings() {
-    if (!serverPayTo) return;
-    var padded = serverPayTo.toLowerCase().replace('0x', '').padStart(64, '0');
-    var callData = '0x70a08231' + padded;
-    fetch(CONFIG.baseRpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0', id: 1, method: 'eth_call',
-        params: [{ to: USDC_BASE, data: callData }, 'latest']
-      })
-    }).then(function(rpc) { return rpc.json(); })
-      .then(function(resp) {
-        if (!resp.result) return;
-        var raw = parseInt(resp.result, 16);
-        if (isNaN(raw)) raw = 0;
-        var balance = (raw / 1e6).toFixed(3);
-        $('earnings-value').textContent = '$' + balance + ' USDC';
-        $('earnings-addr').textContent = serverPayTo.slice(0, 6) + '...' + serverPayTo.slice(-4);
-        $('earnings-badge').style.display = '';
-      }).catch(function() {});
-  }
-
-  function loadServerEarnings() {
-    // Get pay_to address from /health endpoint
-    fetch(CONFIG.healthEndpoint).then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (data.pay_to) {
-          serverPayTo = data.pay_to;
-          refreshEarnings();
-        } else {
-          // Fallback: probe via 402 response to discover pay_to address
-          return fetch(CONFIG.evaluateEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ skill: { name: '_probe', version: '0', author: '_', description: '', skill_md: '_', scripts: [], files: [] } })
-          }).then(async function(r) {
-            if (r.status === 402) {
-              var info = await parse402Response(r);
-              if (info && info.accepts && info.accepts[0] && info.accepts[0].payTo) {
-                serverPayTo = info.accepts[0].payTo;
-                refreshEarnings();
-              }
-            }
-          });
-        }
-      }).catch(function() {});
-  }
-
   /* ── Init ── */
   loadSkillIndex();
-  loadServerEarnings();
-  // Refresh earnings balance periodically
-  setInterval(refreshEarnings, CONFIG.earningsIntervalMs);
 })();
 
 checkHealth();

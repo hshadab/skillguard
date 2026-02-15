@@ -1,6 +1,6 @@
-# SkillGuard
+# SkillGuard: SSL for Agent Skills
 
-> Unforgeable cryptographic safety guardrails for OpenClaw agent skills, powered by [Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas) zero-knowledge machine learning proofs
+> Every classification is a verifiable certificate. Like SSL proves server identity, SkillGuard proofs prove classification integrity — powered by [Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas) zero-knowledge machine learning proofs.
 
 [![CI](https://github.com/hshadab/skillguard/actions/workflows/ci.yml/badge.svg)](https://github.com/hshadab/skillguard/actions/workflows/ci.yml)
 
@@ -10,25 +10,25 @@
 
 ## What Is This?
 
-SkillGuard is a safety classifier for AI agent skills. It answers a simple question: **"Is this skill safe to install?"**
+SkillGuard is **SSL for the AI agent skill supply chain**. It answers a simple question: **"Is this skill safe to install?"** — and backs every answer with a cryptographic certificate anyone can verify.
 
 AI agents on platforms like [OpenClaw](https://openclaw.ai) can install community-created "skills" — small packages of code and instructions that give an agent new abilities (calling APIs, writing files, running scripts, etc.). Some skills might be malicious: they could steal credentials, open reverse shells, or trick the AI into leaking secrets.
 
 SkillGuard inspects each skill and classifies it as **SAFE**, **CAUTION**, **DANGEROUS**, or **MALICIOUS**. It then makes a decision: **ALLOW**, **FLAG**, or **DENY**.
 
-What makes SkillGuard different from a regular classifier is that every classification comes with a **zero-knowledge machine learning proof** — a cryptographic certificate proving the classification was computed correctly by a specific model. Anyone can verify this proof without trusting the SkillGuard operator and without seeing the model's internal weights.
+Just as an SSL certificate proves a server is who it claims to be, every SkillGuard classification comes with a **zero-knowledge machine learning proof** — a cryptographic certificate proving the classification was computed correctly by a specific model. Anyone can verify this proof without trusting the SkillGuard operator and without seeing the model's internal weights.
 
 ### How It Works
 
-1. **Feature extraction** — SkillGuard reads the skill's documentation, scripts, and metadata, then extracts 28 numeric features that capture security-relevant signals (shell execution calls, reverse shell patterns, credential access, obfuscation techniques, entropy analysis, author reputation, download counts, etc.).
+1. **Skill submitted** — A developer publishes a skill to [ClawHub](https://clawhub.ai), or submits data directly via API.
 
-2. **Neural network classification** — The 28 features feed into a small neural network (3-layer MLP, 2,116 parameters) that outputs probabilities for each safety class. All arithmetic uses fixed-point integers so the computation is deterministic and provable.
+2. **Features extracted** — SkillGuard reads the skill's documentation, scripts, and metadata, then extracts 28 numeric features that capture security-relevant signals (shell execution calls, reverse shell patterns, credential access, obfuscation techniques, entropy analysis, author reputation, download counts, etc.).
 
-3. **Zero-knowledge machine learning proof** — The entire neural network forward pass runs inside a SNARK virtual machine ([Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas)). This produces a ~53 KB cryptographic proof that the classification was computed correctly. The proof reveals the inputs and outputs but not the model weights.
+3. **Classified with proof** — The 28 features feed into a small neural network (3-layer MLP, 2,116 parameters). The entire forward pass runs inside a SNARK virtual machine ([Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas)), producing a ~53 KB cryptographic proof that the classification was computed correctly.
 
-4. **Verification** — Anyone can verify a proof by posting it to `/api/v1/verify`. Verification is free, takes milliseconds, and requires no API key.
+4. **Anyone verifies** — Anyone can verify a proof by posting it to `/api/v1/verify`. Verification is free, takes milliseconds, and requires no API key.
 
-5. **Payment** — SkillGuard uses the [x402 protocol](https://www.x402.org/) for pay-per-request pricing. AI agents or users pay $0.001 USDC on Base per classification. Payment is settled on-chain via `transferWithAuthorization`. API key holders bypass payment.
+5. **Classification made** — The result (ALLOW, FLAG, or DENY) plus the proof become a tamperproof safety certificate for the skill. Payment is handled via the [x402 protocol](https://www.x402.org/) at $0.001 USDC on Base per classification.
 
 ---
 
@@ -121,6 +121,7 @@ skillguard check --input SKILL.md --prove --format json
 | GET | `/health` | None | Free | Health check (includes `zkml_enabled`, `pay_to`) |
 | GET | `/stats` | None | Free | Usage statistics and proof counts |
 | GET | `/openapi.json` | None | Free | OpenAPI 3.1 specification |
+| GET | `/.well-known/ai-plugin.json` | None | Free | AI agent discovery manifest |
 | GET | `/` | None | Free | Web dashboard |
 
 The `/api/v1/evaluate` endpoint accepts two request formats:

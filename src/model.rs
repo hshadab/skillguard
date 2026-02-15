@@ -119,7 +119,7 @@ impl ModelBuilder {
 }
 
 // ---------------------------------------------------------------------------
-// Auto-generated weights from training/train.py
+// Auto-generated weights from training script
 // Training date: 2026-02-14
 // Training seed: 42
 // Validation accuracy: 100.0% exact match, 100.0% decision match

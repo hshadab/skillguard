@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "SkillGuard",
+    "title": "SkillGuard: SSL for Agent Skills",
     "version": "0.1.0",
-    "description": "Unforgeable cryptographic safety guardrails for OpenClaw agent skills. Evaluates skill metadata and scripts to produce a safety classification (SAFE, CAUTION, DANGEROUS, MALICIOUS) with a zero-knowledge machine learning proof via Jolt/Dory SNARK.",
+    "description": "SSL for Agent Skills — every classification is a verifiable certificate. SkillGuard evaluates AI agent skill metadata and scripts, producing a safety classification (SAFE, CAUTION, DANGEROUS, MALICIOUS) backed by a zero-knowledge machine learning proof via Jolt/Dory SNARK. Like SSL proves server identity, SkillGuard proofs prove classification integrity.",
     "license": {
       "name": "MIT",
       "url": "https://github.com/hshadab/skillguard/blob/main/LICENSE"
@@ -73,6 +73,40 @@
                 "schema": {
                   "$ref": "#/components/schemas/StatsResponse"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "operationId": "getOpenApiSpec",
+        "summary": "OpenAPI specification",
+        "description": "Returns the OpenAPI 3.1 specification for SkillGuard.",
+        "responses": {
+          "200": {
+            "description": "OpenAPI JSON",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/ai-plugin.json": {
+      "get": {
+        "operationId": "getAiPluginManifest",
+        "summary": "AI plugin manifest",
+        "description": "Returns the ai-plugin.json manifest for agent discovery (ChatGPT plugin protocol).",
+        "responses": {
+          "200": {
+            "description": "AI plugin manifest JSON",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object" }
               }
             }
           }
