@@ -65,6 +65,10 @@ impl UsageMetrics {
             .ok()
             .and_then(|data| serde_json::from_slice::<serde_json::Value>(&data).ok());
 
+        if restored.is_some() {
+            tracing::info!(path = %metrics_path_str, "restored persisted metrics from disk");
+        }
+
         let v = |field: &str| -> u64 {
             restored
                 .as_ref()

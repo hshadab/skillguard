@@ -1274,6 +1274,7 @@ async function signX402Payment(requirements) {
       { key: 'MALICIOUS', label: 'Malicious', color: 'var(--malicious)' }
     ];
     var html = '<div class="result-scores">';
+    html += '<div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:6px">Class Probabilities</div>';
     for (var i = 0; i < cats.length; i++) {
       var c = cats[i];
       var val = scores[c.key] || 0;
@@ -1290,12 +1291,26 @@ async function signX402Payment(requirements) {
 
   function renderResult(ev, proofBundle, timeMs, paidViaX402, settlement) {
     var cls = classColor(ev.classification);
+    // Compute top-class probability from scores
+    var topProb = 0;
+    if (ev.scores) {
+      var clsKey = ev.classification.toUpperCase();
+      topProb = ev.scores[clsKey] || 0;
+    }
+    var certaintyMargin = (typeof ev.confidence === 'number') ? ev.confidence : 0;
+    var marginPct = (certaintyMargin * 100).toFixed(1);
+    var isLowCertainty = certaintyMargin < 0.20;
+
     var html = '<div class="result-card">';
     html += '<div class="result-header">';
-    html += '<span class="result-badge ' + cls + '">' + escHtml(ev.classification) + '</span>';
+    html += '<span class="result-badge ' + cls + '">' + escHtml(ev.classification) + ' (' + pct(topProb) + ')</span>';
     html += '<span class="result-decision">Decision: <strong>' + escHtml(ev.decision) + '</strong></span>';
     if (typeof ev.confidence === 'number') {
-      html += '<span class="result-confidence">Confidence: <strong>' + pct(ev.confidence) + '</strong></span>';
+      var tierLabel, tierColor;
+      if (certaintyMargin >= 0.50) { tierLabel = 'High'; tierColor = 'var(--safe)'; }
+      else if (certaintyMargin >= 0.20) { tierLabel = 'Moderate'; tierColor = 'var(--caution)'; }
+      else { tierLabel = 'Low'; tierColor = 'var(--dangerous)'; }
+      html += '<span class="result-confidence" style="color:' + tierColor + '">Certainty: <strong>' + tierLabel + '</strong> <span style="font-size:0.78rem;color:var(--text-muted)">(' + marginPct + '% margin)</span></span>';
     }
     if (paidViaX402) {
       if (settlement && settlement.success && settlement.transaction) {
@@ -1309,6 +1324,12 @@ async function signX402Payment(requirements) {
       }
     }
     html += '</div>';
+    if (isLowCertainty) {
+      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.2);border-radius:var(--radius);font-size:0.8rem;color:var(--text-secondary);line-height:1.5">' +
+        'The model could not clearly distinguish between safety classes. ' +
+        'The top class (<strong style="color:var(--text-primary)">' + escHtml(ev.classification) + '</strong> at ' + pct(topProb) + ') only narrowly leads. ' +
+        'This skill has been <strong style="color:var(--text-primary)">' + escHtml(ev.decision.toLowerCase()) + (ev.decision === 'FLAG' ? 'ged' : ev.decision === 'DENY' ? 'ied' : 'ed') + '</strong> for review.</div>';
+    }
     if (ev.scores) html += renderScores(ev.scores);
     if (ev.reasoning) {
       html += '<div style="margin-top:10px;font-size:0.82rem;color:var(--text-secondary)"><strong>Reasoning:</strong> ' + escHtml(ev.reasoning) + '</div>';
