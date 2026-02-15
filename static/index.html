@@ -1303,13 +1303,43 @@ async function signX402Payment(requirements) {
       html += '<div class="proof-meta">';
       html += '<span>Proof size: <code>' + sizeKB + ' KB</code></span>';
       html += '<span>Proving time: <code>' + proveSec + 's</code></span>';
+      html += '<span id="verify-status" style="color:var(--text-muted)"><span class="spinner" style="width:12px;height:12px;border-width:1.5px;margin-right:4px"></span>Verifying proof...</span>';
       html += '</div>';
       html += '<button class="proof-toggle">Show raw proof JSON</button>';
       html += '<div class="proof-raw" style="display:none">' + escHtml(JSON.stringify(proofBundle, null, 2)) + '</div>';
     }
-    html += '<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted)">Proof verification time: ' + (timeMs / 1000).toFixed(2) + 's</div>';
+    html += '<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted)">Total processing time: ' + (timeMs / 1000).toFixed(2) + 's</div>';
     html += '</div>';
     return html;
+  }
+
+  function autoVerifyProof(proofBundle) {
+    if (!proofBundle || !proofBundle.proof_b64) return;
+    var el = document.getElementById('verify-status');
+    if (!el) return;
+    fetch('/api/v1/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        proof_b64: proofBundle.proof_b64,
+        program_io: proofBundle.program_io
+      })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var verifySec = (d.verification_time_ms / 1000).toFixed(3);
+      if (d.valid) {
+        el.innerHTML = 'Verified <code style="color:var(--safe)">' + verifySec + 's</code>';
+        el.style.color = 'var(--safe)';
+      } else {
+        el.innerHTML = 'Verification failed <code>' + verifySec + 's</code>';
+        el.style.color = 'var(--malicious)';
+      }
+    })
+    .catch(function() {
+      el.innerHTML = 'Verification unavailable';
+      el.style.color = 'var(--text-muted)';
+    });
   }
 
 
@@ -1347,6 +1377,8 @@ async function signX402Payment(requirements) {
           raw.style.display = raw.style.display === 'none' ? 'block' : 'none';
         });
       });
+      // Auto-verify the proof
+      if (proof) autoVerifyProof(proof);
     });
   }
 
