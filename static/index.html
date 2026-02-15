@@ -492,7 +492,7 @@ footer a:hover { text-decoration: underline; }
       Unforgeable cryptographic safety guardrails for OpenClaw agent skills.
     </div>
     <div class="tagline">
-      Powered by <a href="https://github.com/ICME-Lab/jolt-atlas" target="_blank" rel="noopener">Jolt Atlas</a> zero-knowledge proofs &middot; Paid via <a href="https://www.x402.org/" target="_blank" rel="noopener">x402</a> on Base
+      Powered by <a href="https://github.com/ICME-Lab/jolt-atlas" target="_blank" rel="noopener">Jolt Atlas</a> zero-knowledge machine learning proofs &middot; Paid via <a href="https://www.x402.org/" target="_blank" rel="noopener">x402</a> on Base
     </div>
     <div class="earnings-badge" id="earnings-badge" style="display:none">
       <div class="earnings-label">Earnings to Date</div>
@@ -546,7 +546,7 @@ footer a:hover { text-decoration: underline; }
         </div>
       </div>
       <div class="how-cert">
-        Every classification is backed by a <strong>zero-knowledge proof</strong> — a cryptographic receipt that the neural network ran correctly on the claimed inputs. The proof reveals the decision but not the model weights. Anyone can verify. No one can forge.
+        Like an SSL certificate for agent skills: every classification is backed by a <strong>zero-knowledge machine learning proof</strong> — a cryptographic receipt that the neural network ran correctly on the claimed inputs. The proof reveals the decision but not the model weights. Anyone can verify. No one can forge.
       </div>
     </div>
   </details>
@@ -658,7 +658,7 @@ This skill fetches current weather data from a public API and returns a friendly
         </div>
         <div class="form-errors" id="form-errors" role="alert"><ul></ul></div>
         <div class="try-buttons">
-          <button class="btn-classify" id="btn-classify" type="button" aria-label="Classify skill with ZK proof">Classify</button>
+          <button class="btn-classify" id="btn-classify" type="button" aria-label="Classify skill with zkML proof">Classify</button>
         </div>
       </div>
     </div>
@@ -1362,7 +1362,7 @@ async function signX402Payment(requirements) {
         return;
       }
     }
-    showLoading('Classifying with ZK proof...');
+    showLoading('Classifying with zkML proof...');
     var btnC = $('btn-classify');
     if (btnC) btnC.disabled = true;
     // Disable all quick classify buttons
@@ -1414,7 +1414,7 @@ async function signX402Payment(requirements) {
           }).then(function(paymentHeader) {
             var headers = getHeaders();
             headers['X-PAYMENT'] = paymentHeader;
-            showLoading('Classifying with ZK proof (paid via x402)...');
+            showLoading('Classifying with zkML proof (paid via x402)...');
             return fetch(url, { method: 'POST', headers: headers, body: reqBody });
           }).then(function(r2) {
             if (!r2.ok && r2.status !== 200) {

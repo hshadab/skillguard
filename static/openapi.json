@@ -3,7 +3,7 @@
   "info": {
     "title": "SkillGuard",
     "version": "0.1.0",
-    "description": "Cryptographically verified agent skill analysis guardrails. Evaluates AI agent skills and produces a safety classification (SAFE, CAUTION, DANGEROUS, MALICIOUS) with a zero-knowledge proof via Jolt/Dory SNARK.",
+    "description": "Unforgeable cryptographic safety guardrails for OpenClaw agent skills. Evaluates skill metadata and scripts to produce a safety classification (SAFE, CAUTION, DANGEROUS, MALICIOUS) with a zero-knowledge machine learning proof via Jolt/Dory SNARK.",
     "license": {
       "name": "MIT",
       "url": "https://github.com/hshadab/skillguard/blob/main/LICENSE"
@@ -83,7 +83,7 @@
       "post": {
         "operationId": "evaluateSkill",
         "summary": "Classify a skill",
-        "description": "Single endpoint for all skill classifications. Accepts two request formats:\n\n1. **Name lookup:** `{\"skill\": \"skill-slug\"}` — fetches skill data from ClawHub, then classifies.\n2. **Full skill data:** `{\"skill\": {\"name\": \"...\", ...}}` — classifies the provided skill directly.\n\nBoth formats return the same response. A ZK proof is automatically included when the prover is ready.",
+        "description": "Single endpoint for all skill classifications. Accepts two request formats:\n\n1. **Name lookup:** `{\"skill\": \"skill-slug\"}` — fetches skill data from ClawHub, then classifies.\n2. **Full skill data:** `{\"skill\": {\"name\": \"...\", ...}}` — classifies the provided skill directly.\n\nBoth formats return the same response. A zkML proof is automatically included when the prover is ready.",
         "x-x402-pricing": {
           "amount": "0.001",
           "currency": "USDC",
@@ -130,7 +130,7 @@
         },
         "responses": {
           "200": {
-            "description": "Classification result with optional ZK proof",
+            "description": "Classification result with optional zkML proof",
             "content": {
               "application/json": {
                 "schema": {
@@ -154,7 +154,7 @@
     "/api/v1/verify": {
       "post": {
         "operationId": "verifyProof",
-        "summary": "Verify a ZK proof",
+        "summary": "Verify a zkML proof",
         "description": "Verify a previously generated SNARK proof. Free, no authentication required.",
         "requestBody": {
           "required": true,
@@ -286,7 +286,7 @@
       },
       "ProofBundle": {
         "type": "object",
-        "description": "ZK proof bundle from Jolt/Dory SNARK proving the neural network forward pass.",
+        "description": "zkML proof bundle from Jolt/Dory SNARK proving the neural network forward pass.",
         "required": ["proof_b64", "program_io", "proof_size_bytes", "proving_time_ms"],
         "properties": {
           "proof_b64": { "type": "string", "description": "Base64-encoded SNARK proof bytes" },
@@ -297,7 +297,7 @@
       },
       "EvaluationResult": {
         "type": "object",
-        "description": "Classification result with optional ZK proof.",
+        "description": "Classification result with optional zkML proof.",
         "required": ["skill_name", "classification", "decision", "confidence", "scores", "reasoning"],
         "properties": {
           "skill_name": { "type": "string" },
@@ -311,7 +311,7 @@
               { "$ref": "#/components/schemas/ProofBundle" },
               { "type": "null" }
             ],
-            "description": "ZK proof bundle. Present when the prover is ready; null or omitted otherwise."
+            "description": "zkML proof bundle. Present when the prover is ready; null or omitted otherwise."
           }
         }
       },

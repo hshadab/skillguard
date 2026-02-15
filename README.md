@@ -1,6 +1,6 @@
 # SkillGuard
 
-> Cryptographically verified agent skill analysis guardrails, powered by [Jolt Atlas ZKML](https://github.com/ICME-Lab/jolt-atlas)
+> Unforgeable cryptographic safety guardrails for OpenClaw agent skills, powered by [Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas) zero-knowledge machine learning proofs
 
 [![CI](https://github.com/hshadab/skillguard/actions/workflows/ci.yml/badge.svg)](https://github.com/hshadab/skillguard/actions/workflows/ci.yml)
 
@@ -16,7 +16,7 @@ AI agents on platforms like [OpenClaw](https://openclaw.org) can install communi
 
 SkillGuard inspects each skill and classifies it as **SAFE**, **CAUTION**, **DANGEROUS**, or **MALICIOUS**. It then makes a decision: **ALLOW**, **FLAG**, or **DENY**.
 
-What makes SkillGuard different from a regular classifier is that every classification comes with a **zero-knowledge proof** — a cryptographic certificate proving the classification was computed correctly by a specific model. Anyone can verify this proof without trusting the SkillGuard operator and without seeing the model's internal weights.
+What makes SkillGuard different from a regular classifier is that every classification comes with a **zero-knowledge machine learning proof** — a cryptographic certificate proving the classification was computed correctly by a specific model. Anyone can verify this proof without trusting the SkillGuard operator and without seeing the model's internal weights.
 
 ### How It Works
 
@@ -24,7 +24,7 @@ What makes SkillGuard different from a regular classifier is that every classifi
 
 2. **Neural network classification** — The 22 features feed into a small neural network (3-layer MLP, 1,924 parameters) that outputs probabilities for each safety class. All arithmetic uses fixed-point integers so the computation is deterministic and provable.
 
-3. **Zero-knowledge proof** — The entire neural network forward pass runs inside a SNARK virtual machine ([Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas)). This produces a ~53 KB cryptographic proof that the classification was computed correctly. The proof reveals the inputs and outputs but not the model weights.
+3. **Zero-knowledge machine learning proof** — The entire neural network forward pass runs inside a SNARK virtual machine ([Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas)). This produces a ~53 KB cryptographic proof that the classification was computed correctly. The proof reveals the inputs and outputs but not the model weights.
 
 4. **Verification** — Anyone can verify a proof by posting it to `/api/v1/verify`. Verification is free, takes milliseconds, and requires no API key.
 
@@ -59,7 +59,7 @@ SKILLGUARD_PAY_TO=0xYourBaseWallet ./target/release/skillguard serve --bind 0.0.
 
 ### Classify a Skill
 
-There is a single endpoint that handles all classifications. It automatically generates a ZK proof when the prover is ready.
+There is a single endpoint that handles all classifications. It automatically generates a zkML proof when the prover is ready.
 
 **By name** (fetches from [ClawHub](https://clawhub.ai)):
 ```bash
@@ -106,8 +106,8 @@ skillguard check --input SKILL.md --prove --format json
 
 | Method | Path | Auth | Price | Description |
 |--------|------|------|-------|-------------|
-| POST | `/api/v1/evaluate` | API key or x402 | $0.001 USDC | Classify a skill (auto-detects name lookup vs full data, includes ZK proof when prover is ready) |
-| POST | `/api/v1/verify` | None | Free | Verify a ZK proof |
+| POST | `/api/v1/evaluate` | API key or x402 | $0.001 USDC | Classify a skill (auto-detects name lookup vs full data, includes zkML proof when prover is ready) |
+| POST | `/api/v1/verify` | None | Free | Verify a zkML proof |
 | GET | `/health` | None | Free | Health check (includes `zkml_enabled`, `pay_to`) |
 | GET | `/stats` | None | Free | Usage statistics and proof counts |
 | GET | `/openapi.json` | None | Free | OpenAPI 3.1 specification |
@@ -117,7 +117,7 @@ The `/api/v1/evaluate` endpoint accepts two request formats:
 - **Name lookup:** `{"skill": "skill-slug"}` — fetches skill data from ClawHub, then classifies
 - **Full skill data:** `{"skill": {"name": "...", "version": "...", ...}}` — classifies directly
 
-Both formats return the same response with classification, confidence, scores, reasoning, and an optional ZK proof bundle.
+Both formats return the same response with classification, confidence, scores, reasoning, and an optional zkML proof bundle.
 
 ---
 
