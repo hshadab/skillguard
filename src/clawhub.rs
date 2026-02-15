@@ -135,7 +135,7 @@ impl ClawHubClient {
         let slug = name.rsplit('/').next().unwrap_or(name);
 
         // Fetch skill details
-        let detail_url = format!("{}/skills/{}", self.base_url, slug);
+        let detail_url = format!("{}/skills/{}", self.base_url, urlencoding::encode(slug));
         let detail: SkillDetailResponse = self
             .client
             .get(&detail_url)
@@ -149,9 +149,13 @@ impl ClawHubClient {
             .wrap_err("Failed to parse skill detail JSON")?;
 
         // Fetch SKILL.md content
-        let mut content_url = format!("{}/skills/{}/file?path=SKILL.md", self.base_url, slug);
+        let mut content_url = format!(
+            "{}/skills/{}/file?path=SKILL.md",
+            self.base_url,
+            urlencoding::encode(slug)
+        );
         if let Some(v) = version {
-            content_url.push_str(&format!("&version={}", v));
+            content_url.push_str(&format!("&version={}", urlencoding::encode(v)));
         }
 
         let skill_md = self
@@ -162,7 +166,10 @@ impl ClawHubClient {
             .wrap_err("Failed to fetch SKILL.md")?
             .text()
             .await
-            .unwrap_or_default();
+            .unwrap_or_else(|e| {
+                tracing::warn!(skill = %name, error = %e, "failed to read SKILL.md body");
+                String::new()
+            });
 
         let skill_inner = detail.skill;
         let owner = detail.owner.unwrap_or_default();
@@ -206,7 +213,7 @@ impl ClawHubClient {
     ) -> Result<(Vec<SkillListEntry>, Option<String>)> {
         let mut url = format!("{}/skills?limit={}&sort=updated", self.base_url, limit);
         if let Some(c) = cursor {
-            url.push_str(&format!("&cursor={}", c));
+            url.push_str(&format!("&cursor={}", urlencoding::encode(c)));
         }
 
         let resp: SkillListResponse = self

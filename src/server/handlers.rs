@@ -19,6 +19,32 @@ use super::ServerState;
 pub const MAX_BODY_BYTES: usize = 1024 * 1024;
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Try to obtain the prover, recording an error metric if unavailable.
+#[allow(clippy::result_large_err)]
+fn try_get_prover(
+    state: &Arc<ServerState>,
+    start: Instant,
+) -> Result<Arc<crate::prover::ProverState>, ProveEvaluateResponse> {
+    match state.get_prover() {
+        Some(p) => Ok(p),
+        None => {
+            state.usage.record_error();
+            Err(ProveEvaluateResponse {
+                success: false,
+                error: Some(
+                    "ZKML prover is still initializing. Please retry in a few seconds.".into(),
+                ),
+                evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            })
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Shared classification + proving logic
 // ---------------------------------------------------------------------------
 
@@ -37,19 +63,9 @@ async fn classify_and_respond(
 ) -> ProveEvaluateResponse {
     let feature_vec = features.to_normalized_vec();
 
-    let prover = match state.get_prover() {
-        Some(p) => p,
-        None => {
-            state.usage.record_error();
-            return ProveEvaluateResponse {
-                success: false,
-                error: Some(
-                    "ZKML prover is still initializing. Please retry in a few seconds.".into(),
-                ),
-                evaluation: None,
-                processing_time_ms: start.elapsed().as_millis() as u64,
-            };
-        }
+    let prover = match try_get_prover(state, start) {
+        Ok(p) => p,
+        Err(resp) => return resp,
     };
 
     // Check proof cache first
@@ -68,16 +84,14 @@ async fn classify_and_respond(
     }
 
     let fv_for_proof = feature_vec.clone();
-    let prove_result = tokio::task::spawn_blocking(move || {
-        crate::classify_with_proof(&prover, &fv_for_proof)
-    })
-    .await;
+    let prove_result =
+        tokio::task::spawn_blocking(move || crate::classify_with_proof(&prover, &fv_for_proof))
+            .await;
 
     match prove_result {
         Ok(Ok((classification, raw_scores, confidence, proof_bundle))) => {
             let scores = ClassScores::from_raw_scores(&raw_scores);
-            let (decision, reasoning) =
-                derive_decision(classification, &scores.to_array());
+            let (decision, reasoning) = derive_decision(classification, &scores.to_array());
             let processing_time_ms = start.elapsed().as_millis() as u64;
 
             state.usage.record(
@@ -110,8 +124,7 @@ async fn classify_and_respond(
 
             // Cache the successful proof response
             if let Some(bytes) = request_bytes {
-                let cache_key =
-                    crate::cache::ProofCache::cache_key(bytes, &state.model_hash);
+                let cache_key = crate::cache::ProofCache::cache_key(bytes, &state.model_hash);
                 state.proof_cache.put(&cache_key, &response);
             }
 
@@ -152,8 +165,11 @@ pub async fn health_handler(
         .map(|m| !m.permissions().readonly())
         .unwrap_or(false);
 
+    let prover_ready = state.skip_prover || state.get_prover().is_some();
+    let status = if prover_ready { "ok" } else { "degraded" };
+
     let response = HealthResponse {
-        status: "ok".to_string(),
+        status: status.to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         model_hash: state.model_hash.clone(),
         uptime_seconds: state.start_time.elapsed().as_secs(),
@@ -179,7 +195,7 @@ pub async fn evaluate_handler(
     let client_ip = addr.ip();
 
     let body = request.into_body();
-    let bytes = match axum::body::to_bytes(body, 2 * 1024 * 1024).await {
+    let bytes = match axum::body::to_bytes(body, MAX_BODY_BYTES).await {
         Ok(b) => b,
         Err(e) => {
             return axum::Json(ProveEvaluateResponse {
@@ -250,10 +266,7 @@ pub async fn evaluate_handler(
                 state.usage.record_error();
                 return axum::Json(ProveEvaluateResponse {
                     success: false,
-                    error: Some(format!(
-                        "Failed to fetch skill '{}': {}",
-                        name_req.skill, e
-                    )),
+                    error: Some(format!("Failed to fetch skill '{}': {}", name_req.skill, e)),
                     evaluation: None,
                     processing_time_ms: start.elapsed().as_millis() as u64,
                 });
@@ -264,8 +277,14 @@ pub async fn evaluate_handler(
         let skill_name = skill.name;
 
         let response = classify_and_respond(
-            &state, features, skill_name, start, "evaluate", Some(&bytes),
-        ).await;
+            &state,
+            features,
+            skill_name,
+            start,
+            "evaluate",
+            Some(&bytes),
+        )
+        .await;
 
         axum::Json(response)
     } else {
@@ -284,13 +303,18 @@ pub async fn evaluate_handler(
 
         state.usage.ep_evaluate.fetch_add(1, Ordering::Relaxed);
 
-        let features =
-            SkillFeatures::extract(&eval_request.skill, eval_request.vt_report.as_ref());
+        let features = SkillFeatures::extract(&eval_request.skill, eval_request.vt_report.as_ref());
         let skill_name = eval_request.skill.name.clone();
 
         let response = classify_and_respond(
-            &state, features, skill_name, start, "evaluate", Some(&bytes),
-        ).await;
+            &state,
+            features,
+            skill_name,
+            start,
+            "evaluate",
+            Some(&bytes),
+        )
+        .await;
 
         axum::Json(response)
     }
@@ -304,9 +328,9 @@ pub async fn verify_handler(
 
     state.usage.ep_verify.fetch_add(1, Ordering::Relaxed);
 
-    let prover = match state.get_prover() {
-        Some(p) => p,
-        None => {
+    let prover = match try_get_prover(&state, start) {
+        Ok(p) => p,
+        Err(_) => {
             return axum::Json(serde_json::json!({
                 "error": "ZKML prover not available",
                 "valid": false,
@@ -322,7 +346,10 @@ pub async fn verify_handler(
         proving_time_ms: 0,
     };
 
-    let valid: bool = prover.verify_proof(&bundle).unwrap_or_default();
+    let valid: bool = prover.verify_proof(&bundle).unwrap_or_else(|e| {
+        tracing::warn!(error = %e, "proof verification returned error");
+        false
+    });
 
     state
         .usage

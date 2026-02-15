@@ -5,6 +5,7 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use sha2::{Digest, Sha256};
 use tracing::{info, warn};
@@ -20,6 +21,8 @@ const MAX_CACHE_ENTRIES: usize = 1000;
 /// Disk-backed proof cache.
 pub struct ProofCache {
     proofs_dir: PathBuf,
+    /// Guard to prevent concurrent cleanup runs.
+    cleaning: AtomicBool,
 }
 
 impl ProofCache {
@@ -34,7 +37,10 @@ impl ProofCache {
             info!(path = %proofs_dir.display(), "proof cache ready");
         }
 
-        Self { proofs_dir }
+        Self {
+            proofs_dir,
+            cleaning: AtomicBool::new(false),
+        }
     }
 
     /// Build the cache key from request body bytes and the model hash.
@@ -84,7 +90,12 @@ impl ProofCache {
     }
 
     /// Remove oldest cache entries when the count exceeds the limit.
+    /// Uses an atomic flag to prevent concurrent cleanup runs.
     fn cleanup_if_needed(&self) {
+        if self.cleaning.swap(true, Ordering::Acquire) {
+            // Another thread is already cleaning.
+            return;
+        }
         let entries: Vec<_> = match fs::read_dir(&self.proofs_dir) {
             Ok(rd) => rd
                 .filter_map(|e| e.ok())
@@ -95,10 +106,14 @@ impl ProofCache {
                         .unwrap_or(false)
                 })
                 .collect(),
-            Err(_) => return,
+            Err(_) => {
+                self.cleaning.store(false, Ordering::Release);
+                return;
+            }
         };
 
         if entries.len() <= MAX_CACHE_ENTRIES {
+            self.cleaning.store(false, Ordering::Release);
             return;
         }
 
@@ -119,5 +134,6 @@ impl ProofCache {
         }
 
         info!(evicted = remove_count, "proof cache cleanup complete");
+        self.cleaning.store(false, Ordering::Release);
     }
 }

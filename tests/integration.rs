@@ -135,10 +135,9 @@ async fn evaluate_handler(
     let feature_vec = features.to_normalized_vec();
     let skill_name = eval_request.skill.name.clone();
 
-    let prove_result = tokio::task::spawn_blocking(move || {
-        skillguard::classify_with_proof(&prover, &feature_vec)
-    })
-    .await;
+    let prove_result =
+        tokio::task::spawn_blocking(move || skillguard::classify_with_proof(&prover, &feature_vec))
+            .await;
 
     match prove_result {
         Ok(Ok((classification, raw_scores, confidence, proof_bundle))) => {

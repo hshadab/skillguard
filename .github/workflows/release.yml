@@ -38,6 +38,7 @@ jobs:
       - name: Install Rust nightly toolchain
         uses: dtolnay/rust-toolchain@nightly
         with:
+          toolchain: nightly-2026-01-29
           targets: ${{ matrix.target }}
 
       - name: Install cross-compilation tools (aarch64-linux)

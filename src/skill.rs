@@ -16,10 +16,10 @@ use std::collections::HashSet;
 
 use crate::patterns::{
     count_matches, ARCHIVE_RE, CARGO_ADD_RE, CHR_CALL_RE, CREDENTIAL_RE, CURL_DOWNLOAD_RE,
-    DOMAIN_RE, ENV_ACCESS_RE, EXFILTRATION_RE, EXTERNAL_DOWNLOAD_RE, FS_WRITE_RE,
-    HEX_ESCAPE_RE, IMPORT_RE, JOIN_CALL_RE, LLM_SECRET_EXPOSURE_RE, NETWORK_CALL_RE,
-    NPM_INSTALL_RE, OBFUSCATION_RE, PERSISTENCE_RE, PIP_INSTALL_RE, PRIV_ESC_RE, REQUIRE_RE,
-    REVERSE_SHELL_RE, SHELL_EXEC_RE,
+    DOMAIN_RE, ENV_ACCESS_RE, EXFILTRATION_RE, EXTERNAL_DOWNLOAD_RE, FS_WRITE_RE, HEX_ESCAPE_RE,
+    IMPORT_RE, JOIN_CALL_RE, LLM_SECRET_EXPOSURE_RE, NETWORK_CALL_RE, NPM_INSTALL_RE,
+    OBFUSCATION_RE, PERSISTENCE_RE, PIP_INSTALL_RE, PRIV_ESC_RE, REQUIRE_RE, REVERSE_SHELL_RE,
+    SHELL_EXEC_RE,
 };
 
 // ---------------------------------------------------------------------------
@@ -410,9 +410,8 @@ impl SkillFeatures {
             ((val.min(max) as f32 / max as f32) * SCALE as f32) as i32
         };
 
-        let clip_scale_f32 = |val: f32, max: f32| -> i32 {
-            ((val.min(max) / max) * SCALE as f32) as i32
-        };
+        let clip_scale_f32 =
+            |val: f32, max: f32| -> i32 { ((val.min(max) / max) * SCALE as f32) as i32 };
 
         let log_scale = |val: u64, max_log: f32| -> i32 {
             let log_val = (val as f64 + 1.0).log10() as f32;
@@ -454,7 +453,7 @@ impl SkillFeatures {
             clip_scale_f32(self.non_ascii_ratio, 0.5), // 23 — >50% non-ASCII is highly suspicious
             clip_scale(self.max_line_length, 1000), // 24 — >1000 chars per line = minified/obfuscated
             clip_scale_f32(self.comment_ratio, 1.0), // 25 — ratio [0,1], 1.0 = all comments
-            clip_scale(self.domain_count, 20),       // 26 — >20 unique domains is unusual
+            clip_scale(self.domain_count, 20),      // 26 — >20 unique domains is unusual
             clip_scale(self.string_obfuscation_score, 10), // 27 — hex+join+chr combo count
         ]
     }

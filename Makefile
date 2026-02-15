@@ -23,3 +23,9 @@ docker:
 
 clean:
 	cargo clean
+
+setup-hooks:
+	@mkdir -p .git/hooks
+	@printf '#!/bin/sh\ncargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings\n' > .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	@echo "pre-commit hook installed (fmt + clippy)"

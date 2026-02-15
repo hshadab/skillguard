@@ -20,6 +20,7 @@ jobs:
       - name: Install Rust nightly toolchain
         uses: dtolnay/rust-toolchain@nightly
         with:
+          toolchain: nightly-2026-01-29
           components: rustfmt, clippy
 
       - name: Cache cargo registry & build
@@ -67,7 +68,7 @@ jobs:
           fetch-depth: 0
 
       - name: Scan for secrets
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@v3.88.0
         with:
           extra_args: --only-verified
 

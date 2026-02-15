@@ -43,6 +43,9 @@ lru = "0.12"
 # HTTP client for ClawHub API
 reqwest = { version = "0.12", features = ["json"] }
 
+# URL percent-encoding for user-supplied path segments
+urlencoding = "2.1"
+
 # Middleware
 tower-http = { version = "0.6", features = ["cors"] }
 

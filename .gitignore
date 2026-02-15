@@ -11,6 +11,7 @@ demo/wallets.env
 # Secrets and credentials
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 *.pk8
@@ -27,3 +28,15 @@ demo/wallets.env
 # OS
 .DS_Store
 Thumbs.db
+
+# Build / toolchain artifacts
+*.log
+.cargo/
+node_modules/
+
+# Coverage
+*.profraw
+lcov.info
+tarpaulin-report.html
+cobertura.xml
+coverage/

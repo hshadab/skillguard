@@ -44,6 +44,16 @@ cargo build --release
 
 Requires Rust nightly (arkworks const generics dependency).
 
+### Developer Setup
+
+```bash
+# Copy environment template and configure
+cp .env.example .env
+
+# Install pre-commit hooks (fmt + clippy)
+make setup-hooks
+```
+
 ### Serve
 
 ```bash
@@ -177,7 +187,10 @@ The classifier extracts 28 features from each skill:
 | `SKILLGUARD_FACILITATOR_URL` | x402 facilitator URL. Production Render deployment overrides to `https://facilitator.x402.rs`. | `https://pay.openfacilitator.io` |
 | `SKILLGUARD_EXTERNAL_URL` | Public base URL (for x402 resource URLs behind TLS proxies). | (none) |
 | `SKILLGUARD_SKIP_PROVER` | Set to `1` to disable the ZKML prover. | `0` |
+| `SKILLGUARD_PRICE_USDC_MICRO` | Price per classification in USDC micro-units (6 decimals). `1000` = $0.001. | `1000` |
 | `RUST_LOG` | Log level filter. | `info` |
+
+See `.env.example` for a documented template of all variables.
 
 ---
 

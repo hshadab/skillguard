@@ -272,6 +272,10 @@ footer a:hover { text-decoration: underline; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+}
+
 /* Wallet connection */
 .wallet-bar {
   display: flex; align-items: center; justify-content: space-between;
@@ -282,7 +286,6 @@ footer a:hover { text-decoration: underline; }
 .wallet-section {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
-.wallet-info-text { display: none; }
 .wallet-row {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
@@ -588,7 +591,6 @@ footer a:hover { text-decoration: underline; }
     <div class="card-title">Try It</div>
     <div class="wallet-bar">
       <div class="wallet-section" id="wallet-section">
-        <div class="wallet-info-text" id="wallet-info"></div>
         <div class="wallet-row">
           <button class="btn-wallet btn-connect" id="btn-connect-wallet" type="button" aria-label="Connect wallet">Connect Wallet</button>
           <span class="wallet-label" id="wallet-label" style="display:none">Your Wallet</span>
@@ -765,6 +767,23 @@ This skill fetches current weather data from a public API and returns a friendly
 </div>
 
 <script>
+var CONFIG = {
+  apiBase: '',
+  healthEndpoint: '/health',
+  statsEndpoint: '/stats',
+  evaluateEndpoint: '/api/v1/evaluate',
+  verifyEndpoint: '/api/v1/verify',
+  skillIndexUrl: 'https://raw.githubusercontent.com/VoltAgent/awesome-openclaw-skills/main/README.md',
+  baseRpcUrl: 'https://mainnet.base.org',
+  usdcContract: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+  baseChainId: '0x2105',
+  baseExplorerUrl: 'https://basescan.org',
+  healthIntervalMs: 30000,
+  statsIntervalMs: 10000,
+  earningsIntervalMs: 30000,
+  skillCacheTtlMs: 3600000
+};
+
 function $(id) { return document.getElementById(id); }
 
 function escHtml(str) {
@@ -784,7 +803,7 @@ function formatUptime(s) {
 }
 
 function checkHealth() {
-  fetch('/health')
+  fetch(CONFIG.healthEndpoint)
     .then(function(r) { return r.json(); })
     .then(function(d) {
       $('status-badge').className = 'status-badge online';
@@ -807,7 +826,7 @@ function checkHealth() {
 }
 
 function loadStats() {
-  fetch('/stats')
+  fetch(CONFIG.statsEndpoint)
     .then(function(r) { return r.json(); })
     .then(function(d) {
       $('st-total').textContent = d.requests.total;
@@ -842,8 +861,8 @@ function loadStats() {
 
 /* ── Wallet connection (EIP-1193 / window.ethereum) ── */
 var walletState = { connected: false, address: null, chainId: null };
-var BASE_CHAIN_ID = '0x2105'; // 8453
-var USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+var BASE_CHAIN_ID = CONFIG.baseChainId;
+var USDC_BASE = CONFIG.usdcContract;
 
 function truncateAddr(addr) {
   return addr.slice(0, 6) + '...' + addr.slice(-4);
@@ -856,7 +875,7 @@ async function fetchUsdcBalance(address) {
 
   try {
     // Use public Base RPC directly — more reliable than routing through wallet provider
-    var r = await fetch('https://mainnet.base.org', {
+    var r = await fetch(CONFIG.baseRpcUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1014,8 +1033,8 @@ function switchToBase() {
           chainId: BASE_CHAIN_ID,
           chainName: 'Base',
           nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-          rpcUrls: ['https://mainnet.base.org'],
-          blockExplorerUrls: ['https://basescan.org']
+          rpcUrls: [CONFIG.baseRpcUrl],
+          blockExplorerUrls: [CONFIG.baseExplorerUrl]
         }]
       });
     }
@@ -1285,7 +1304,7 @@ async function signX402Payment(requirements) {
       if (settlement && settlement.success && settlement.transaction) {
         var txHash = settlement.transaction;
         var shortTx = txHash.slice(0, 10) + '...' + txHash.slice(-8);
-        html += '<a href="https://basescan.org/tx/' + escHtml(txHash) + '" target="_blank" rel="noopener" class="payment-badge payment-link">&#x2714; x402 settled &middot; ' + shortTx + '</a>';
+        html += '<a href="' + CONFIG.baseExplorerUrl + '/tx/' + escHtml(txHash) + '" target="_blank" rel="noopener" class="payment-badge payment-link">&#x2714; x402 settled &middot; ' + shortTx + '</a>';
       } else if (settlement && !settlement.success) {
         html += '<span class="payment-badge payment-failed">&#x2718; x402 settlement failed</span>';
       } else {
@@ -1316,14 +1335,14 @@ async function signX402Payment(requirements) {
     if (!proofBundle || !proofBundle.proof_b64) return;
     var el = document.getElementById('verify-status');
     if (!el) return;
-    fetch('/api/v1/verify', {
+    withTimeout(fetch(CONFIG.verifyEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         proof_b64: proofBundle.proof_b64,
         program_io: proofBundle.program_io
       })
-    })
+    }), 30000, 'Proof verification timed out')
     .then(function(r) { return r.json(); })
     .then(function(d) {
       var verifySec = (d.verification_time_ms / 1000).toFixed(3);
@@ -1403,7 +1422,7 @@ async function signX402Payment(requirements) {
 
     var reqBody = JSON.stringify(data);
 
-    fetch(url, { method: 'POST', headers: getHeaders(), body: reqBody })
+    withTimeout(fetch(url, { method: 'POST', headers: getHeaders(), body: reqBody }), 60000, 'Classification request timed out')
       .then(async function(r) {
         if (r.status === 401) throw new Error('API key required. Provide a valid key under Advanced.');
         if (r.status === 402) {
@@ -1511,7 +1530,7 @@ async function signX402Payment(requirements) {
   /* ── Custom mode buttons ── */
   $('btn-classify').addEventListener('click', function() {
     if (!validateForm()) return;
-    doRequest('/api/v1/evaluate');
+    doRequest(CONFIG.evaluateEndpoint);
   });
 
   /* ── Skill Index ── */
@@ -1534,11 +1553,45 @@ async function signX402Payment(requirements) {
     return 'https://raw.githubusercontent.com/' + stripped;
   }
 
+  function populateCategoryDropdown() {
+    var catCounts = {};
+    for (var j = 0; j < skillIndex.length; j++) {
+      var c = skillIndex[j].category;
+      catCounts[c] = (catCounts[c] || 0) + 1;
+    }
+    var catSelect = $('filter-category');
+    // Clear existing options beyond the first "All Categories" option
+    while (catSelect.options.length > 1) catSelect.remove(1);
+    var sortedCats = Object.keys(catCounts).filter(function(c) {
+      return catCounts[c] >= 5;
+    }).sort();
+    for (var k = 0; k < sortedCats.length; k++) {
+      var opt = document.createElement('option');
+      opt.value = sortedCats[k];
+      opt.textContent = sortedCats[k] + ' (' + catCounts[sortedCats[k]] + ')';
+      catSelect.appendChild(opt);
+    }
+  }
+
   function loadSkillIndex() {
     var statusEl = $('search-status');
     statusEl.innerHTML = '<span class="spinner"></span>Loading skill directory...';
 
-    fetch('https://raw.githubusercontent.com/VoltAgent/awesome-openclaw-skills/main/README.md')
+    // Check localStorage cache first
+    try {
+      var cached = localStorage.getItem('skillguard_skill_index');
+      if (cached) {
+        var parsed = JSON.parse(cached);
+        if (parsed.ts && (Date.now() - parsed.ts) < CONFIG.skillCacheTtlMs && parsed.data) {
+          skillIndex = parsed.data;
+          populateCategoryDropdown();
+          renderSearchResults('');
+          return;
+        }
+      }
+    } catch (e) { /* cache miss or corrupt — fetch fresh */ }
+
+    fetch(CONFIG.skillIndexUrl)
       .then(function(r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.text();
@@ -1569,22 +1622,12 @@ async function signX402Payment(requirements) {
             });
           }
         }
-        // Populate category dropdown (only categories with 5+ skills)
-        var catCounts = {};
-        for (var j = 0; j < skillIndex.length; j++) {
-          var c = skillIndex[j].category;
-          catCounts[c] = (catCounts[c] || 0) + 1;
-        }
-        var catSelect = $('filter-category');
-        var sortedCats = Object.keys(catCounts).filter(function(c) {
-          return catCounts[c] >= 5;
-        }).sort();
-        for (var k = 0; k < sortedCats.length; k++) {
-          var opt = document.createElement('option');
-          opt.value = sortedCats[k];
-          opt.textContent = sortedCats[k] + ' (' + catCounts[sortedCats[k]] + ')';
-          catSelect.appendChild(opt);
-        }
+        // Save to localStorage cache
+        try {
+          localStorage.setItem('skillguard_skill_index', JSON.stringify({ ts: Date.now(), data: skillIndex }));
+        } catch (e) { /* storage full or unavailable */ }
+
+        populateCategoryDropdown();
         renderSearchResults('');
       })
       .catch(function() {
@@ -1681,7 +1724,7 @@ async function signX402Payment(requirements) {
     for (var m = 0; m < btns.length; m++) {
       btns[m].addEventListener('click', function() {
         var slug = this.getAttribute('data-slug');
-        doRequest('/api/v1/evaluate', { skill: slug });
+        doRequest(CONFIG.evaluateEndpoint, { skill: slug });
       });
     }
   }
@@ -1752,7 +1795,7 @@ async function signX402Payment(requirements) {
         return r.text();
       })
       .then(function(skillMd) {
-        doRequest('/api/v1/evaluate', {
+        doRequest(CONFIG.evaluateEndpoint, {
           skill: {
             name: name,
             version: '1.0.0',
@@ -1780,7 +1823,7 @@ async function signX402Payment(requirements) {
     if (!serverPayTo) return;
     var padded = serverPayTo.toLowerCase().replace('0x', '').padStart(64, '0');
     var callData = '0x70a08231' + padded;
-    fetch('https://mainnet.base.org', {
+    fetch(CONFIG.baseRpcUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1801,14 +1844,14 @@ async function signX402Payment(requirements) {
 
   function loadServerEarnings() {
     // Get pay_to address from /health endpoint
-    fetch('/health').then(function(r) { return r.json(); })
+    fetch(CONFIG.healthEndpoint).then(function(r) { return r.json(); })
       .then(function(data) {
         if (data.pay_to) {
           serverPayTo = data.pay_to;
           refreshEarnings();
         } else {
           // Fallback: probe via 402 response to discover pay_to address
-          return fetch('/api/v1/evaluate', {
+          return fetch(CONFIG.evaluateEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ skill: { name: '_probe', version: '0', author: '_', description: '', skill_md: '_', scripts: [], files: [] } })
@@ -1828,14 +1871,33 @@ async function signX402Payment(requirements) {
   /* ── Init ── */
   loadSkillIndex();
   loadServerEarnings();
-  // Refresh earnings balance every 30 seconds
-  setInterval(refreshEarnings, 30000);
+  // Refresh earnings balance periodically
+  setInterval(refreshEarnings, CONFIG.earningsIntervalMs);
 })();
 
 checkHealth();
 loadStats();
-setInterval(checkHealth, 30000);
-setInterval(loadStats, 10000);
+
+// Visibility-aware polling: pause when tab is hidden, resume when visible
+(function() {
+  var healthTimer = setInterval(checkHealth, CONFIG.healthIntervalMs);
+  var statsTimer = setInterval(loadStats, CONFIG.statsIntervalMs);
+
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+      clearInterval(healthTimer);
+      clearInterval(statsTimer);
+      healthTimer = null;
+      statsTimer = null;
+    } else {
+      // Refresh immediately on return, then resume polling
+      checkHealth();
+      loadStats();
+      healthTimer = setInterval(checkHealth, CONFIG.healthIntervalMs);
+      statsTimer = setInterval(loadStats, CONFIG.statsIntervalMs);
+    }
+  });
+})();
 </script>
 </body>
 </html>

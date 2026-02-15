@@ -1,3 +1,11 @@
 skillguard.example.com {
     reverse_proxy 127.0.0.1:8080
+
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https://cdn.prod.website-files.com; connect-src 'self' https://mainnet.base.org https://raw.githubusercontent.com"
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
 }

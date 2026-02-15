@@ -35,6 +35,8 @@ pub struct ServerConfig {
     pub external_url: Option<String>,
     /// Cache directory for proofs and metrics persistence.
     pub cache_dir: String,
+    /// Price per classification in USDC micro-units (6 decimals). Default: 1000 ($0.001).
+    pub price_usdc_micro: u64,
 }
 
 /// Default cache directory (Render persistent disk mount point).
@@ -54,6 +56,7 @@ impl Default for ServerConfig {
             facilitator_url: "https://pay.openfacilitator.io".to_string(),
             external_url: None,
             cache_dir: DEFAULT_CACHE_DIR.to_string(),
+            price_usdc_micro: 1000,
         }
     }
 }

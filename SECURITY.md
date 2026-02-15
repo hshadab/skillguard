@@ -46,9 +46,11 @@ The following techniques may bypass SkillGuard's detection:
 
 ## Deployment Recommendations
 
-1. **Run behind a reverse proxy** (nginx, Caddy) with TLS termination.
+1. **Run behind a reverse proxy** (nginx, Caddy) with TLS termination. The provided `deploy/nginx-skillguard.conf` and `deploy/Caddyfile` include security headers (X-Content-Type-Options, X-Frame-Options, CSP, HSTS, Referrer-Policy).
 2. **Enable API key authentication** via `SKILLGUARD_API_KEY` for production deployments.
 3. **Set rate limits** to prevent abuse (default: 60 req/min per IP; Docker image uses 30).
 4. **Monitor access logs** (`skillguard-access.jsonl`) for unusual patterns.
 5. **Re-scan skills on updates** — a skill that passes today could be modified later.
 6. **Use SkillGuard as one layer** in a defense-in-depth strategy, not as a sole gate.
+7. **Use the systemd service file** (`deploy/skillguard.service`) for production, which includes `NoNewPrivileges`, `ProtectSystem=strict`, and scoped `ReadWritePaths`.
+8. **Never embed credentials** in git config or source files. Use environment variables or secret managers.

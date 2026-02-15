@@ -124,6 +124,7 @@ fn cmd_serve(
     pay_to: Option<String>,
     facilitator_url: String,
     external_url: Option<String>,
+    price_usdc_micro: u64,
 ) -> Result<()> {
     use skillguard::server::{run_server, ServerConfig};
 
@@ -140,6 +141,7 @@ fn cmd_serve(
         pay_to: pay_to.clone(),
         facilitator_url,
         external_url,
+        price_usdc_micro,
         ..Default::default()
     };
 
@@ -358,6 +360,10 @@ fn main() {
     let facilitator_url = std::env::var("SKILLGUARD_FACILITATOR_URL")
         .unwrap_or_else(|_| "https://pay.openfacilitator.io".to_string());
     let external_url = std::env::var("SKILLGUARD_EXTERNAL_URL").ok();
+    let price_usdc_micro: u64 = std::env::var("SKILLGUARD_PRICE_USDC_MICRO")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1000);
 
     let result = match cli.command {
         Commands::Serve {
@@ -374,6 +380,7 @@ fn main() {
             pay_to,
             facilitator_url,
             external_url,
+            price_usdc_micro,
         ),
         Commands::Check {
             input,

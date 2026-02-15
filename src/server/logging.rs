@@ -135,7 +135,7 @@ impl UsageMetrics {
                 let mut line = entry.to_string();
                 line.push('\n');
                 let line_len = line.len() as u64;
-                if let Err(e) = file.write_all(line.as_bytes()) {
+                if let Err(e) = file.write_all(line.as_bytes()).and_then(|_| file.flush()) {
                     warn!(error = %e, "failed to write access log entry");
                 }
                 let new_size =

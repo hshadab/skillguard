@@ -132,19 +132,16 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
 
         // Set base URL so resource URLs use https:// behind TLS-terminating proxies
         if let Some(ref ext_url) = state.config.external_url {
-            x402 = x402.with_base_url(
-                ext_url
-                    .parse()
-                    .expect("Invalid SKILLGUARD_EXTERNAL_URL"),
-            );
+            x402 = x402.with_base_url(ext_url.parse().expect("Invalid SKILLGUARD_EXTERNAL_URL"));
         }
 
         let pay_to: Address = pay_to_addr
             .parse()
             .expect("Invalid SKILLGUARD_PAY_TO address");
 
-        // Flat $0.001 USDC per request (1000 base units, 6 decimals).
+        // USDC price per request in base units (6 decimals).
         // API key users bypass payment.
+        let price = state.config.price_usdc_micro;
         let api_key_for_closure = state.config.api_key.clone();
         api_routes.layer(
             x402.with_dynamic_price(move |headers, _uri, _base_url| {
@@ -163,11 +160,7 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
                     if has_valid_api_key {
                         vec![]
                     } else {
-                        // $0.001 USDC = 1000 base units (6 decimals)
-                        vec![V1Eip155Exact::price_tag(
-                            pay_to,
-                            USDC::base().amount(1000u64),
-                        )]
+                        vec![V1Eip155Exact::price_tag(pay_to, USDC::base().amount(price))]
                     }
                 }
             })
