@@ -152,9 +152,7 @@ impl ClawHubClient {
 
         let detail: SkillDetailResponse = resp
             .error_for_status()
-            .wrap_err_with(|| {
-                format!("ClawHub API error fetching skill: {}", name)
-            })?
+            .wrap_err_with(|| format!("ClawHub API error fetching skill: {}", name))?
             .json()
             .await
             .wrap_err("Failed to parse skill detail JSON")?;

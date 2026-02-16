@@ -16,10 +16,10 @@ use std::collections::HashSet;
 
 use crate::patterns::{
     count_matches, ARCHIVE_RE, CARGO_ADD_RE, CHR_CALL_RE, CLI_COMMAND_RE, CREDENTIAL_RE,
-    CURL_DOWNLOAD_RE, DOMAIN_RE, ENV_ACCESS_RE, EXFILTRATION_RE, EXTERNAL_DOWNLOAD_RE,
-    FS_WRITE_RE, HEX_ESCAPE_RE, JOIN_CALL_RE, LLM_SECRET_EXPOSURE_RE, NETWORK_CALL_RE,
-    NPM_INSTALL_RE, OBFUSCATION_RE, PERSISTENCE_RE, PIP_INSTALL_RE, PRIV_ESC_RE, REQUIRE_RE,
-    REVERSE_SHELL_RE, SHELL_EXEC_RE, SPLIT_STRING_RE, UNICODE_CONFUSABLE_RE,
+    CURL_DOWNLOAD_RE, DOMAIN_RE, ENV_ACCESS_RE, EXFILTRATION_RE, EXTERNAL_DOWNLOAD_RE, FS_WRITE_RE,
+    HEX_ESCAPE_RE, JOIN_CALL_RE, LLM_SECRET_EXPOSURE_RE, NETWORK_CALL_RE, NPM_INSTALL_RE,
+    OBFUSCATION_RE, PERSISTENCE_RE, PIP_INSTALL_RE, PRIV_ESC_RE, REQUIRE_RE, REVERSE_SHELL_RE,
+    SHELL_EXEC_RE, SPLIT_STRING_RE, UNICODE_CONFUSABLE_RE,
 };
 
 // ---------------------------------------------------------------------------
@@ -476,10 +476,7 @@ impl SkillFeatures {
         };
 
         // Has shebang — check real scripts first, then code blocks
-        let has_shebang = skill
-            .scripts
-            .iter()
-            .any(|s| s.content.starts_with("#!"))
+        let has_shebang = skill.scripts.iter().any(|s| s.content.starts_with("#!"))
             || script_text.lines().any(|l| l.starts_with("#!"));
 
         Self {
@@ -755,9 +752,8 @@ fn parse_yaml_frontmatter(content: &str) -> Frontmatter {
 
     for line in frontmatter.lines() {
         let line = line.trim();
-        let extract = |val: &str| -> String {
-            val.trim().trim_matches('"').trim_matches('\'').to_string()
-        };
+        let extract =
+            |val: &str| -> String { val.trim().trim_matches('"').trim_matches('\'').to_string() };
         if let Some(val) = line.strip_prefix("name:") {
             name = Some(extract(val));
         } else if let Some(val) = line.strip_prefix("description:") {
@@ -851,7 +847,10 @@ Instructions here.
 "#;
         let fm = parse_yaml_frontmatter(content);
         assert_eq!(fm.name.as_deref(), Some("my-cool-skill"));
-        assert_eq!(fm.description.as_deref(), Some("A skill that does cool things"));
+        assert_eq!(
+            fm.description.as_deref(),
+            Some("A skill that does cool things")
+        );
     }
 
     #[test]
