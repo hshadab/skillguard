@@ -69,14 +69,28 @@ impl UsageMetrics {
         let metrics_path = cache_path.join("metrics.json");
         let metrics_path_str = metrics_path.to_string_lossy().to_string();
 
-        // Attempt to restore persisted metrics from a previous run
-        let restored = std::fs::read(&metrics_path)
+        // Attempt to restore persisted metrics from a previous run.
+        // Primary source: metrics.json on the persistent disk.
+        // Fallback: METRICS_BASELINE env var (JSON object with counter floors).
+        // This ensures counters survive even if the persistent disk is wiped
+        // (e.g. Render redeploys that recreate the container filesystem).
+        let disk_restored = std::fs::read(&metrics_path)
             .ok()
             .and_then(|data| serde_json::from_slice::<serde_json::Value>(&data).ok());
 
-        if restored.is_some() {
+        let baseline = std::env::var("METRICS_BASELINE")
+            .ok()
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+
+        let restored = if disk_restored.is_some() {
             tracing::info!(path = %metrics_path_str, "restored persisted metrics from disk");
-        }
+            disk_restored
+        } else if baseline.is_some() {
+            tracing::info!("no metrics.json on disk; using METRICS_BASELINE env var as floor");
+            baseline
+        } else {
+            None
+        };
 
         let v = |field: &str| -> u64 {
             restored

@@ -22,3 +22,5 @@ services:
         value: info
       - key: SKILLGUARD_SKIP_PROVER
         value: "0"
+      - key: METRICS_BASELINE
+        sync: false
