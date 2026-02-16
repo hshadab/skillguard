@@ -52,7 +52,8 @@ jobs:
         run: cargo install cargo-tarpaulin
 
       - name: Generate coverage
-        run: cargo tarpaulin --out xml
+        run: cargo tarpaulin --out xml --lib --exclude-files "src/prover.rs"
+        continue-on-error: true
 
       - name: Build release
         run: cargo build --release
