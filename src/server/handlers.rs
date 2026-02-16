@@ -106,6 +106,9 @@ async fn classify_and_respond(
                 .usage
                 .total_proofs_generated
                 .fetch_add(1, Ordering::Relaxed);
+            // Persist immediately — record() above already persisted classification
+            // counters, but the proof counter was incremented after that call.
+            state.usage.persist_to_disk();
 
             let response = ProveEvaluateResponse {
                 success: true,
@@ -355,6 +358,7 @@ pub async fn verify_handler(
         .usage
         .total_proofs_verified
         .fetch_add(1, Ordering::Relaxed);
+    state.usage.persist_to_disk();
 
     let verification_time_ms = start.elapsed().as_millis() as u64;
 

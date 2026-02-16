@@ -36,6 +36,10 @@ enum Commands {
         /// Maximum access log file size in bytes before rotation (0 = no limit)
         #[arg(long, default_value_t = 50_000_000)]
         max_log_bytes: u64,
+
+        /// Cache directory for proofs and metrics persistence
+        #[arg(long, default_value = "/var/data/skillguard-cache")]
+        cache_dir: String,
     },
 
     /// Check a skill for safety issues (local CLI)
@@ -120,6 +124,7 @@ fn cmd_serve(
     rate_limit: u32,
     access_log: String,
     max_log_bytes: u64,
+    cache_dir: String,
     api_key: Option<String>,
     pay_to: Option<String>,
     facilitator_url: String,
@@ -137,12 +142,12 @@ fn cmd_serve(
         rate_limit_rpm: rate_limit,
         access_log_path: access_log,
         max_access_log_bytes: max_log_bytes,
+        cache_dir,
         api_key: api_key.clone(),
         pay_to: pay_to.clone(),
         facilitator_url,
         external_url,
         price_usdc_micro,
-        ..Default::default()
     };
 
     info!("Starting SkillGuard ZKML classifier service");
@@ -371,11 +376,13 @@ fn main() {
             rate_limit,
             access_log,
             max_log_bytes,
+            cache_dir,
         } => cmd_serve(
             bind,
             rate_limit,
             access_log,
             max_log_bytes,
+            cache_dir,
             api_key,
             pay_to,
             facilitator_url,

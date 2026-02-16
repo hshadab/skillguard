@@ -12,7 +12,8 @@ use crate::skill::{SafetyClassification, SafetyDecision};
 /// Maximum number of rotated access log files to keep.
 const MAX_ACCESS_LOG_ROTATIONS: usize = 5;
 
-/// Interval in seconds between metrics persistence to disk.
+/// Interval in seconds between metrics persistence to disk (safety-net fallback;
+/// primary persistence happens after every state-changing request).
 pub const METRICS_PERSIST_INTERVAL_SECS: u64 = 60;
 
 pub struct UsageMetrics {
@@ -57,7 +58,15 @@ impl UsageMetrics {
             .map(|m| m.len())
             .unwrap_or(0);
 
-        let metrics_path = Path::new(cache_dir).join("metrics.json");
+        // Ensure cache directory exists (persistent disk may be freshly mounted)
+        let cache_path = Path::new(cache_dir);
+        if !cache_path.exists() {
+            if let Err(e) = std::fs::create_dir_all(cache_path) {
+                warn!(path = cache_dir, error = %e, "failed to create cache directory");
+            }
+        }
+
+        let metrics_path = cache_path.join("metrics.json");
         let metrics_path_str = metrics_path.to_string_lossy().to_string();
 
         // Attempt to restore persisted metrics from a previous run
@@ -183,11 +192,15 @@ impl UsageMetrics {
                 }
             }
         }
+
+        // Persist immediately so counters survive crashes / SIGKILL restarts.
+        self.persist_to_disk();
     }
 
     pub fn record_error(&self) {
         self.total_requests.fetch_add(1, Ordering::Relaxed);
         self.total_errors.fetch_add(1, Ordering::Relaxed);
+        self.persist_to_disk();
     }
 
     /// Persist current metrics snapshot to disk so they survive restarts.
