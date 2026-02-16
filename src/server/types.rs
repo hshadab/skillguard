@@ -11,7 +11,7 @@ use crate::skill::{Skill, VTReport};
 // ---------------------------------------------------------------------------
 
 /// Server configuration
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ServerConfig {
     /// Address to bind to (defaults to 127.0.0.1:8080; use 0.0.0.0 to expose externally)
     pub bind_addr: SocketAddr,
@@ -58,6 +58,23 @@ impl Default for ServerConfig {
             cache_dir: DEFAULT_CACHE_DIR.to_string(),
             price_usdc_micro: 1000,
         }
+    }
+}
+
+impl std::fmt::Debug for ServerConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ServerConfig")
+            .field("bind_addr", &self.bind_addr)
+            .field("rate_limit_rpm", &self.rate_limit_rpm)
+            .field("access_log_path", &self.access_log_path)
+            .field("max_access_log_bytes", &self.max_access_log_bytes)
+            .field("api_key", &self.api_key.as_ref().map(|_| "[REDACTED]"))
+            .field("pay_to", &self.pay_to)
+            .field("facilitator_url", &self.facilitator_url)
+            .field("external_url", &self.external_url)
+            .field("cache_dir", &self.cache_dir)
+            .field("price_usdc_micro", &self.price_usdc_micro)
+            .finish()
     }
 }
 

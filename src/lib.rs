@@ -37,6 +37,32 @@ use crate::skill::SafetyClassification;
 /// Version prefix for model hashes. Bump when serialization format changes.
 const MODEL_HASH_VERSION: &str = "v1";
 
+/// Process raw model output scores into a classification and confidence.
+///
+/// Shared by both `classify()` and `classify_with_proof()`.
+fn process_raw_scores(raw_scores: &[i32; 4], label: &str) -> (SafetyClassification, f64) {
+    let (best_idx, _) = raw_scores
+        .iter()
+        .enumerate()
+        .max_by_key(|(_, v)| *v)
+        .expect("raw_scores is non-empty");
+
+    let scores = crate::scores::ClassScores::from_raw_scores(raw_scores);
+    let confidence = scores.to_array()[best_idx];
+    let classification = SafetyClassification::from_index(best_idx);
+
+    tracing::debug!(
+        raw_logits = ?raw_scores,
+        softmax = ?(scores.safe, scores.caution, scores.dangerous, scores.malicious),
+        entropy = scores.entropy(),
+        top_class = %classification.as_str(),
+        top_confidence = confidence,
+        "{}: raw logits and softmax scores", label
+    );
+
+    (classification, confidence)
+}
+
 /// Run the classifier on a 35-element feature vector.
 ///
 /// Returns (classification, raw_scores, confidence).
@@ -55,30 +81,7 @@ pub fn classify(features: &[i32]) -> Result<(SafetyClassification, [i32; 4], f64
     }
 
     let raw_scores: [i32; 4] = [data[0], data[1], data[2], data[3]];
-
-    // Find best class
-    let (best_idx, _) = data
-        .iter()
-        .enumerate()
-        .max_by_key(|(_, v)| *v)
-        .ok_or_else(|| eyre::eyre!("Empty classifier output"))?;
-
-    // Confidence = top-class softmax probability (with temperature scaling).
-    // This is more intuitive than the old margin-based metric: it directly
-    // represents how likely the model thinks its top pick is correct.
-    let scores = crate::scores::ClassScores::from_raw_scores(&raw_scores);
-    let confidence = scores.to_array()[best_idx];
-
-    let classification = SafetyClassification::from_index(best_idx);
-
-    tracing::debug!(
-        raw_logits = ?raw_scores,
-        softmax = ?(scores.safe, scores.caution, scores.dangerous, scores.malicious),
-        entropy = scores.entropy(),
-        top_class = %classification.as_str(),
-        top_confidence = confidence,
-        "classify: raw logits and softmax scores"
-    );
+    let (classification, confidence) = process_raw_scores(&raw_scores, "classify");
 
     Ok((classification, raw_scores, confidence))
 }
@@ -96,26 +99,7 @@ pub fn classify_with_proof(
         eyre::bail!("Expected 4 output classes, got {}", raw_scores.len());
     }
 
-    let data = &raw_scores;
-    let (best_idx, _) = data
-        .iter()
-        .enumerate()
-        .max_by_key(|(_, v)| *v)
-        .ok_or_else(|| eyre::eyre!("Empty classifier output"))?;
-
-    let scores = crate::scores::ClassScores::from_raw_scores(&raw_scores);
-    let confidence = scores.to_array()[best_idx];
-
-    let classification = SafetyClassification::from_index(best_idx);
-
-    tracing::debug!(
-        raw_logits = ?raw_scores,
-        softmax = ?(scores.safe, scores.caution, scores.dangerous, scores.malicious),
-        entropy = scores.entropy(),
-        top_class = %classification.as_str(),
-        top_confidence = confidence,
-        "classify_with_proof: raw logits and softmax scores"
-    );
+    let (classification, confidence) = process_raw_scores(&raw_scores, "classify_with_proof");
 
     Ok((classification, raw_scores, confidence, bundle))
 }

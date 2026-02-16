@@ -118,18 +118,22 @@ enum Commands {
     },
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Environment-variable-derived configuration for the server.
+struct EnvConfig {
+    api_key: Option<String>,
+    pay_to: Option<String>,
+    facilitator_url: String,
+    external_url: Option<String>,
+    price_usdc_micro: u64,
+}
+
 fn cmd_serve(
     bind: String,
     rate_limit: u32,
     access_log: String,
     max_log_bytes: u64,
     cache_dir: String,
-    api_key: Option<String>,
-    pay_to: Option<String>,
-    facilitator_url: String,
-    external_url: Option<String>,
-    price_usdc_micro: u64,
+    env: EnvConfig,
 ) -> Result<()> {
     use skillguard::server::{run_server, ServerConfig};
 
@@ -143,20 +147,20 @@ fn cmd_serve(
         access_log_path: access_log,
         max_access_log_bytes: max_log_bytes,
         cache_dir,
-        api_key: api_key.clone(),
-        pay_to: pay_to.clone(),
-        facilitator_url,
-        external_url,
-        price_usdc_micro,
+        api_key: env.api_key.clone(),
+        pay_to: env.pay_to.clone(),
+        facilitator_url: env.facilitator_url,
+        external_url: env.external_url,
+        price_usdc_micro: env.price_usdc_micro,
     };
 
     info!("Starting SkillGuard ZKML classifier service");
     info!(model = "skill-safety", params = 4460, proving = "Jolt/Dory");
     info!(model_hash = %skillguard::model_hash());
-    if api_key.is_some() {
+    if env.api_key.is_some() {
         info!("API key authentication enabled on /api/v1/* endpoints");
     }
-    if let Some(ref addr) = pay_to {
+    if let Some(ref addr) = env.pay_to {
         info!(pay_to = %addr, "x402 payment enabled ($0.001 USDC per request on Base, proofs included)");
     }
 
@@ -375,10 +379,26 @@ fn main() {
     let facilitator_url = std::env::var("SKILLGUARD_FACILITATOR_URL")
         .unwrap_or_else(|_| "https://pay.openfacilitator.io".to_string());
     let external_url = std::env::var("SKILLGUARD_EXTERNAL_URL").ok();
-    let price_usdc_micro: u64 = std::env::var("SKILLGUARD_PRICE_USDC_MICRO")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(1000);
+    let price_usdc_micro: u64 = match std::env::var("SKILLGUARD_PRICE_USDC_MICRO") {
+        Ok(v) => v.parse().unwrap_or_else(|e| {
+            tracing::warn!(
+                var = "SKILLGUARD_PRICE_USDC_MICRO",
+                value = %v,
+                error = %e,
+                "failed to parse, using default 1000"
+            );
+            1000
+        }),
+        Err(_) => 1000,
+    };
+
+    let env_config = EnvConfig {
+        api_key,
+        pay_to,
+        facilitator_url,
+        external_url,
+        price_usdc_micro,
+    };
 
     let result = match cli.command {
         Commands::Serve {
@@ -393,11 +413,7 @@ fn main() {
             access_log,
             max_log_bytes,
             cache_dir,
-            api_key,
-            pay_to,
-            facilitator_url,
-            external_url,
-            price_usdc_micro,
+            env_config,
         ),
         Commands::Check {
             input,

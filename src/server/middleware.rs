@@ -152,8 +152,18 @@ pub async fn x402_settlement_logger(
     response
 }
 
+/// Maximum base64 input length for settlement decoding (64 KB).
+const MAX_B64_LEN: usize = 64 * 1024;
+
 /// Decode a base64-encoded JSON string into a serde_json::Value.
 fn base64_decode_json(b64: &str) -> Option<serde_json::Value> {
+    if b64.len() > MAX_B64_LEN {
+        tracing::warn!(
+            len = b64.len(),
+            "base64 settlement header too large, skipping decode"
+        );
+        return None;
+    }
     use base64::Engine;
     let bytes = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
     serde_json::from_slice(&bytes).ok()
@@ -185,7 +195,7 @@ pub async fn auth_middleware(
     if let Some(ref expected_key) = state.config.api_key {
         let auth_header = request
             .headers()
-            .get("authorization")
+            .get(axum::http::header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
             .map(|s| s.to_string());
 

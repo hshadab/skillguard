@@ -18,9 +18,25 @@ use super::ServerState;
 /// Maximum request body size in bytes (1 MB).
 pub const MAX_BODY_BYTES: usize = 1024 * 1024;
 
+/// Maximum total skill content size (skill_md + all scripts) before regex processing (512 KB).
+const MAX_SKILL_CONTENT_BYTES: usize = 512 * 1024;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/// Check that the total skill content is within the processing limit.
+fn check_skill_content_size(skill: &crate::skill::Skill) -> Result<(), String> {
+    let scripts_total: usize = skill.scripts.iter().map(|s| s.content.len()).sum();
+    let total = skill.skill_md.len() + scripts_total;
+    if total > MAX_SKILL_CONTENT_BYTES {
+        return Err(format!(
+            "Skill content too large ({} bytes, max {} bytes)",
+            total, MAX_SKILL_CONTENT_BYTES
+        ));
+    }
+    Ok(())
+}
 
 /// Try to obtain the prover, recording an error metric if unavailable.
 #[allow(clippy::result_large_err)]
@@ -69,9 +85,11 @@ async fn classify_and_respond(
     };
 
     // Check proof cache first
-    if let Some(bytes) = request_bytes {
-        let cache_key = crate::cache::ProofCache::cache_key(bytes, &state.model_hash);
-        if let Some(cached) = state.proof_cache.get(&cache_key) {
+    let cache_key =
+        request_bytes.map(|bytes| crate::cache::ProofCache::cache_key(bytes, &state.model_hash));
+
+    if let Some(ref key) = cache_key {
+        if let Some(cached) = state.proof_cache.get(key) {
             if let Some(ref eval) = cached.evaluation {
                 let cls = crate::skill::SafetyClassification::parse_str(&eval.classification);
                 let dec = crate::skill::SafetyDecision::parse_str(&eval.decision);
@@ -89,10 +107,27 @@ async fn classify_and_respond(
         }
     }
 
+    // Mark this key as in-flight to prevent duplicate proving work.
+    // If another request is already proving the same key, wait briefly and re-check cache.
+    if let Some(ref key) = cache_key {
+        if !state.proof_cache.mark_in_flight(key) {
+            // Another request is already proving this key. Wait and re-check cache.
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            if let Some(cached) = state.proof_cache.get(key) {
+                return cached;
+            }
+        }
+    }
+
     let fv_for_proof = feature_vec.clone();
     let prove_result =
         tokio::task::spawn_blocking(move || crate::classify_with_proof(&prover, &fv_for_proof))
             .await;
+
+    // Clear in-flight regardless of outcome.
+    if let Some(ref key) = cache_key {
+        state.proof_cache.clear_in_flight(key);
+    }
 
     match prove_result {
         Ok(Ok((classification, raw_scores, confidence, proof_bundle))) => {
@@ -136,9 +171,8 @@ async fn classify_and_respond(
             };
 
             // Cache the successful proof response
-            if let Some(bytes) = request_bytes {
-                let cache_key = crate::cache::ProofCache::cache_key(bytes, &state.model_hash);
-                state.proof_cache.put(&cache_key, &response);
+            if let Some(ref key) = cache_key {
+                state.proof_cache.put(key, &response);
             }
 
             response
@@ -286,6 +320,15 @@ pub async fn evaluate_handler(
             }
         };
 
+        if let Err(msg) = check_skill_content_size(&skill) {
+            return axum::Json(ProveEvaluateResponse {
+                success: false,
+                error: Some(msg),
+                evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            });
+        }
+
         let features = SkillFeatures::extract(&skill, None);
         let skill_name = skill.name;
 
@@ -315,6 +358,15 @@ pub async fn evaluate_handler(
         };
 
         state.usage.ep_evaluate.fetch_add(1, Ordering::Relaxed);
+
+        if let Err(msg) = check_skill_content_size(&eval_request.skill) {
+            return axum::Json(ProveEvaluateResponse {
+                success: false,
+                error: Some(msg),
+                evaluation: None,
+                processing_time_ms: start.elapsed().as_millis() as u64,
+            });
+        }
 
         let features = SkillFeatures::extract(&eval_request.skill, eval_request.vt_report.as_ref());
         let skill_name = eval_request.skill.name.clone();

@@ -8,6 +8,19 @@
 
 ---
 
+## Table of Contents
+- [What Is This?](#what-is-this)
+- [Quick Start](#quick-start)
+- [API Reference](#api-reference)
+- [How the Model Works](#how-the-model-works-plain-english)
+- [Architecture](#architecture)
+- [Model Training](#model-training)
+- [Environment Variables](#environment-variables)
+- [Links](#links)
+- [License](#license)
+
+---
+
 ## What Is This?
 
 SkillGuard is **SSL for the AI agent skill supply chain**. It answers a simple question: **"Is this skill safe to install?"** — and backs every answer with a cryptographic certificate anyone can verify.
@@ -310,6 +323,7 @@ cd .. && cargo test
 | `SKILLGUARD_EXTERNAL_URL` | Public base URL (for x402 resource URLs behind TLS proxies). | (none) |
 | `SKILLGUARD_SKIP_PROVER` | Set to `1` to disable the ZKML prover. | `0` |
 | `SKILLGUARD_PRICE_USDC_MICRO` | Price per classification in USDC micro-units (6 decimals). `1000` = $0.001. | `1000` |
+| `REDIS_URL` | Redis connection URL for durable metrics persistence. If set, counters are persisted to Redis in addition to disk and survive container redeployments. | (none) |
 | `RUST_LOG` | Log level filter. | `info` |
 
 See `.env.example` for a documented template of all variables.

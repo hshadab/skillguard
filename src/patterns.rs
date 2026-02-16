@@ -41,8 +41,7 @@ pub static SHELL_EXEC_RE: LazyLock<Vec<Regex>> = LazyLock::new(|| {
         Regex::new(r"\bpassthru\s*\(").unwrap(),
         Regex::new(r"\bshell_exec\s*\(").unwrap(),
         // Pipe-to-shell patterns (curl|bash, wget|sh)
-        Regex::new(r"curl\s+[^|]*\|\s*(ba)?sh").unwrap(),
-        Regex::new(r"wget\s+[^|]*\|\s*(ba)?sh").unwrap(),
+        Regex::new(r"(?:curl|wget)\s+\S[^|\n]{0,200}\|\s*(?:ba)?sh").unwrap(),
     ]
 });
 

@@ -866,6 +866,74 @@ async fn test_x402_invalid_api_key_returns_401() {
 }
 
 // ---------------------------------------------------------------------------
+// Concurrent classification test
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_concurrent_classifications() {
+    use std::thread;
+
+    let results: Vec<_> = (0..10)
+        .map(|i| {
+            thread::spawn(move || {
+                let skill = Skill {
+                    name: format!("concurrent-{}", i),
+                    version: "1.0.0".into(),
+                    author: "test".into(),
+                    description: "test".into(),
+                    skill_md: "# Test\n\nSimple skill.".into(),
+                    scripts: vec![],
+                    metadata: SkillMetadata {
+                        stars: 100,
+                        downloads: 1000,
+                        author_account_created: "2024-01-01T00:00:00Z".into(),
+                        author_total_skills: 5,
+                        ..Default::default()
+                    },
+                    files: vec![],
+                };
+                let features = SkillFeatures::extract(&skill, None);
+                let feature_vec = features.to_normalized_vec();
+                skillguard::classify(&feature_vec).unwrap()
+            })
+        })
+        .collect();
+
+    for handle in results {
+        let (classification, raw_scores, confidence) = handle.join().expect("thread panicked");
+        assert!(confidence >= 0.0);
+        assert!(confidence <= 1.0);
+        assert_eq!(raw_scores.len(), 4);
+        // All should classify consistently (same input)
+        assert!(
+            !classification.is_deny(),
+            "Simple skill should not be denied"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Model output value verification
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_model_output_deterministic() {
+    // Use a known feature vector and verify the raw logit output is deterministic.
+    let mut features = vec![0i32; 35];
+    features[16] = 100; // downloads (high)
+
+    let (cls1, scores1, conf1) = skillguard::classify(&features).unwrap();
+    let (cls2, scores2, conf2) = skillguard::classify(&features).unwrap();
+
+    assert_eq!(cls1, cls2, "Classification should be deterministic");
+    assert_eq!(scores1, scores2, "Raw scores should be deterministic");
+    assert!(
+        (conf1 - conf2).abs() < f64::EPSILON,
+        "Confidence should be deterministic"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Verify endpoint is public (no auth)
 // ---------------------------------------------------------------------------
 

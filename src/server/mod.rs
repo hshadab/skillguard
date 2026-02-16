@@ -81,6 +81,39 @@ impl ServerState {
         }
     }
 
+    /// Async constructor — connects to Redis for metrics persistence if `REDIS_URL` is set.
+    pub async fn new_async(config: ServerConfig) -> Self {
+        let model_hash = crate::model_hash();
+        let usage = UsageMetrics::new_async(
+            &config.access_log_path,
+            config.max_access_log_bytes,
+            &config.cache_dir,
+        )
+        .await;
+
+        let skip_prover = std::env::var("SKILLGUARD_SKIP_PROVER")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
+        if skip_prover {
+            info!("ZKML prover disabled (SKILLGUARD_SKIP_PROVER=1). Prove endpoints unavailable.");
+        }
+
+        let proof_cache = crate::cache::ProofCache::open(Some(&config.cache_dir));
+
+        Self {
+            config,
+            model_hash,
+            start_time: Instant::now(),
+            rate_limiters: middleware::new_rate_limiter_cache(),
+            clawhub_client: ClawHubClient::new(),
+            usage,
+            prover: tokio::sync::OnceCell::new(),
+            skip_prover,
+            proof_cache,
+        }
+    }
+
     /// Get the prover, returning None if skipped or not yet initialized.
     pub fn get_prover(&self) -> Option<Arc<crate::prover::ProverState>> {
         if self.skip_prover {
@@ -108,7 +141,7 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
     let bind_addr = config.bind_addr;
     let access_log = config.access_log_path.clone();
     let x402_enabled = config.pay_to.is_some();
-    let state = Arc::new(ServerState::new(config));
+    let state = Arc::new(ServerState::new_async(config).await);
 
     // Single evaluate endpoint — auto-detects name lookup vs full skill data.
     // Every classification includes a mandatory ZK proof.

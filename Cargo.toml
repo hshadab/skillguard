@@ -49,6 +49,9 @@ urlencoding = "2.1"
 # Middleware
 tower-http = { version = "0.6", features = ["cors"] }
 
+# Redis for durable metrics persistence
+redis = { version = "0.27", features = ["aio", "tokio-comp", "connection-manager"] }
+
 # Constant-time comparison
 subtle = "2.6"
 

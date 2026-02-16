@@ -502,7 +502,7 @@ impl SkillFeatures {
             // Combine malicious and suspicious counts (suspicious weighted at 0.5)
             // to capture a broader signal from VirusTotal scanners.
             vt_malicious_flags: vt_report
-                .map(|r| r.malicious_count + r.suspicious_count / 2)
+                .map(|r| r.malicious_count + r.suspicious_count.div_ceil(2))
                 .unwrap_or(0),
             password_protected_archives: has_archive && password_in_md,
             reverse_shell_patterns: count_matches(&all_text, &REVERSE_SHELL_RE),
