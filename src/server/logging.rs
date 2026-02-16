@@ -110,6 +110,7 @@ impl UsageMetrics {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn record(
         &self,
         endpoint: &str,
