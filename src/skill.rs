@@ -401,12 +401,9 @@ impl SkillFeatures {
         let script_file_count = skill.scripts.len() as u32;
 
         // Phase 3b: density / interaction features
-        let shell_exec_per_line =
-            shell_exec_count as f32 / total_lines.max(1) as f32;
-        let network_per_script =
-            network_call_count as f32 / script_file_count.max(1) as f32;
-        let credential_density =
-            credential_patterns as f32 / skill_md_line_count.max(1) as f32;
+        let shell_exec_per_line = shell_exec_count as f32 / total_lines.max(1) as f32;
+        let network_per_script = network_call_count as f32 / script_file_count.max(1) as f32;
+        let credential_density = credential_patterns as f32 / skill_md_line_count.max(1) as f32;
         let shell_and_network = shell_exec_count.min(network_call_count);
         let obfuscation_and_exec = (obfuscation_raw).min(shell_exec_count);
 
@@ -422,10 +419,7 @@ impl SkillFeatures {
         };
 
         // Has shebang — any script starts with #!
-        let has_shebang = skill
-            .scripts
-            .iter()
-            .any(|s| s.content.starts_with("#!"));
+        let has_shebang = skill.scripts.iter().any(|s| s.content.starts_with("#!"));
 
         Self {
             shell_exec_count,

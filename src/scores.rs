@@ -155,7 +155,14 @@ mod tests {
         // With T=200, a large gap in the thousands produces low entropy
         let scores = ClassScores::from_raw_scores(&[5000, 0, -10000, -8000]);
         let e = scores.entropy();
-        assert!(e < 0.02, "Dominant class should have very low entropy, got {}", e);
-        assert!(!scores.is_uncertain(), "Dominant class should not be uncertain");
+        assert!(
+            e < 0.02,
+            "Dominant class should have very low entropy, got {}",
+            e
+        );
+        assert!(
+            !scores.is_uncertain(),
+            "Dominant class should not be uncertain"
+        );
     }
 }
