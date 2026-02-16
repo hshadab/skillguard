@@ -145,6 +145,7 @@ async fn evaluate_handler(
             let (decision, reasoning) =
                 skillguard::skill::derive_decision(classification, &scores.to_array());
 
+            let entropy = scores.entropy();
             axum::Json(ProveEvaluateResponse {
                 success: true,
                 error: None,
@@ -155,6 +156,8 @@ async fn evaluate_handler(
                     confidence,
                     scores,
                     reasoning,
+                    raw_logits: Some(raw_scores),
+                    entropy: Some(entropy),
                     proof: proof_bundle,
                 }),
                 processing_time_ms: start.elapsed().as_millis() as u64,

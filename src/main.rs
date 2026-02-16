@@ -151,7 +151,7 @@ fn cmd_serve(
     };
 
     info!("Starting SkillGuard ZKML classifier service");
-    info!(model = "skill-safety", params = 1924, proving = "Jolt/Dory");
+    info!(model = "skill-safety", params = 4460, proving = "Jolt/Dory");
     info!(model_hash = %skillguard::model_hash());
     if api_key.is_some() {
         info!("API key authentication enabled on /api/v1/* endpoints");
@@ -272,6 +272,8 @@ fn cmd_check(
     // Extract features
     let features = SkillFeatures::extract(&skill, vt_report.as_ref());
     let feature_vec = features.to_normalized_vec();
+    tracing::debug!(?features, "extracted skill features");
+    tracing::debug!(?feature_vec, "normalized feature vector");
     let model_hash = skillguard::model_hash();
 
     let (classification, raw_scores, confidence, proof_bundle) = if prove {
@@ -297,6 +299,8 @@ fn cmd_check(
                     "confidence": confidence,
                     "scores": scores,
                     "reasoning": reasoning,
+                    "raw_logits": raw_scores,
+                    "entropy": scores.entropy(),
                 },
                 "model_hash": model_hash,
             });
@@ -320,6 +324,12 @@ fn cmd_check(
             println!("  CAUTION:    {:.1}%", scores.caution * 100.0);
             println!("  DANGEROUS:  {:.1}%", scores.dangerous * 100.0);
             println!("  MALICIOUS:  {:.1}%", scores.malicious * 100.0);
+            println!();
+            println!(
+                "Raw logits:  [{}, {}, {}, {}]",
+                raw_scores[0], raw_scores[1], raw_scores[2], raw_scores[3]
+            );
+            println!("Entropy:     {:.4}", scores.entropy());
             println!();
             println!("Model Hash: {}", model_hash);
             if let Some(ref bundle) = proof_bundle {

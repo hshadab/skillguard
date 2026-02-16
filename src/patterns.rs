@@ -46,6 +46,27 @@ pub static SHELL_EXEC_RE: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     ]
 });
 
+/// Common CLI command patterns found in SKILL.md code blocks.
+/// These indicate the skill instructs an agent to run shell commands.
+/// Separate from SHELL_EXEC_RE which targets programmatic exec() calls.
+pub static CLI_COMMAND_RE: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
+        Regex::new(r"\bgit\s+(clone|pull|push|checkout)\b").unwrap(),
+        Regex::new(r"\bnpm\s+(install|run|exec)\b").unwrap(),
+        Regex::new(r"\bnpx\s+").unwrap(),
+        Regex::new(r"\bbun\s+(add|install|run|x)\b").unwrap(),
+        Regex::new(r"\bbunx\s+").unwrap(),
+        Regex::new(r"\bpip\s+install\b").unwrap(),
+        Regex::new(r"\bcargo\s+(install|add|run)\b").unwrap(),
+        Regex::new(r"\bmkdir\s+").unwrap(),
+        Regex::new(r"\bln\s+-s\b").unwrap(),
+        Regex::new(r"\bchmod\s+").unwrap(),
+        Regex::new(r"\bcp\s+").unwrap(),
+        Regex::new(r"\brm\s+(-rf?|--force)").unwrap(),
+        Regex::new(r"\bdocker\s+(run|exec|build)\b").unwrap(),
+    ]
+});
+
 /// Network call patterns
 pub static NETWORK_CALL_RE: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![

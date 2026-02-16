@@ -105,6 +105,12 @@ pub struct ProvedEvaluationResult {
     pub confidence: f64,
     pub scores: ClassScores,
     pub reasoning: String,
+    /// Raw i32 logits from the fixed-point MLP (before softmax).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_logits: Option<[i32; 4]>,
+    /// Normalized Shannon entropy of the softmax distribution (0=certain, 1=uniform).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entropy: Option<f64>,
     /// ZK proof bundle — every classification includes a cryptographic proof.
     pub proof: crate::prover::ProofBundle,
 }

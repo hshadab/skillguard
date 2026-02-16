@@ -22,9 +22,9 @@ Just as an SSL certificate proves a server is who it claims to be, every SkillGu
 
 1. **Skill submitted** — A developer publishes a skill to [ClawHub](https://clawhub.ai), or submits data directly via API.
 
-2. **Features extracted** — SkillGuard reads the skill's documentation, scripts, and metadata, then extracts 35 numeric features that capture security-relevant signals (shell execution calls, reverse shell patterns, credential access, obfuscation techniques, entropy analysis, author reputation, download counts, interaction terms, density ratios, etc.).
+2. **Features extracted** — SkillGuard reads the skill's documentation, scripts, and metadata, then extracts 35 numeric features that capture security-relevant signals (shell execution calls, reverse shell patterns, credential access, obfuscation techniques, entropy analysis, author reputation, download counts, interaction terms, density ratios, etc.). When a skill only has a SKILL.md file (no separate scripts), SkillGuard extracts code blocks from the markdown and analyzes them as if they were script files.
 
-3. **Classified with proof** — The 35 features feed into a small neural network (3-layer MLP, 4,460 parameters, 94.8% cross-validated accuracy). The entire forward pass runs inside a SNARK virtual machine ([Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas)), producing a ~53 KB cryptographic proof that the classification was computed correctly.
+3. **Classified with proof** — The 35 features feed into a small neural network (3-layer MLP, 4,460 parameters, 93.9% cross-validated accuracy). The entire forward pass runs inside a SNARK virtual machine ([Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas)), producing a ~53 KB cryptographic proof that the classification was computed correctly.
 
 4. **Anyone verifies** — Anyone can verify a proof by posting it to `/api/v1/verify`. Verification is free, takes milliseconds, and requires no API key.
 
@@ -134,11 +134,66 @@ Both formats return the same response with classification, confidence, scores, r
 
 ---
 
+## How the Model Works (Plain English)
+
+SkillGuard's brain is a small neural network — a program that learned to spot dangerous patterns by studying hundreds of examples of safe and malicious skills.
+
+### What it looks at
+
+When a skill is submitted, SkillGuard doesn't try to "understand" the code the way a human would. Instead, it counts things. It reads through the skill's documentation, scripts, and metadata and produces 35 numbers — a kind of fingerprint. These numbers capture questions like:
+
+- **How many times does this skill try to run shell commands?** Legitimate tools might run one or two; malware often runs many.
+- **Does it download and execute anything from the internet?** A `curl | bash` pattern is a classic attack vector.
+- **Are there reverse shell patterns?** Code that opens a connection back to an attacker's server is almost never legitimate.
+- **Is the code obfuscated?** Base64-encoded eval() calls, character code assembly, and similar tricks are red flags.
+- **How old is the author's account? How many stars does the skill have?** Brand-new accounts with no history publishing skills that request elevated permissions deserve extra scrutiny.
+- **What's the entropy of the script bytes?** Encrypted or heavily encoded payloads have unusually high randomness.
+- **How dense are the suspicious patterns?** One shell exec in a 500-line script is normal; ten in a 20-line script is suspicious.
+
+Each of these 35 measurements is scaled to a number between 0 and 128, creating a fixed-size numeric fingerprint regardless of how big or complex the original skill is.
+
+### How it decides
+
+The fingerprint feeds into a **3-layer neural network** — three stacked layers of simple math operations (multiply, add, apply a threshold). The network has 4,460 tunable parameters (weights) that were learned during training.
+
+- **Layer 1** (35 → 56 neurons): Takes the 35 features and mixes them through 56 neurons. Each neuron learns a different combination — one might activate when it sees "high obfuscation + shell exec + new account," while another fires on "network calls + credential access."
+- **Layer 2** (56 → 40 neurons): Combines the first layer's patterns into higher-level concepts. This is where the network builds compound indicators like "this looks like a credential stealer" vs "this looks like a legitimate API client."
+- **Layer 3** (40 → 4 outputs): Produces four scores — one for each safety class: SAFE, CAUTION, DANGEROUS, MALICIOUS. The highest score wins.
+
+The raw output scores are converted to probabilities using a **softmax function** (with a calibrated temperature of T=12.8 for the fixed-point logits). This turns the scores into percentages that sum to 100%, giving a confidence level for each class.
+
+### How it handles uncertainty
+
+The model doesn't just pick the top class and move on. It checks how confident it is:
+
+- If the top probability is high and the others are low (low **entropy**), the model is confident. SAFE/CAUTION skills get **ALLOW**. DANGEROUS/MALICIOUS skills get **DENY**.
+- If the probabilities are spread out (high entropy, above 0.85 normalized), the model isn't sure. These predictions get **FLAG**ged for human review regardless of the top class.
+- DANGEROUS/MALICIOUS classifications with less than 50% confidence also get **FLAG** instead of **DENY** — the model errs on the side of caution rather than blocking something it's unsure about.
+
+### Why fixed-point arithmetic?
+
+All the math inside the network uses integers instead of floating-point numbers (every weight is multiplied by 128 and stored as an `i32`). This is unusual for neural networks, but it's required because the entire forward pass runs inside a **zero-knowledge proof system** (Jolt Atlas). ZK circuits work with integers, not floats. The training process (quantization-aware training) ensures the integer version of the network makes the same decisions as the floating-point version.
+
+### What it was trained on
+
+The model was trained on 690 synthetic skill profiles across the four safety classes, including:
+
+- **Safe skills:** Documentation tools, calculators, formatters — with various combinations of known and unknown author metadata.
+- **Caution skills:** Legitimate tools that happen to use shell commands, network calls, or file writes in normal ways.
+- **Dangerous skills:** Credential harvesters, privilege escalation scripts, data exfiltration tools.
+- **Malicious skills:** Reverse shells, obfuscated payloads, persistence installers, crypto miners, multi-vector attacks.
+
+The dataset includes samples with "unknown" metadata (neutral author age, moderate stars/downloads) so the model can still classify correctly when metadata is unavailable — as is often the case with real-world SKILL.md files loaded from the CLI.
+
+Training used **adversarial examples** (FGSM perturbations on 30% of batches) to make the model robust against skills that are deliberately crafted to sit on the edge of the decision boundary.
+
+---
+
 ## Architecture
 
 | Component | Details |
 |-----------|---------|
-| Model | 3-layer MLP: 35→56→40→4 (ReLU). 4,460 parameters. Fixed-point i32 arithmetic (scale=7, rounding division). QAT-trained with FGSM adversarial examples. 94.8% 5-fold CV accuracy, 100% fixed-point decision match. |
+| Model | 3-layer MLP: 35→56→40→4 (ReLU). 4,460 parameters. Fixed-point i32 arithmetic (scale=7, rounding division). QAT-trained with FGSM adversarial examples. 93.9% 5-fold CV accuracy, 100% fixed-point decision match. |
 | Proving | [Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas) SNARK with Dory commitment (BN254 curve). ~53 KB proofs, ~4s proving time. |
 | Payment | [x402](https://www.x402.org/) HTTP 402 protocol. $0.001 USDC on Base. [OpenFacilitator](https://openfacilitator.io). |
 | Server | Axum async HTTP. LRU per-IP rate limiting (IPv6 /64 aggregation), constant-time API key auth, CORS, graceful shutdown, JSONL access logging. |
@@ -202,8 +257,9 @@ SkillGuard includes a full training pipeline in `training/` for reproducing or i
 | Training | QAT (quantization-aware training) with straight-through estimator |
 | Adversarial | FGSM perturbations during training (ε=2.0, 30% of batches) |
 | Validation | 5-fold stratified cross-validation |
-| Accuracy | 94.8% ± 1.4% (CV), 100% on full dataset, 100% fixed-point decision match |
-| Calibration | Softmax temperature T=200 (fixed-point), ECE=0.007 |
+| Dataset | 690 samples (balanced 4-class, incl. unknown-metadata augmentation) |
+| Accuracy | 93.9% ± 1.2% (CV), 100% on full dataset, 100% fixed-point decision match |
+| Calibration | Softmax temperature T=12.8 (fixed-point, float T=0.10), ECE≈0 |
 
 ### Improvements over previous model (28→35 features, 2,116→4,460 params)
 
@@ -211,9 +267,17 @@ SkillGuard includes a full training pipeline in `training/` for reproducing or i
 - **Wider layers:** 56→40 hidden vs 32→32, better feature mixing for sparse attack patterns
 - **Realistic training data:** Archetype-based malicious samples (10 distinct attack patterns: reverse shells, credential stealers, obfuscated payloads, persistence installers, data exfiltration, curl|bash, privilege escalation, LLM exposure, multi-vector, crypto miners) that match actual feature extraction sparsity
 - **Decision logic fix:** MALICIOUS/DANGEROUS classifications never fall through to Allow regardless of confidence
-- **Entropy-based abstain:** Uncertain predictions (normalized entropy > 0.042) are flagged for human review
+- **Entropy-based abstain:** Uncertain predictions (normalized entropy > 0.85) are flagged for human review
 - **Rounding division:** Eliminates systematic negative truncation bias in fixed-point arithmetic
 - **23 regression tests:** 10 known-safe skills, 10 known-malicious skills, 3 edge cases validated on every build
+
+### Latest improvements (v2 retraining, 540→690 samples)
+
+- **Unknown-metadata augmentation:** 150 new training samples with neutral metadata (moderate stars, downloads, account age) so the model classifies correctly when metadata is unavailable — as with raw SKILL.md files
+- **Code block extraction:** When skills have no separate script files, code blocks inside the markdown are extracted and analyzed
+- **CLI command detection:** Common shell commands (git, npm, pip, cargo, docker, etc.) in code blocks are now counted as execution patterns
+- **Sharper temperature:** T=12.8 (down from 200) converts small logit differences into decisive probabilities, raising real-world confidence from ~27% to 70-81%
+- **Tuned entropy threshold:** 0.85 (up from 0.042) accommodates real-world inputs where metadata signals are weaker than training data, while still flagging genuinely ambiguous cases
 
 ### Reproducing
 

@@ -117,6 +117,7 @@ async fn classify_and_respond(
             // counters, but the proof counter was incremented after that call.
             state.usage.persist_to_disk();
 
+            let entropy = scores.entropy();
             let response = ProveEvaluateResponse {
                 success: true,
                 error: None,
@@ -127,6 +128,8 @@ async fn classify_and_respond(
                     confidence,
                     scores,
                     reasoning,
+                    raw_logits: Some(raw_scores),
+                    entropy: Some(entropy),
                     proof: proof_bundle,
                 }),
                 processing_time_ms,

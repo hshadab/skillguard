@@ -71,6 +71,15 @@ pub fn classify(features: &[i32]) -> Result<(SafetyClassification, [i32; 4], f64
 
     let classification = SafetyClassification::from_index(best_idx);
 
+    tracing::debug!(
+        raw_logits = ?raw_scores,
+        softmax = ?(scores.safe, scores.caution, scores.dangerous, scores.malicious),
+        entropy = scores.entropy(),
+        top_class = %classification.as_str(),
+        top_confidence = confidence,
+        "classify: raw logits and softmax scores"
+    );
+
     Ok((classification, raw_scores, confidence))
 }
 
@@ -98,6 +107,15 @@ pub fn classify_with_proof(
     let confidence = scores.to_array()[best_idx];
 
     let classification = SafetyClassification::from_index(best_idx);
+
+    tracing::debug!(
+        raw_logits = ?raw_scores,
+        softmax = ?(scores.safe, scores.caution, scores.dangerous, scores.malicious),
+        entropy = scores.entropy(),
+        top_class = %classification.as_str(),
+        top_confidence = confidence,
+        "classify_with_proof: raw logits and softmax scores"
+    );
 
     Ok((classification, raw_scores, confidence, bundle))
 }

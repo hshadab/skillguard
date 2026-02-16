@@ -522,7 +522,7 @@ footer a:hover { text-decoration: underline; }
         <div class="how-step">
           <div class="how-step-num">2</div>
           <div class="how-step-title">Features extracted</div>
-          <div class="how-step-desc">35 security signals analyzed: shell exec, reverse shells, credential access, obfuscation, entropy, exfiltration, density ratios, interaction terms</div>
+          <div class="how-step-desc">35 security signals analyzed: shell exec, reverse shells, credential access, obfuscation, entropy, exfiltration, density ratios, interaction terms. Code blocks in SKILL.md are extracted and scanned</div>
           <span class="how-step-arrow">&rarr;</span>
         </div>
         <div class="how-step">
@@ -545,6 +545,64 @@ footer a:hover { text-decoration: underline; }
       </div>
       <div class="how-cert">
         Like an SSL certificate for agent skills: every classification is backed by a <strong>zero-knowledge machine learning proof</strong> — a cryptographic receipt that the neural network ran correctly on the claimed inputs. The proof reveals the decision but not the model weights. Anyone can verify. No one can forge.
+      </div>
+    </div>
+  </details>
+
+  <!-- How the Classifier Works (collapsible) -->
+  <details class="card how-it-works">
+    <summary>
+      <span class="toggle-icon">&#9654;</span>
+      <span class="card-title">How the Classifier Works</span>
+    </summary>
+    <div class="how-body">
+      <div class="how-intro">
+        The classifier is a small neural network that learned to spot dangerous patterns by studying
+        hundreds of examples of safe and malicious skills. It doesn't "understand" code — it counts
+        security-relevant signals and uses learned patterns to decide.
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px">
+        <div style="padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius)">
+          <div style="font-weight:600;font-size:0.82rem;margin-bottom:6px;color:var(--text-primary)">Feature Extraction (35 signals)</div>
+          <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.55">
+            Each skill is reduced to 35 numbers: shell exec count, network calls, obfuscation
+            score, reverse shell patterns, credential access, author reputation, download counts,
+            byte entropy, code density ratios, and more. Code blocks inside SKILL.md files are
+            extracted and scanned even when no separate scripts exist. Each value is scaled
+            to 0&ndash;128.
+          </div>
+        </div>
+        <div style="padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius)">
+          <div style="font-weight:600;font-size:0.82rem;margin-bottom:6px;color:var(--text-primary)">Neural Network (4,460 params)</div>
+          <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.55">
+            Three layers of neurons (35&rarr;56&rarr;40&rarr;4) mix the features into progressively
+            higher-level patterns. Layer 1 detects basic combinations ("obfuscation + shell exec").
+            Layer 2 builds compound indicators ("credential stealer" vs "API client").
+            Layer 3 outputs four scores: SAFE, CAUTION, DANGEROUS, MALICIOUS. Highest wins.
+          </div>
+        </div>
+        <div style="padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius)">
+          <div style="font-weight:600;font-size:0.82rem;margin-bottom:6px;color:var(--text-primary)">Confidence &amp; Decisions</div>
+          <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.55">
+            Raw scores are converted to probabilities via softmax (T=12.8). If the distribution
+            is spread out (high entropy), the model flags it for human review. DANGEROUS/MALICIOUS
+            results need &ge;50% confidence for DENY; otherwise they're flagged. SAFE/CAUTION
+            results get ALLOW unless entropy is too high.
+          </div>
+        </div>
+        <div style="padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius)">
+          <div style="font-weight:600;font-size:0.82rem;margin-bottom:6px;color:var(--text-primary)">Integer Arithmetic &amp; ZK Proofs</div>
+          <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.55">
+            All math uses integers (scale=128) instead of floating-point, because the entire
+            forward pass runs inside a zero-knowledge SNARK (Jolt Atlas). This produces a ~53 KB
+            cryptographic proof that the classification was computed correctly. Anyone can verify
+            the proof without trusting SkillGuard or seeing the model weights.
+          </div>
+        </div>
+      </div>
+      <div class="how-cert" style="margin-top:14px">
+        Trained on <strong>690 skill profiles</strong> (balanced across 4 classes, including unknown-metadata samples).
+        <strong>93.9%</strong> cross-validated accuracy. Adversarially hardened with FGSM perturbations.
       </div>
     </div>
   </details>
@@ -1298,7 +1356,11 @@ async function signX402Payment(requirements) {
     // ev.confidence is the top-class softmax probability (0.0–1.0)
     var confidence = (typeof ev.confidence === 'number') ? ev.confidence : 0;
     var confPct = (confidence * 100).toFixed(1);
-    var isLowCertainty = confidence < 0.40;
+    // For a 4-class classifier, random chance is 25%. Tiers are calibrated accordingly:
+    //   >= 50%  → High   (clearly dominant class)
+    //   >= 33%  → Moderate (above uniform, some separation)
+    //   <  33%  → Low    (near-uniform, model genuinely uncertain)
+    var isLowCertainty = confidence < 0.33;
 
     var html = '<div class="result-card">';
     html += '<div class="result-header">';
@@ -1306,8 +1368,8 @@ async function signX402Payment(requirements) {
     html += '<span class="result-decision">Decision: <strong>' + escHtml(ev.decision) + '</strong></span>';
     if (typeof ev.confidence === 'number') {
       var tierLabel, tierColor;
-      if (confidence >= 0.60) { tierLabel = 'High'; tierColor = 'var(--safe)'; }
-      else if (confidence >= 0.40) { tierLabel = 'Moderate'; tierColor = 'var(--caution)'; }
+      if (confidence >= 0.50) { tierLabel = 'High'; tierColor = 'var(--safe)'; }
+      else if (confidence >= 0.33) { tierLabel = 'Moderate'; tierColor = 'var(--caution)'; }
       else { tierLabel = 'Low'; tierColor = 'var(--dangerous)'; }
       html += '<span class="result-confidence" style="color:' + tierColor + '">Confidence: <strong>' + tierLabel + '</strong> <span style="font-size:0.78rem;color:var(--text-muted)">(' + confPct + '%)</span></span>';
     }
@@ -1332,6 +1394,17 @@ async function signX402Payment(requirements) {
     if (ev.scores) html += renderScores(ev.scores);
     if (ev.reasoning) {
       html += '<div style="margin-top:10px;font-size:0.82rem;color:var(--text-secondary)"><strong>Reasoning:</strong> ' + escHtml(ev.reasoning) + '</div>';
+    }
+    // Show raw logits and entropy if available (model diagnostics)
+    if (ev.raw_logits || typeof ev.entropy === 'number') {
+      html += '<div style="margin-top:8px;display:flex;gap:16px;font-size:0.75rem;color:var(--text-muted);font-family:monospace">';
+      if (ev.raw_logits) {
+        html += '<span>Logits: [' + ev.raw_logits.join(', ') + ']</span>';
+      }
+      if (typeof ev.entropy === 'number') {
+        html += '<span>Entropy: ' + ev.entropy.toFixed(4) + '</span>';
+      }
+      html += '</div>';
     }
     if (sourceUrl) {
       html += '<div style="margin-top:10px"><a href="' + escHtml(sourceUrl) + '" target="_blank" rel="noopener" style="font-size:0.82rem;color:var(--accent);text-decoration:none">View skill source on GitHub &#x2197;</a></div>';

@@ -3,7 +3,7 @@
   "info": {
     "title": "SkillGuard: SSL for Agent Skills",
     "version": "0.1.0",
-    "description": "SSL for Agent Skills — every classification is a verifiable certificate. SkillGuard evaluates AI agent skill metadata and scripts, producing a safety classification (SAFE, CAUTION, DANGEROUS, MALICIOUS) backed by a zero-knowledge machine learning proof via Jolt/Dory SNARK. Like SSL proves server identity, SkillGuard proofs prove classification integrity.\n\nQuick start: `curl -X POST https://skillguard.onrender.com/api/v1/evaluate -H 'Content-Type: application/json' -d '{\"skill\": \"4claw\"}'`\n\nAgent discovery: GET /.well-known/ai-plugin.json | LLM info: GET /.well-known/llms.txt",
+    "description": "SSL for Agent Skills — every classification is a verifiable certificate. SkillGuard evaluates AI agent skill metadata and scripts using a 3-layer MLP (35 features, 4,460 parameters, 93.9% CV accuracy), producing a safety classification (SAFE, CAUTION, DANGEROUS, MALICIOUS) backed by a zero-knowledge machine learning proof via Jolt/Dory SNARK. The model extracts 35 security signals from each skill (shell exec, obfuscation, reverse shells, credential access, entropy, etc.) and classifies using fixed-point integer arithmetic inside a ZK circuit. Like SSL proves server identity, SkillGuard proofs prove classification integrity.\n\nQuick start: `curl -X POST https://skillguard.onrender.com/api/v1/evaluate -H 'Content-Type: application/json' -d '{\"skill\": \"4claw\"}'`\n\nAgent discovery: GET /.well-known/ai-plugin.json | LLM info: GET /.well-known/llms.txt",
     "license": {
       "name": "MIT",
       "url": "https://github.com/hshadab/skillguard/blob/main/LICENSE"
@@ -357,6 +357,17 @@
           "confidence": { "type": "number" },
           "scores": { "$ref": "#/components/schemas/ClassScores" },
           "reasoning": { "type": "string" },
+          "raw_logits": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "minItems": 4,
+            "maxItems": 4,
+            "description": "Raw integer logits from the fixed-point neural network [SAFE, CAUTION, DANGEROUS, MALICIOUS]"
+          },
+          "entropy": {
+            "type": "number",
+            "description": "Normalized Shannon entropy of the softmax distribution (0.0 = certain, 1.0 = uniform). Predictions with entropy > 0.85 are flagged for review."
+          },
           "proof": {
             "$ref": "#/components/schemas/ProofBundle",
             "description": "zkML proof bundle — every successful classification includes a cryptographic proof."

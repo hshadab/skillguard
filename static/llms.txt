@@ -59,7 +59,18 @@ curl -X POST https://skillguard.onrender.com/api/v1/evaluate \
 
 ## Model
 3-layer MLP: 35 inputs → 56 hidden (ReLU) → 40 hidden (ReLU) → 4 outputs.
-4,460 parameters. Fixed-point i32 arithmetic (scale=7, rounding division). QAT-trained with FGSM adversarial examples. 94.8% cross-validated accuracy. ~53 KB proofs, ~4s proving time.
+4,460 parameters. Fixed-point i32 arithmetic (scale=7, rounding division).
+QAT-trained with FGSM adversarial examples on 690 samples (incl. unknown-metadata augmentation).
+93.9% cross-validated accuracy. Softmax temperature T=12.8 (fixed-point).
+~53 KB proofs, ~4s proving time.
+
+The model extracts 35 numeric features from each skill (shell exec counts, network calls,
+obfuscation score, reverse shell patterns, credential access, author reputation, download
+counts, byte entropy, density ratios, interaction terms). When a skill has no separate
+scripts, code blocks inside SKILL.md are extracted and analyzed. Features are scaled to
+0-128 and fed through the network. The highest of the 4 output scores (SAFE, CAUTION,
+DANGEROUS, MALICIOUS) determines the classification. Confidence is the softmax probability
+of the top class. High-entropy (uncertain) predictions are flagged for human review.
 
 ## Links
 - OpenAPI spec: https://skillguard.onrender.com/openapi.json

@@ -17,21 +17,25 @@ pub struct ClassScores {
 
 /// Softmax temperature for fixed-point i32 logits.
 ///
-/// The float model's calibrated temperature is 1.5 (ECE=0.0038). However, the Rust
-/// fixed-point model outputs i32 logits ~128x larger than float logits (due to scale=7
-/// arithmetic). The equivalent fixed-point temperature is 1.5 * 128 ≈ 200.
+/// The float model's calibrated temperature is 0.10 (ECE≈0). The Rust fixed-point
+/// model outputs i32 logits ~128x larger than float logits (due to scale=7
+/// arithmetic). The equivalent fixed-point temperature is 0.10 * 128 = 12.8.
 ///
-/// With T=200: 100% accuracy, mean confidence 99.5%, min confidence 58.8%.
-/// Entropy is meaningful for edge cases (max 0.49), enabling the abstain mechanism.
+/// This sharper temperature converts small logit gaps into decisive probability
+/// distributions, resolving the low-confidence issue with real SKILL.md inputs.
 ///
-/// Calibrated via `training/calibrate.py` with fixed-point scaling adjustment.
-const SOFTMAX_TEMPERATURE: f64 = 200.0;
+/// Calibrated via `training/calibrate.py` on 690-sample augmented dataset.
+const SOFTMAX_TEMPERATURE: f64 = 12.8;
 
 /// Normalized entropy threshold for flagging uncertain predictions.
 /// If the normalized entropy of the softmax distribution exceeds this value,
 /// the model is too uncertain and the prediction should be flagged for review.
-/// Calibrated at p95 of fixed-point entropy distribution (~5% flag rate).
-pub const ENTROPY_ABSTAIN_THRESHOLD: f64 = 0.042;
+/// With the sharper temperature (T=12.8), training-data predictions have
+/// near-zero entropy. Real-world SKILL.md inputs with limited signals produce
+/// entropy in the 0.45-0.65 range even when correctly classified at 70-80%
+/// confidence. Threshold 0.85 flags only genuinely ambiguous cases where no
+/// class exceeds ~40%.
+pub const ENTROPY_ABSTAIN_THRESHOLD: f64 = 0.85;
 
 impl ClassScores {
     pub fn from_raw_scores(raw: &[i32; 4]) -> Self {
@@ -107,11 +111,11 @@ mod tests {
 
     #[test]
     fn test_softmax_dominant() {
-        // With T=200, a gap of ~5000 (typical trained model output) produces a sharp distribution
-        let scores = ClassScores::from_raw_scores(&[5000, 0, -10000, -8000]);
+        // With T=12.8, even moderate logit gaps produce very sharp distributions
+        let scores = ClassScores::from_raw_scores(&[100, 0, -50, -30]);
         assert!(
             scores.safe > 0.99,
-            "SAFE should dominate with large gap: {:?}",
+            "SAFE should dominate with gap of 100: {:?}",
             scores
         );
         let total = scores.safe + scores.caution + scores.dangerous + scores.malicious;
@@ -120,16 +124,17 @@ mod tests {
 
     #[test]
     fn test_softmax_small_gap_still_separates() {
-        // Typical fixed-point logits: gaps in the thousands produce meaningful separation
-        let scores = ClassScores::from_raw_scores(&[3500, 4000, 3800, 3700]);
+        // With T=12.8, small logit gaps (typical of real SKILL.md inputs) produce
+        // meaningful separation — this is the key improvement over T=200
+        let scores = ClassScores::from_raw_scores(&[10, 15, 8, 5]);
         assert!(
             scores.caution > scores.safe
                 && scores.caution > scores.dangerous
                 && scores.caution > scores.malicious,
-            "CAUTION (4000) should be highest: {:?}",
+            "CAUTION (15) should be highest: {:?}",
             scores
         );
-        // With T=200, a gap of 200-500 should still produce >30% for the top class
+        // With T=12.8, a gap of 5 logit units should produce >30% for the top class
         assert!(
             scores.caution > 0.30,
             "Top class should be >30%: {:?}",
@@ -152,8 +157,8 @@ mod tests {
 
     #[test]
     fn test_entropy_dominant() {
-        // With T=200, a large gap in the thousands produces low entropy
-        let scores = ClassScores::from_raw_scores(&[5000, 0, -10000, -8000]);
+        // With T=12.8, even moderate logit gaps produce near-zero entropy
+        let scores = ClassScores::from_raw_scores(&[100, 0, -50, -30]);
         let e = scores.entropy();
         assert!(
             e < 0.02,

@@ -80,6 +80,22 @@ def _base_metadata(author_type: str = "established") -> dict:
             "has_vt": 0.0,                                # 17
             "vt_flags": 0.0,                              # 18
         }
+    elif author_type == "unknown":
+        # Neutral/midpoint metadata — represents a skill loaded from a local
+        # SKILL.md file where stars, downloads, author reputation are unavailable.
+        # Values sit in the middle of the training range so the model learns to
+        # rely on content-based features when metadata is uninformative.
+        return {
+            "md_lines": clip(rand_range(8, 80)),         # 10: varies
+            "script_files": clip(rand_range(0, 30)),     # 11: varies
+            "dep_count": clip(rand_range(0, 20)),        # 12
+            "acct_age": clip(rand_range(30, 80)),        # 13: neutral zone
+            "author_skills": clip(rand_range(5, 30)),    # 14: neutral
+            "stars": clip(rand_range(20, 70)),           # 15: neutral
+            "downloads": clip(rand_range(20, 70)),       # 16: neutral
+            "has_vt": 0.0,                                # 17
+            "vt_flags": 0.0,                              # 18
+        }
     else:  # "attacker"
         return {
             "md_lines": clip(rand_range(0, 10)),         # 10: minimal docs
@@ -397,6 +413,63 @@ def _make_malicious_sample() -> list[float]:
     return gen()
 
 
+def _make_safe_unknown_metadata() -> list[float]:
+    """Generate a SAFE skill with unknown/neutral metadata.
+
+    Represents skills loaded from local SKILL.md files where repository
+    metadata (stars, downloads, author age) is unavailable. The model must
+    learn to classify these based on content features alone.
+    """
+    vec = _zeros()
+    meta = _base_metadata("unknown")
+    _set_metadata(vec, meta)
+
+    # Same content profile as safe — minimal risk features
+    vec[0] = clip(rand_range(0, 15))     # 0: shell_exec (0-2 CLI commands from code blocks)
+    vec[1] = clip(rand_range(0, 10))     # 1: network (0-2 API mentions)
+    vec[2] = clip(rand_range(0, 5))      # 2: fs_write
+    vec[3] = clip(rand_range(0, 10))     # 3: env (0-2 vars)
+    vec[4] = clip(rand_range(0, 5))      # 4: credential (0 or 1 mention)
+
+    vec[22] = clip(rand_range(0, 50))    # 22: entropy (code blocks)
+    vec[24] = clip(rand_range(0, 30))    # 24: max_line_length
+    vec[25] = clip(rand_range(0, 30))    # 25: comment_ratio (code blocks may lack comments)
+    vec[26] = clip(rand_range(0, 30))    # 26: domain_count
+    vec[33] = clip(rand_range(0, 40))    # 33: file_ext_diversity
+    vec[34] = 128.0 if random.random() < 0.2 else 0.0  # 34: has_shebang
+
+    return vec
+
+
+def _make_caution_unknown_metadata() -> list[float]:
+    """Generate a CAUTION skill with unknown/neutral metadata.
+
+    New-author API wrappers loaded from local SKILL.md with no repo metadata.
+    """
+    vec = _zeros()
+    meta = _base_metadata("unknown")
+    _set_metadata(vec, meta)
+
+    # Same content profile as caution — moderate risk features
+    vec[0] = clip(rand_range(0, 25))     # 0: shell_exec (CLI commands in code blocks)
+    vec[1] = clip(rand_range(5, 40))     # 1: network (API calls mentioned)
+    vec[2] = clip(rand_range(0, 15))     # 2: fs_write
+    vec[3] = clip(rand_range(5, 40))     # 3: env_access
+    vec[4] = clip(rand_range(5, 30))     # 4: credential
+    vec[5] = 128.0 if random.random() < 0.3 else 0.0   # 5: ext_download
+    vec[6] = clip(rand_range(0, 15))     # 6: obfuscation (low)
+
+    vec[22] = clip(rand_range(10, 60))   # 22: entropy
+    vec[24] = clip(rand_range(5, 50))    # 24: max_line_length
+    vec[25] = clip(rand_range(0, 30))    # 25: comment_ratio
+    vec[26] = clip(rand_range(10, 60))   # 26: domain_count
+    vec[29] = clip(rand_range(0, 30))    # 29: net_per_script
+    vec[33] = clip(rand_range(10, 60))   # 33: file_ext_diversity
+    vec[34] = 128.0 if random.random() < 0.3 else 0.0  # 34: has_shebang
+
+    return vec
+
+
 def _make_hard_negative() -> tuple[list[float], int]:
     """Generate a hard negative: legit pentest/security/CI-CD tool.
 
@@ -434,6 +507,7 @@ def _make_hard_negative() -> tuple[list[float], int]:
 def generate_dataset(
     n_per_class: int = 125,
     n_hard_negatives: int = 40,
+    n_unknown_metadata: int = 50,
     seed: int = 42,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Generate the full synthetic dataset.
@@ -465,6 +539,29 @@ def generate_dataset(
         feat, lab = _make_hard_negative()
         features.append(feat)
         labels.append(lab)
+
+    # Unknown-metadata samples — teach the model to classify based on content
+    # features when repository metadata is unavailable (local SKILL.md files).
+    # Includes all 4 classes so the model doesn't learn "unknown metadata = safe".
+    for _ in range(n_unknown_metadata):
+        features.append(_make_safe_unknown_metadata())
+        labels.append(0)  # SAFE
+        features.append(_make_caution_unknown_metadata())
+        labels.append(1)  # CAUTION
+
+    # Dangerous/malicious with unknown metadata (attacker blending in)
+    for _ in range(n_unknown_metadata // 2):
+        vec = _make_dangerous_sample()
+        meta = _base_metadata("unknown")
+        _set_metadata(vec, meta)
+        features.append(vec)
+        labels.append(2)  # DANGEROUS
+
+        vec = _make_malicious_sample()
+        meta = _base_metadata("unknown")
+        _set_metadata(vec, meta)
+        features.append(vec)
+        labels.append(3)  # MALICIOUS
 
     features_arr = np.array(features, dtype=np.float32)
     labels_arr = np.array(labels, dtype=np.int64)

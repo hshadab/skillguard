@@ -15,11 +15,11 @@ use tracing::warn;
 use std::collections::HashSet;
 
 use crate::patterns::{
-    count_matches, ARCHIVE_RE, CARGO_ADD_RE, CHR_CALL_RE, CREDENTIAL_RE, CURL_DOWNLOAD_RE,
-    DOMAIN_RE, ENV_ACCESS_RE, EXFILTRATION_RE, EXTERNAL_DOWNLOAD_RE, FS_WRITE_RE, HEX_ESCAPE_RE,
-    JOIN_CALL_RE, LLM_SECRET_EXPOSURE_RE, NETWORK_CALL_RE, NPM_INSTALL_RE, OBFUSCATION_RE,
-    PERSISTENCE_RE, PIP_INSTALL_RE, PRIV_ESC_RE, REQUIRE_RE, REVERSE_SHELL_RE, SHELL_EXEC_RE,
-    SPLIT_STRING_RE, UNICODE_CONFUSABLE_RE,
+    count_matches, ARCHIVE_RE, CARGO_ADD_RE, CHR_CALL_RE, CLI_COMMAND_RE, CREDENTIAL_RE,
+    CURL_DOWNLOAD_RE, DOMAIN_RE, ENV_ACCESS_RE, EXFILTRATION_RE, EXTERNAL_DOWNLOAD_RE,
+    FS_WRITE_RE, HEX_ESCAPE_RE, JOIN_CALL_RE, LLM_SECRET_EXPOSURE_RE, NETWORK_CALL_RE,
+    NPM_INSTALL_RE, OBFUSCATION_RE, PERSISTENCE_RE, PIP_INSTALL_RE, PRIV_ESC_RE, REQUIRE_RE,
+    REVERSE_SHELL_RE, SHELL_EXEC_RE, SPLIT_STRING_RE, UNICODE_CONFUSABLE_RE,
 };
 
 // ---------------------------------------------------------------------------
@@ -299,6 +299,42 @@ pub struct SkillFeatures {
 }
 
 impl SkillFeatures {
+    /// Extract fenced code blocks from markdown text.
+    ///
+    /// When a skill is loaded from a SKILL.md file (no separate script files),
+    /// the markdown body often contains fenced code blocks (```bash, ```python, etc.)
+    /// with shell commands, network calls, and other patterns the model needs to see.
+    /// This extracts those blocks so they can be scanned by the same pattern matchers
+    /// used for real script files.
+    fn extract_code_blocks(markdown: &str) -> String {
+        let mut blocks = Vec::new();
+        let mut in_block = false;
+        let mut current_block = Vec::new();
+
+        for line in markdown.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("```") {
+                if in_block {
+                    // Closing fence — save the block
+                    blocks.push(current_block.join("\n"));
+                    current_block.clear();
+                    in_block = false;
+                } else {
+                    // Opening fence
+                    in_block = true;
+                }
+            } else if in_block {
+                current_block.push(line);
+            }
+        }
+        // Handle unclosed fence
+        if !current_block.is_empty() {
+            blocks.push(current_block.join("\n"));
+        }
+
+        blocks.join("\n")
+    }
+
     /// Extract features from a skill
     pub fn extract(skill: &Skill, vt_report: Option<&VTReport>) -> Self {
         let all_text = format!(
@@ -311,12 +347,20 @@ impl SkillFeatures {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
-        let script_text: String = skill
-            .scripts
-            .iter()
-            .map(|s| s.content.as_str())
-            .collect::<Vec<_>>()
-            .join("\n");
+
+        // When no script files are provided (e.g. CLI `check --input SKILL.md`),
+        // extract fenced code blocks from the markdown body so that patterns like
+        // shell exec, network calls, obfuscation, etc. are still detected.
+        let script_text: String = if skill.scripts.is_empty() {
+            Self::extract_code_blocks(&skill.skill_md)
+        } else {
+            skill
+                .scripts
+                .iter()
+                .map(|s| s.content.as_str())
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
 
         // Calculate author account age in days.
         // Returns 0 for missing or unparseable dates (treated as unknown/new author).
@@ -392,13 +436,26 @@ impl SkillFeatures {
         let string_obfuscation_score =
             hex_count + join_count + chr_count + confusable_count + split_string_count;
 
-        // Compute base counts needed for interaction features
-        let shell_exec_count = count_matches(&script_text, &SHELL_EXEC_RE);
+        // Compute base counts needed for interaction features.
+        // When code blocks serve as script_text, also count common shell
+        // command invocations (git, npm, ln, mkdir, etc.) that indicate
+        // the skill instructs an agent to run commands.
+        let shell_exec_count = {
+            let programmatic = count_matches(&script_text, &SHELL_EXEC_RE);
+            let cli_commands = count_matches(&script_text, &CLI_COMMAND_RE);
+            programmatic + cli_commands
+        };
         let network_call_count = count_matches(&all_text, &NETWORK_CALL_RE);
         let credential_patterns = count_matches(&skill.skill_md, &CREDENTIAL_RE);
         let obfuscation_raw = count_matches(&script_text, &OBFUSCATION_RE);
         let skill_md_line_count = skill.skill_md.lines().count() as u32;
-        let script_file_count = skill.scripts.len() as u32;
+        // When scripts are empty but we extracted code blocks, count the blocks
+        // as pseudo-scripts so density features are meaningful.
+        let script_file_count = if skill.scripts.is_empty() {
+            Self::count_code_blocks(&skill.skill_md) as u32
+        } else {
+            skill.scripts.len() as u32
+        };
 
         // Phase 3b: density / interaction features
         let shell_exec_per_line = shell_exec_count as f32 / total_lines.max(1) as f32;
@@ -418,8 +475,12 @@ impl SkillFeatures {
             exts.len() as u32
         };
 
-        // Has shebang — any script starts with #!
-        let has_shebang = skill.scripts.iter().any(|s| s.content.starts_with("#!"));
+        // Has shebang — check real scripts first, then code blocks
+        let has_shebang = skill
+            .scripts
+            .iter()
+            .any(|s| s.content.starts_with("#!"))
+            || script_text.lines().any(|l| l.starts_with("#!"));
 
         Self {
             shell_exec_count,
@@ -486,6 +547,25 @@ impl SkillFeatures {
             }
         }
         entropy
+    }
+
+    /// Count the number of fenced code blocks in markdown.
+    fn count_code_blocks(markdown: &str) -> usize {
+        let mut count = 0;
+        let mut in_block = false;
+        for line in markdown.lines() {
+            if line.trim().starts_with("```") {
+                if in_block {
+                    count += 1; // closing fence completes a block
+                }
+                in_block = !in_block;
+            }
+        }
+        // Count unclosed blocks too
+        if in_block {
+            count += 1;
+        }
+        count
     }
 
     fn count_dependencies(text: &str) -> u32 {
@@ -579,14 +659,17 @@ pub fn parse_skill_from_json(json: &str) -> eyre::Result<Skill> {
 /// Create a skill from a SKILL.md file path (for local testing).
 ///
 /// If the file contains YAML frontmatter (between `---` markers),
-/// the `name` and `description` fields are extracted from it.
+/// the `name`, `description`, and `author` fields are extracted from it.
+/// File references (e.g. `payload.sh`, `script.py`) are detected in the
+/// markdown body so the `files` list is populated for extension-diversity
+/// and archive-detection features.
 pub fn skill_from_skill_md(path: &std::path::Path) -> eyre::Result<Skill> {
     let skill_md = std::fs::read_to_string(path)?;
 
-    // Try to extract name/description from YAML frontmatter
-    let (fm_name, fm_desc) = parse_yaml_frontmatter(&skill_md);
+    // Try to extract fields from YAML frontmatter
+    let fm = parse_yaml_frontmatter(&skill_md);
 
-    let name = fm_name.unwrap_or_else(|| {
+    let name = fm.name.unwrap_or_else(|| {
         path.parent()
             .and_then(|p| p.file_name())
             .and_then(|n| n.to_str())
@@ -594,26 +677,62 @@ pub fn skill_from_skill_md(path: &std::path::Path) -> eyre::Result<Skill> {
             .to_string()
     });
 
-    let description = fm_desc.unwrap_or_default();
+    let description = fm.description.unwrap_or_default();
+    let author = fm.author.unwrap_or_else(|| "unknown".into());
 
+    // Detect file references in markdown (paths like foo.sh, script.py, etc.)
+    let file_ref_re =
+        regex::Regex::new(r"\b[\w./-]+\.(sh|py|js|ts|rb|lua|php|ps1|bat|exe|zip|tar|gz)\b")
+            .unwrap();
+    let files: Vec<String> = file_ref_re
+        .find_iter(&skill_md)
+        .map(|m| m.as_str().to_string())
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+
+    // When loading from a local file, metadata (stars, downloads, author
+    // reputation) is unavailable. Use neutral midpoint defaults rather than
+    // zeros — zeros look identical to a brand-new throwaway account, which
+    // the training data strongly associates with malicious skills. These
+    // midpoints place the skill in a "no opinion" zone so the model relies
+    // on content-based features instead of missing metadata.
+    let neutral_author_date = (chrono::Utc::now() - chrono::Duration::days(180))
+        .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
     Ok(Skill {
         name,
         version: "1.0.0".into(),
-        author: "unknown".into(),
+        author,
         description,
         skill_md,
         scripts: Vec::new(),
-        metadata: SkillMetadata::default(),
-        files: Vec::new(),
+        metadata: SkillMetadata {
+            stars: 50,
+            downloads: 500,
+            author_account_created: neutral_author_date,
+            author_total_skills: 5,
+            ..Default::default()
+        },
+        files,
     })
 }
 
+/// Parsed YAML frontmatter fields from a SKILL.md file.
+struct Frontmatter {
+    name: Option<String>,
+    description: Option<String>,
+    author: Option<String>,
+}
+
 /// Parse YAML frontmatter from a SKILL.md file.
-/// Returns (name, description) if found.
-fn parse_yaml_frontmatter(content: &str) -> (Option<String>, Option<String>) {
+fn parse_yaml_frontmatter(content: &str) -> Frontmatter {
     let trimmed = content.trim_start();
     if !trimmed.starts_with("---") {
-        return (None, None);
+        return Frontmatter {
+            name: None,
+            description: None,
+            author: None,
+        };
     }
 
     // Find the closing ---
@@ -621,22 +740,38 @@ fn parse_yaml_frontmatter(content: &str) -> (Option<String>, Option<String>) {
     let close_pos = after_open.find("\n---");
     let frontmatter = match close_pos {
         Some(pos) => &after_open[..pos],
-        None => return (None, None),
+        None => {
+            return Frontmatter {
+                name: None,
+                description: None,
+                author: None,
+            }
+        }
     };
 
     let mut name = None;
     let mut description = None;
+    let mut author = None;
 
     for line in frontmatter.lines() {
         let line = line.trim();
+        let extract = |val: &str| -> String {
+            val.trim().trim_matches('"').trim_matches('\'').to_string()
+        };
         if let Some(val) = line.strip_prefix("name:") {
-            name = Some(val.trim().trim_matches('"').trim_matches('\'').to_string());
+            name = Some(extract(val));
         } else if let Some(val) = line.strip_prefix("description:") {
-            description = Some(val.trim().trim_matches('"').trim_matches('\'').to_string());
+            description = Some(extract(val));
+        } else if let Some(val) = line.strip_prefix("author:") {
+            author = Some(extract(val));
         }
     }
 
-    (name, description)
+    Frontmatter {
+        name,
+        description,
+        author,
+    }
 }
 
 #[cfg(test)]
@@ -714,25 +849,25 @@ version: 2.0.0
 
 Instructions here.
 "#;
-        let (name, desc) = parse_yaml_frontmatter(content);
-        assert_eq!(name.as_deref(), Some("my-cool-skill"));
-        assert_eq!(desc.as_deref(), Some("A skill that does cool things"));
+        let fm = parse_yaml_frontmatter(content);
+        assert_eq!(fm.name.as_deref(), Some("my-cool-skill"));
+        assert_eq!(fm.description.as_deref(), Some("A skill that does cool things"));
     }
 
     #[test]
     fn test_yaml_frontmatter_quoted() {
         let content = "---\nname: \"quoted-name\"\ndescription: 'single quoted'\n---\n# Skill";
-        let (name, desc) = parse_yaml_frontmatter(content);
-        assert_eq!(name.as_deref(), Some("quoted-name"));
-        assert_eq!(desc.as_deref(), Some("single quoted"));
+        let fm = parse_yaml_frontmatter(content);
+        assert_eq!(fm.name.as_deref(), Some("quoted-name"));
+        assert_eq!(fm.description.as_deref(), Some("single quoted"));
     }
 
     #[test]
     fn test_no_frontmatter() {
         let content = "# Just a regular markdown file\n\nNo frontmatter here.";
-        let (name, desc) = parse_yaml_frontmatter(content);
-        assert!(name.is_none());
-        assert!(desc.is_none());
+        let fm = parse_yaml_frontmatter(content);
+        assert!(fm.name.is_none());
+        assert!(fm.description.is_none());
     }
 
     #[test]
