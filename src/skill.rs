@@ -3,7 +3,7 @@
 //! This module defines the types for representing skills from ClawHub
 //! and extracting safety-relevant features for the skill safety classifier.
 //!
-//! Feature extraction produces a 28-element vector. Each feature is normalized
+//! Feature extraction produces a 35-element vector. Each feature is normalized
 //! to [0, 128] using empirically chosen thresholds (documented inline in
 //! [`SkillFeatures::to_normalized_vec`]). VirusTotal integration combines both
 //! `malicious_count` and `suspicious_count` (weighted at 0.5) into a single
@@ -17,9 +17,9 @@ use std::collections::HashSet;
 use crate::patterns::{
     count_matches, ARCHIVE_RE, CARGO_ADD_RE, CHR_CALL_RE, CREDENTIAL_RE, CURL_DOWNLOAD_RE,
     DOMAIN_RE, ENV_ACCESS_RE, EXFILTRATION_RE, EXTERNAL_DOWNLOAD_RE, FS_WRITE_RE, HEX_ESCAPE_RE,
-    IMPORT_RE, JOIN_CALL_RE, LLM_SECRET_EXPOSURE_RE, NETWORK_CALL_RE, NPM_INSTALL_RE,
-    OBFUSCATION_RE, PERSISTENCE_RE, PIP_INSTALL_RE, PRIV_ESC_RE, REQUIRE_RE, REVERSE_SHELL_RE,
-    SHELL_EXEC_RE,
+    JOIN_CALL_RE, LLM_SECRET_EXPOSURE_RE, NETWORK_CALL_RE, NPM_INSTALL_RE, OBFUSCATION_RE,
+    PERSISTENCE_RE, PIP_INSTALL_RE, PRIV_ESC_RE, REQUIRE_RE, REVERSE_SHELL_RE, SHELL_EXEC_RE,
+    SPLIT_STRING_RE, UNICODE_CONFUSABLE_RE,
 };
 
 // ---------------------------------------------------------------------------
@@ -161,34 +161,82 @@ impl SafetyDecision {
     }
 }
 
-/// Derive a decision from classification and confidence scores
+/// Derive a decision from classification, confidence scores, and model uncertainty.
+///
+/// If the model's entropy exceeds the abstain threshold, the prediction is flagged
+/// regardless of the top class ("Model uncertainty too high").
+///
+/// Decision matrix (no catch-all fallthrough):
+/// - Safe         → Allow ("No concerning patterns detected")
+/// - Caution      → Allow ("Minor concerns noted; functional skill")
+/// - Dangerous:
+///   score >= 0.5 → Deny  ("Significant risk patterns detected")
+///   score <  0.5 → Flag  ("Risk patterns detected but confidence below threshold")
+/// - Malicious:
+///   score >= 0.5 → Deny  ("Active malware indicators detected")
+///   score <  0.5 → Flag  ("Malware indicators detected with low confidence")
+///
+/// MALICIOUS and DANGEROUS are **never** allowed.
 pub fn derive_decision(
     classification: SafetyClassification,
     scores: &[f64; 4],
 ) -> (SafetyDecision, String) {
-    let top_score = scores.iter().cloned().fold(0.0f64, f64::max);
+    // Check entropy-based abstain: if the model is too uncertain, flag for human review.
+    // This only upgrades SAFE/CAUTION to Flag; DANGEROUS/MALICIOUS are already at least Flag.
+    let class_scores = crate::scores::ClassScores {
+        safe: scores[0],
+        caution: scores[1],
+        dangerous: scores[2],
+        malicious: scores[3],
+    };
+    if class_scores.is_uncertain() {
+        match classification {
+            SafetyClassification::Safe | SafetyClassification::Caution => {
+                return (
+                    SafetyDecision::Flag,
+                    "Model uncertainty too high; flagged for review".into(),
+                );
+            }
+            // For Dangerous/Malicious, fall through to normal logic (already ≥ Flag)
+            _ => {}
+        }
+    }
 
     match classification {
-        SafetyClassification::Malicious if scores[3] > 0.7 => (
-            SafetyDecision::Deny,
-            "Active malware indicators detected".into(),
-        ),
-        SafetyClassification::Dangerous if scores[2] > 0.6 => (
-            SafetyDecision::Deny,
-            "Significant risk patterns detected".into(),
-        ),
-        SafetyClassification::Dangerous | SafetyClassification::Malicious if top_score < 0.6 => (
-            SafetyDecision::Flag,
-            "Risk patterns detected but confidence below threshold".into(),
+        SafetyClassification::Safe => (
+            SafetyDecision::Allow,
+            "No concerning patterns detected".into(),
         ),
         SafetyClassification::Caution => (
             SafetyDecision::Allow,
             "Minor concerns noted; functional skill".into(),
         ),
-        _ => (
-            SafetyDecision::Allow,
-            "No concerning patterns detected".into(),
-        ),
+        SafetyClassification::Dangerous => {
+            if scores[2] >= 0.5 {
+                (
+                    SafetyDecision::Deny,
+                    "Significant risk patterns detected".into(),
+                )
+            } else {
+                (
+                    SafetyDecision::Flag,
+                    "Risk patterns detected but confidence below threshold".into(),
+                )
+            }
+        }
+        SafetyClassification::Malicious => {
+            if scores[3] >= 0.5 {
+                (
+                    SafetyDecision::Deny,
+                    "Active malware indicators detected".into(),
+                )
+            } else {
+                (
+                    SafetyDecision::Flag,
+                    "Malware indicators detected with low confidence".into(),
+                )
+            }
+        }
     }
 }
 
@@ -196,7 +244,7 @@ pub fn derive_decision(
 // Feature extraction
 // ---------------------------------------------------------------------------
 
-/// The 28-dimensional feature vector for skill safety classification
+/// The 35-dimensional feature vector for skill safety classification
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillFeatures {
     pub shell_exec_count: u32,
@@ -231,8 +279,23 @@ pub struct SkillFeatures {
     pub comment_ratio: f32,
     /// Unique external domains referenced
     pub domain_count: u32,
-    /// Hex escapes + join() + chr() pattern counts
+    /// Hex escapes + join() + chr() + unicode confusables + split-string patterns
     pub string_obfuscation_score: u32,
+    // --- Phase 3b: 7 new interaction/density features (28→35) ---
+    /// shell_exec_count / max(total_script_lines, 1)
+    pub shell_exec_per_line: f32,
+    /// network_call_count / max(script_file_count, 1)
+    pub network_per_script: f32,
+    /// credential_patterns / max(skill_md_line_count, 1)
+    pub credential_density: f32,
+    /// min(shell_exec_count, network_call_count) — co-occurrence
+    pub shell_and_network: u32,
+    /// min(obfuscation_score, shell_exec_count) — obfuscated execution
+    pub obfuscation_and_exec: u32,
+    /// Number of unique file extensions in skill package
+    pub file_extension_diversity: u32,
+    /// Any script starts with `#!`
+    pub has_shebang: bool,
 }
 
 impl SkillFeatures {
@@ -320,26 +383,64 @@ impl SkillFeatures {
             .collect();
         let domain_count = domains.len() as u32;
 
-        // String obfuscation score — hex escapes + join() + chr()
+        // String obfuscation score — hex escapes + join() + chr() + unicode confusables + split strings
         let hex_count = HEX_ESCAPE_RE.find_iter(&script_text).count() as u32;
         let join_count = JOIN_CALL_RE.find_iter(&script_text).count() as u32;
         let chr_count = CHR_CALL_RE.find_iter(&script_text).count() as u32;
-        let string_obfuscation_score = hex_count + join_count + chr_count;
+        let confusable_count = UNICODE_CONFUSABLE_RE.find_iter(&script_text).count() as u32;
+        let split_string_count = SPLIT_STRING_RE.find_iter(&script_text).count() as u32;
+        let string_obfuscation_score =
+            hex_count + join_count + chr_count + confusable_count + split_string_count;
+
+        // Compute base counts needed for interaction features
+        let shell_exec_count = count_matches(&script_text, &SHELL_EXEC_RE);
+        let network_call_count = count_matches(&all_text, &NETWORK_CALL_RE);
+        let credential_patterns = count_matches(&skill.skill_md, &CREDENTIAL_RE);
+        let obfuscation_raw = count_matches(&script_text, &OBFUSCATION_RE);
+        let skill_md_line_count = skill.skill_md.lines().count() as u32;
+        let script_file_count = skill.scripts.len() as u32;
+
+        // Phase 3b: density / interaction features
+        let shell_exec_per_line =
+            shell_exec_count as f32 / total_lines.max(1) as f32;
+        let network_per_script =
+            network_call_count as f32 / script_file_count.max(1) as f32;
+        let credential_density =
+            credential_patterns as f32 / skill_md_line_count.max(1) as f32;
+        let shell_and_network = shell_exec_count.min(network_call_count);
+        let obfuscation_and_exec = (obfuscation_raw).min(shell_exec_count);
+
+        // File extension diversity — unique extensions in skill package
+        let file_extension_diversity = {
+            let exts: HashSet<&str> = skill
+                .files
+                .iter()
+                .filter_map(|f| std::path::Path::new(f.as_str()).extension())
+                .filter_map(|e| e.to_str())
+                .collect();
+            exts.len() as u32
+        };
+
+        // Has shebang — any script starts with #!
+        let has_shebang = skill
+            .scripts
+            .iter()
+            .any(|s| s.content.starts_with("#!"));
 
         Self {
-            shell_exec_count: count_matches(&script_text, &SHELL_EXEC_RE),
-            network_call_count: count_matches(&all_text, &NETWORK_CALL_RE),
+            shell_exec_count,
+            network_call_count,
             fs_write_count: count_matches(&script_text, &FS_WRITE_RE),
             env_access_count: count_matches(&all_text, &ENV_ACCESS_RE),
-            credential_patterns: count_matches(&skill.skill_md, &CREDENTIAL_RE),
+            credential_patterns,
             external_download: EXTERNAL_DOWNLOAD_RE.is_match(&all_text)
                 || CURL_DOWNLOAD_RE.is_match(&all_text),
-            obfuscation_score: count_matches(&script_text, &OBFUSCATION_RE) as f32,
+            obfuscation_score: obfuscation_raw as f32,
             privilege_escalation: PRIV_ESC_RE.is_match(&all_text),
             persistence_mechanisms: count_matches(&all_text, &PERSISTENCE_RE),
             data_exfiltration_patterns: count_matches(&script_text, &EXFILTRATION_RE),
-            skill_md_line_count: skill.skill_md.lines().count() as u32,
-            script_file_count: skill.scripts.len() as u32,
+            skill_md_line_count,
+            script_file_count,
             dependency_count: Self::count_dependencies(&all_text),
             author_account_age_days: author_age_days,
             author_skill_count: skill.metadata.author_total_skills as u32,
@@ -362,6 +463,14 @@ impl SkillFeatures {
             comment_ratio,
             domain_count,
             string_obfuscation_score,
+            // Phase 3b: interaction/density features
+            shell_exec_per_line,
+            network_per_script,
+            credential_density,
+            shell_and_network,
+            obfuscation_and_exec,
+            file_extension_diversity,
+            has_shebang,
         }
     }
 
@@ -386,12 +495,13 @@ impl SkillFeatures {
     }
 
     fn count_dependencies(text: &str) -> u32 {
+        // Only count actual package installation commands, not language-level imports.
+        // Python/JS import statements inflate dependency counts for normal code.
         let npm = NPM_INSTALL_RE.find_iter(text).count() as u32;
         let pip = PIP_INSTALL_RE.find_iter(text).count() as u32;
         let cargo = CARGO_ADD_RE.find_iter(text).count() as u32;
         let requires = REQUIRE_RE.find_iter(text).count() as u32;
-        let imports = IMPORT_RE.find_iter(text).count() as u32;
-        npm + pip + cargo + requires + imports
+        npm + pip + cargo + requires
     }
 
     /// Convert to normalized feature vector for the classifier.
@@ -454,7 +564,15 @@ impl SkillFeatures {
             clip_scale(self.max_line_length, 1000), // 24 — >1000 chars per line = minified/obfuscated
             clip_scale_f32(self.comment_ratio, 1.0), // 25 — ratio [0,1], 1.0 = all comments
             clip_scale(self.domain_count, 20),      // 26 — >20 unique domains is unusual
-            clip_scale(self.string_obfuscation_score, 10), // 27 — hex+join+chr combo count
+            clip_scale(self.string_obfuscation_score, 10), // 27 — hex+join+chr+confusable+split
+            // Phase 3b: density / interaction features (28–34)
+            clip_scale_f32(self.shell_exec_per_line, 1.0), // 28 — ratio, saturates at 1.0
+            clip_scale_f32(self.network_per_script, 10.0), // 29 — up to 10 calls/script
+            clip_scale_f32(self.credential_density, 1.0),  // 30 — ratio, saturates at 1.0
+            clip_scale(self.shell_and_network, 10),        // 31 — co-occurrence cap at 10
+            clip_scale(self.obfuscation_and_exec, 10),     // 32 — obfuscated exec cap at 10
+            clip_scale(self.file_extension_diversity, 5),  // 33 — >5 unique extensions is unusual
+            bool_scale(self.has_shebang),                  // 34 — binary: shebang present or not
         ]
     }
 }
@@ -639,7 +757,7 @@ Instructions here.
         let features = SkillFeatures::extract(&skill, None);
         let normalized = features.to_normalized_vec();
 
-        assert_eq!(normalized.len(), 28);
+        assert_eq!(normalized.len(), 35);
         for &val in &normalized {
             assert!((0..=128).contains(&val), "Value {} out of range", val);
         }

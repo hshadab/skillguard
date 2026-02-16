@@ -118,6 +118,7 @@ impl UsageMetrics {
         decision: SafetyDecision,
         confidence: f64,
         processing_time_ms: u64,
+        feature_vec: Option<&[i32]>,
     ) {
         self.total_requests.fetch_add(1, Ordering::Relaxed);
 
@@ -150,7 +151,7 @@ impl UsageMetrics {
 
         if let Ok(mut guard) = self.access_log.try_lock() {
             if let Some(ref mut file) = *guard {
-                let entry = serde_json::json!({
+                let mut entry = serde_json::json!({
                     "timestamp": chrono::Utc::now().to_rfc3339(),
                     "endpoint": endpoint,
                     "skill_name": skill_name,
@@ -159,6 +160,9 @@ impl UsageMetrics {
                     "confidence": confidence,
                     "processing_time_ms": processing_time_ms,
                 });
+                if let Some(fv) = feature_vec {
+                    entry["feature_vec"] = serde_json::json!(fv);
+                }
                 let mut line = entry.to_string();
                 line.push('\n');
                 let line_len = line.len() as u64;

@@ -58,8 +58,8 @@ curl -X POST https://skillguard.onrender.com/api/v1/evaluate \
   -d '{"skill": "4claw"}'
 
 ## Model
-3-layer MLP: 28 inputs → 32 hidden (ReLU) → 32 hidden (ReLU) → 4 outputs.
-2,116 parameters. Fixed-point integer arithmetic. ~53 KB proofs, ~4s proving time.
+3-layer MLP: 35 inputs → 56 hidden (ReLU) → 40 hidden (ReLU) → 4 outputs.
+4,460 parameters. Fixed-point i32 arithmetic (scale=7, rounding division). QAT-trained with FGSM adversarial examples. 94.8% cross-validated accuracy. ~53 KB proofs, ~4s proving time.
 
 ## Links
 - OpenAPI spec: https://skillguard.onrender.com/openapi.json

@@ -40,6 +40,9 @@ pub static SHELL_EXEC_RE: LazyLock<Vec<Regex>> = LazyLock::new(|| {
         Regex::new(r"pcntl_exec\(").unwrap(),
         Regex::new(r"\bpassthru\s*\(").unwrap(),
         Regex::new(r"\bshell_exec\s*\(").unwrap(),
+        // Pipe-to-shell patterns (curl|bash, wget|sh)
+        Regex::new(r"curl\s+[^|]*\|\s*(ba)?sh").unwrap(),
+        Regex::new(r"wget\s+[^|]*\|\s*(ba)?sh").unwrap(),
     ]
 });
 
@@ -178,6 +181,15 @@ pub static OBFUSCATION_RE: LazyLock<Vec<Regex>> = LazyLock::new(|| {
         // Python deserialization
         Regex::new(r"marshal\.loads\(").unwrap(),
         Regex::new(r"compile\s*\(.*exec").unwrap(),
+        // Python pickle deserialization (arbitrary code execution)
+        Regex::new(r"pickle\.loads\s*\(").unwrap(),
+        // Python builtins access via getattr
+        Regex::new(r"getattr\s*\(\s*__builtins__").unwrap(),
+        // WebAssembly instantiation (can run arbitrary bytecode)
+        Regex::new(r"WebAssembly\.instantiate").unwrap(),
+        // Base85/Base32 decoding (alternative obfuscation encodings)
+        Regex::new(r"base64\.b85decode|a85decode").unwrap(),
+        Regex::new(r"base64\.b32decode").unwrap(),
     ]
 });
 
@@ -259,6 +271,23 @@ pub static JOIN_CALL_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\.join\
 
 /// Chr call pattern (for string_obfuscation_score)
 pub static CHR_CALL_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\bchr\s*\(").unwrap());
+
+/// Unicode confusable characters: Cyrillic/Greek lookalikes for Latin letters.
+/// Detects homoglyph attacks where visually similar characters from other scripts
+/// are substituted for Latin letters (e.g. Cyrillic 'а' for Latin 'a').
+pub static UNICODE_CONFUSABLE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    // Cyrillic lookalikes: а(0x430) е(0x435) о(0x43E) р(0x440) с(0x441) х(0x445)
+    //                      А(0x410) В(0x412) Е(0x415) К(0x41A) М(0x41C) Н(0x41D) О(0x41E) Р(0x420) С(0x421) Т(0x422) Х(0x425)
+    // Greek lookalikes: ο(0x3BF) α(0x3B1) ε(0x3B5) ν(0x3BD) Α(0x391) Β(0x392) Ε(0x395) Η(0x397) Ι(0x399) Κ(0x39A) Μ(0x39C) Ν(0x39D) Ο(0x39F) Ρ(0x3A1) Τ(0x3A4) Χ(0x3A7)
+    Regex::new("[\u{0410}-\u{044F}\u{0391}-\u{03C9}]").unwrap()
+});
+
+/// Split-string evasion: char-by-char concatenation to evade string-matching.
+/// Detects patterns like "e"+"v"+"a"+"l" or 'e'+'v'+'a'+'l'.
+pub static SPLIT_STRING_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?:['"][a-zA-Z]['"])\s*[+]\s*(?:['"][a-zA-Z]['"])\s*[+]\s*(?:['"][a-zA-Z]['"])"#)
+        .unwrap()
+});
 
 // ---------------------------------------------------------------------------
 // Helper functions

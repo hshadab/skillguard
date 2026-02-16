@@ -195,3 +195,29 @@ pub struct ProofStats {
     pub total_generated: u64,
     pub total_verified: u64,
 }
+
+// ---------------------------------------------------------------------------
+// Feedback types
+// ---------------------------------------------------------------------------
+
+/// Request to submit classification feedback (dispute).
+#[derive(Debug, Deserialize)]
+pub struct FeedbackRequest {
+    /// Name of the skill being disputed
+    pub skill_name: String,
+    /// The classification returned by the model
+    pub reported_classification: String,
+    /// The classification the user believes is correct
+    pub expected_classification: String,
+    /// Optional reasoning / context for the dispute
+    #[serde(default)]
+    pub comment: Option<String>,
+}
+
+/// Response from the feedback endpoint.
+#[derive(Debug, Serialize)]
+pub struct FeedbackResponse {
+    pub success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}

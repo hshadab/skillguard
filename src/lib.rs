@@ -37,13 +37,13 @@ use crate::skill::SafetyClassification;
 /// Version prefix for model hashes. Bump when serialization format changes.
 const MODEL_HASH_VERSION: &str = "v1";
 
-/// Run the classifier on a 28-element feature vector.
+/// Run the classifier on a 35-element feature vector.
 ///
 /// Returns (classification, raw_scores, confidence).
 pub fn classify(features: &[i32]) -> Result<(SafetyClassification, [i32; 4], f64)> {
     let model = skill_safety_model();
     let input =
-        Tensor::new(Some(features), &[1, 28]).map_err(|e| eyre::eyre!("Tensor error: {:?}", e))?;
+        Tensor::new(Some(features), &[1, 35]).map_err(|e| eyre::eyre!("Tensor error: {:?}", e))?;
 
     let result = model
         .forward(std::slice::from_ref(&input))
@@ -126,7 +126,7 @@ mod tests {
 
     #[test]
     fn test_classify_safe_skill() {
-        let mut features = vec![0i32; 28];
+        let mut features = vec![0i32; 35];
         features[16] = 100; // downloads (high)
 
         let (classification, _scores, confidence) = classify(&features).unwrap();
@@ -139,7 +139,7 @@ mod tests {
 
     #[test]
     fn test_classify_malicious_skill() {
-        let mut features = vec![0i32; 28];
+        let mut features = vec![0i32; 35];
         features[0] = 80; // shell_exec_count
         features[5] = 128; // external_download
         features[6] = 100; // obfuscation_score

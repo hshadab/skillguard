@@ -15,11 +15,23 @@ pub struct ClassScores {
     pub malicious: f64,
 }
 
-/// Softmax temperature — lower values produce sharper (more decisive) distributions.
-/// The model's fixed-point arithmetic compresses logit ranges through 3 layers of /128
-/// rescaling, so raw score differences are small. A temperature below 1.0 compensates
-/// by amplifying those differences before softmax.
-const SOFTMAX_TEMPERATURE: f64 = 0.25;
+/// Softmax temperature for fixed-point i32 logits.
+///
+/// The float model's calibrated temperature is 1.5 (ECE=0.0038). However, the Rust
+/// fixed-point model outputs i32 logits ~128x larger than float logits (due to scale=7
+/// arithmetic). The equivalent fixed-point temperature is 1.5 * 128 ≈ 200.
+///
+/// With T=200: 100% accuracy, mean confidence 99.5%, min confidence 58.8%.
+/// Entropy is meaningful for edge cases (max 0.49), enabling the abstain mechanism.
+///
+/// Calibrated via `training/calibrate.py` with fixed-point scaling adjustment.
+const SOFTMAX_TEMPERATURE: f64 = 200.0;
+
+/// Normalized entropy threshold for flagging uncertain predictions.
+/// If the normalized entropy of the softmax distribution exceeds this value,
+/// the model is too uncertain and the prediction should be flagged for review.
+/// Calibrated at p95 of fixed-point entropy distribution (~5% flag rate).
+pub const ENTROPY_ABSTAIN_THRESHOLD: f64 = 0.042;
 
 impl ClassScores {
     pub fn from_raw_scores(raw: &[i32; 4]) -> Self {
@@ -56,6 +68,28 @@ impl ClassScores {
     pub fn to_array(&self) -> [f64; 4] {
         [self.safe, self.caution, self.dangerous, self.malicious]
     }
+
+    /// Shannon entropy of the softmax distribution, normalized to [0, 1].
+    ///
+    /// - 0.0 = model is perfectly certain (all probability on one class)
+    /// - 1.0 = maximum uncertainty (uniform across 4 classes)
+    pub fn entropy(&self) -> f64 {
+        let probs = self.to_array();
+        let max_entropy = (4.0_f64).ln(); // ln(4) for 4 classes
+        let mut h = 0.0;
+        for &p in &probs {
+            if p > 1e-15 {
+                h -= p * p.ln();
+            }
+        }
+        h / max_entropy
+    }
+
+    /// Returns true if the model's prediction entropy exceeds the abstain threshold,
+    /// indicating the model is too uncertain for a reliable classification.
+    pub fn is_uncertain(&self) -> bool {
+        self.entropy() > ENTROPY_ABSTAIN_THRESHOLD
+    }
 }
 
 #[cfg(test)]
@@ -73,8 +107,8 @@ mod tests {
 
     #[test]
     fn test_softmax_dominant() {
-        // With temperature 0.25, a raw score gap of 128 produces a very sharp distribution
-        let scores = ClassScores::from_raw_scores(&[128, 0, 0, 0]);
+        // With T=200, a gap of ~5000 (typical trained model output) produces a sharp distribution
+        let scores = ClassScores::from_raw_scores(&[5000, 0, -10000, -8000]);
         assert!(
             scores.safe > 0.99,
             "SAFE should dominate with large gap: {:?}",
@@ -86,20 +120,42 @@ mod tests {
 
     #[test]
     fn test_softmax_small_gap_still_separates() {
-        // Even a gap of 5 (typical model output) should produce meaningful separation
-        let scores = ClassScores::from_raw_scores(&[35, 40, 38, 37]);
+        // Typical fixed-point logits: gaps in the thousands produce meaningful separation
+        let scores = ClassScores::from_raw_scores(&[3500, 4000, 3800, 3700]);
         assert!(
             scores.caution > scores.safe
                 && scores.caution > scores.dangerous
                 && scores.caution > scores.malicious,
-            "CAUTION (40) should be highest: {:?}",
+            "CAUTION (4000) should be highest: {:?}",
             scores
         );
-        // With temperature 0.25, a gap of 2-5 should produce >40% for the top class
+        // With T=200, a gap of 200-500 should still produce >30% for the top class
         assert!(
-            scores.caution > 0.40,
-            "Top class should be >40%: {:?}",
+            scores.caution > 0.30,
+            "Top class should be >30%: {:?}",
             scores
         );
+    }
+
+    #[test]
+    fn test_entropy_uniform() {
+        // Uniform distribution has maximum entropy = 1.0
+        let scores = ClassScores::from_raw_scores(&[0, 0, 0, 0]);
+        let e = scores.entropy();
+        assert!(
+            (e - 1.0).abs() < 0.01,
+            "Uniform distribution should have entropy ~1.0, got {}",
+            e
+        );
+        assert!(scores.is_uncertain(), "Uniform should be uncertain");
+    }
+
+    #[test]
+    fn test_entropy_dominant() {
+        // With T=200, a large gap in the thousands produces low entropy
+        let scores = ClassScores::from_raw_scores(&[5000, 0, -10000, -8000]);
+        let e = scores.entropy();
+        assert!(e < 0.02, "Dominant class should have very low entropy, got {}", e);
+        assert!(!scores.is_uncertain(), "Dominant class should not be uncertain");
     }
 }

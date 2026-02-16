@@ -203,6 +203,7 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
         )
         .route("/.well-known/llms.txt", get(crate::ui::llms_txt_handler))
         .route("/api/v1/verify", post(handlers::verify_handler))
+        .route("/api/v1/feedback", post(handlers::feedback_handler))
         .merge(api_routes)
         .layer(axum_mw::from_fn(
             move |req, next: axum::middleware::Next| {
@@ -238,7 +239,7 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
 
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
     info!(bind = %bind_addr, "SkillGuard ZKML server listening");
-    info!("Endpoints: GET / (UI), GET /health, GET /stats, GET /openapi.json, GET /.well-known/ai-plugin.json, GET /.well-known/llms.txt, POST /api/v1/evaluate, POST /api/v1/verify");
+    info!("Endpoints: GET / (UI), GET /health, GET /stats, GET /openapi.json, GET /.well-known/ai-plugin.json, GET /.well-known/llms.txt, POST /api/v1/evaluate, POST /api/v1/verify, POST /api/v1/feedback");
     if rate_limit_rpm > 0 {
         info!(rate_limit_rpm, "rate limiting enabled");
     } else {
@@ -393,7 +394,8 @@ mod tests {
 
     #[test]
     fn test_usage_metrics_counters() {
-        let metrics = UsageMetrics::new("/dev/null", 0, "/tmp");
+        let tmpdir = tempfile::tempdir().expect("failed to create temp dir");
+        let metrics = UsageMetrics::new("/dev/null", 0, tmpdir.path().to_str().unwrap());
         metrics.record(
             "evaluate",
             "test-skill",
@@ -401,6 +403,7 @@ mod tests {
             SafetyDecision::Allow,
             0.9,
             42,
+            None,
         );
         assert_eq!(metrics.total_requests.load(Ordering::Relaxed), 1);
         assert_eq!(metrics.safe.load(Ordering::Relaxed), 1);

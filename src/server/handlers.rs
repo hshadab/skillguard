@@ -61,7 +61,7 @@ async fn classify_and_respond(
     endpoint: &str,
     request_bytes: Option<&[u8]>,
 ) -> ProveEvaluateResponse {
-    let feature_vec = features.to_normalized_vec();
+    let feature_vec: Vec<i32> = features.to_normalized_vec();
 
     let prover = match try_get_prover(state, start) {
         Ok(p) => p,
@@ -75,9 +75,15 @@ async fn classify_and_respond(
             if let Some(ref eval) = cached.evaluation {
                 let cls = crate::skill::SafetyClassification::parse_str(&eval.classification);
                 let dec = crate::skill::SafetyDecision::parse_str(&eval.decision);
-                state
-                    .usage
-                    .record(endpoint, &eval.skill_name, cls, dec, eval.confidence, 0);
+                state.usage.record(
+                    endpoint,
+                    &eval.skill_name,
+                    cls,
+                    dec,
+                    eval.confidence,
+                    0,
+                    Some(&feature_vec),
+                );
             }
             return cached;
         }
@@ -101,6 +107,7 @@ async fn classify_and_respond(
                 decision,
                 confidence,
                 processing_time_ms,
+                Some(&feature_vec),
             );
             state
                 .usage
@@ -366,6 +373,52 @@ pub async fn verify_handler(
         "valid": valid,
         "verification_time_ms": verification_time_ms,
     }))
+}
+
+pub async fn feedback_handler(
+    axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
+    axum::Json(req): axum::Json<FeedbackRequest>,
+) -> impl axum::response::IntoResponse {
+    let feedback_path = std::path::Path::new(&state.config.cache_dir).join("feedback.jsonl");
+
+    let entry = serde_json::json!({
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "skill_name": req.skill_name,
+        "reported_classification": req.reported_classification,
+        "expected_classification": req.expected_classification,
+        "comment": req.comment,
+    });
+
+    let mut line = entry.to_string();
+    line.push('\n');
+
+    match std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&feedback_path)
+    {
+        Ok(mut file) => {
+            use std::io::Write;
+            if let Err(e) = file.write_all(line.as_bytes()).and_then(|_| file.flush()) {
+                tracing::warn!(error = %e, "failed to write feedback entry");
+                return axum::Json(FeedbackResponse {
+                    success: false,
+                    error: Some("Failed to persist feedback".into()),
+                });
+            }
+            axum::Json(FeedbackResponse {
+                success: true,
+                error: None,
+            })
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, path = %feedback_path.display(), "failed to open feedback file");
+            axum::Json(FeedbackResponse {
+                success: false,
+                error: Some("Failed to open feedback file".into()),
+            })
+        }
+    }
 }
 
 pub async fn stats_handler(

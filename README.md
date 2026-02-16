@@ -22,9 +22,9 @@ Just as an SSL certificate proves a server is who it claims to be, every SkillGu
 
 1. **Skill submitted** — A developer publishes a skill to [ClawHub](https://clawhub.ai), or submits data directly via API.
 
-2. **Features extracted** — SkillGuard reads the skill's documentation, scripts, and metadata, then extracts 28 numeric features that capture security-relevant signals (shell execution calls, reverse shell patterns, credential access, obfuscation techniques, entropy analysis, author reputation, download counts, etc.).
+2. **Features extracted** — SkillGuard reads the skill's documentation, scripts, and metadata, then extracts 35 numeric features that capture security-relevant signals (shell execution calls, reverse shell patterns, credential access, obfuscation techniques, entropy analysis, author reputation, download counts, interaction terms, density ratios, etc.).
 
-3. **Classified with proof** — The 28 features feed into a small neural network (3-layer MLP, 2,116 parameters). The entire forward pass runs inside a SNARK virtual machine ([Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas)), producing a ~53 KB cryptographic proof that the classification was computed correctly.
+3. **Classified with proof** — The 35 features feed into a small neural network (3-layer MLP, 4,460 parameters, 94.8% cross-validated accuracy). The entire forward pass runs inside a SNARK virtual machine ([Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas)), producing a ~53 KB cryptographic proof that the classification was computed correctly.
 
 4. **Anyone verifies** — Anyone can verify a proof by posting it to `/api/v1/verify`. Verification is free, takes milliseconds, and requires no API key.
 
@@ -120,6 +120,7 @@ skillguard check --input SKILL.md --prove --format json
 | POST | `/api/v1/verify` | None | Free | Verify a zkML proof |
 | GET | `/health` | None | Free | Health check (includes `zkml_enabled`, `pay_to`) |
 | GET | `/stats` | None | Free | Usage statistics and proof counts |
+| POST | `/api/v1/feedback` | None | Free | Submit classification feedback/disputes |
 | GET | `/openapi.json` | None | Free | OpenAPI 3.1 specification |
 | GET | `/.well-known/ai-plugin.json` | None | Free | AI agent discovery manifest |
 | GET | `/.well-known/llms.txt` | None | Free | LLM-readable API description |
@@ -137,7 +138,7 @@ Both formats return the same response with classification, confidence, scores, r
 
 | Component | Details |
 |-----------|---------|
-| Model | 3-layer MLP: 28 inputs, 2x32 hidden (ReLU), 4 outputs. 2,116 parameters. Fixed-point integer arithmetic. |
+| Model | 3-layer MLP: 35→56→40→4 (ReLU). 4,460 parameters. Fixed-point i32 arithmetic (scale=7, rounding division). QAT-trained with FGSM adversarial examples. 94.8% 5-fold CV accuracy, 100% fixed-point decision match. |
 | Proving | [Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas) SNARK with Dory commitment (BN254 curve). ~53 KB proofs, ~4s proving time. |
 | Payment | [x402](https://www.x402.org/) HTTP 402 protocol. $0.001 USDC on Base. [OpenFacilitator](https://openfacilitator.io). |
 | Server | Axum async HTTP. LRU per-IP rate limiting (IPv6 /64 aggregation), constant-time API key auth, CORS, graceful shutdown, JSONL access logging. |
@@ -145,7 +146,7 @@ Both formats return the same response with classification, confidence, scores, r
 
 ### Feature List
 
-The classifier extracts 28 features from each skill:
+The classifier extracts 35 features from each skill:
 
 | # | Feature | What It Measures |
 |---|---------|-----------------|
@@ -176,7 +177,62 @@ The classifier extracts 28 features from each skill:
 | 25 | `max_line_length` | Longest script line (long = minified/obfuscated) |
 | 26 | `comment_ratio` | Comment lines / total lines (malware rarely has comments) |
 | 27 | `domain_count` | Unique external domains referenced |
-| 28 | `string_obfuscation_score` | Hex escapes + join() + chr() pattern counts |
+| 28 | `string_obfuscation_score` | Hex escapes, join(), chr(), Unicode confusables, split-string evasion |
+| 29 | `shell_exec_per_line` | Shell execution density (calls / script lines) |
+| 30 | `network_per_script` | Network call density (calls / script count) |
+| 31 | `credential_density` | Credential pattern density (patterns / doc lines) |
+| 32 | `shell_and_network` | Shell + network co-occurrence (interaction term) |
+| 33 | `obfuscation_and_exec` | Obfuscation + execution co-occurrence (interaction term) |
+| 34 | `file_extension_diversity` | Count of unique file extensions in the skill package |
+| 35 | `has_shebang` | Whether any script starts with `#!` |
+
+---
+
+## Model Training
+
+SkillGuard includes a full training pipeline in `training/` for reproducing or improving the classifier.
+
+### Architecture
+
+| Property | Value |
+|----------|-------|
+| Architecture | 35→56→40→4 MLP (ReLU activations, no output activation) |
+| Parameters | 4,460 |
+| Arithmetic | Fixed-point i32, scale=7 (×128), rounding division `(x+64)/128` |
+| Training | QAT (quantization-aware training) with straight-through estimator |
+| Adversarial | FGSM perturbations during training (ε=2.0, 30% of batches) |
+| Validation | 5-fold stratified cross-validation |
+| Accuracy | 94.8% ± 1.4% (CV), 100% on full dataset, 100% fixed-point decision match |
+| Calibration | Softmax temperature T=200 (fixed-point), ECE=0.007 |
+
+### Improvements over previous model (28→35 features, 2,116→4,460 params)
+
+- **+7 features:** Density ratios (shell/line, network/script, credential/doc), interaction terms (shell×network, obfuscation×exec), file extension diversity, shebang detection
+- **Wider layers:** 56→40 hidden vs 32→32, better feature mixing for sparse attack patterns
+- **Realistic training data:** Archetype-based malicious samples (10 distinct attack patterns: reverse shells, credential stealers, obfuscated payloads, persistence installers, data exfiltration, curl|bash, privilege escalation, LLM exposure, multi-vector, crypto miners) that match actual feature extraction sparsity
+- **Decision logic fix:** MALICIOUS/DANGEROUS classifications never fall through to Allow regardless of confidence
+- **Entropy-based abstain:** Uncertain predictions (normalized entropy > 0.042) are flagged for human review
+- **Rounding division:** Eliminates systematic negative truncation bias in fixed-point arithmetic
+- **23 regression tests:** 10 known-safe skills, 10 known-malicious skills, 3 edge cases validated on every build
+
+### Reproducing
+
+```bash
+cd training
+pip install -r requirements.txt
+
+# Generate dataset, train, export
+python train.py --export
+
+# Calibrate temperature
+python calibrate.py
+
+# Export & validate fixed-point weights
+python export_weights.py --validate --output data/weights.rs
+
+# Copy weights into src/model.rs and run tests
+cd .. && cargo test
+```
 
 ---
 
