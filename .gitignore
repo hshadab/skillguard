@@ -40,3 +40,4 @@ lcov.info
 tarpaulin-report.html
 cobertura.xml
 coverage/
+training/__pycache__/
