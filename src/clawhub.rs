@@ -136,14 +136,25 @@ impl ClawHubClient {
 
         // Fetch skill details
         let detail_url = format!("{}/skills/{}", self.base_url, urlencoding::encode(slug));
-        let detail: SkillDetailResponse = self
+        let resp = self
             .client
             .get(&detail_url)
             .send()
             .await
-            .wrap_err_with(|| format!("Failed to fetch skill detail: {}", name))?
+            .wrap_err_with(|| format!("Failed to connect to ClawHub for skill: {}", name))?;
+
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            return Err(eyre::eyre!(
+                "Skill '{}' not found on ClawHub. Check the slug at https://clawhub.ai",
+                slug
+            ));
+        }
+
+        let detail: SkillDetailResponse = resp
             .error_for_status()
-            .wrap_err_with(|| format!("HTTP error fetching skill: {}", name))?
+            .wrap_err_with(|| {
+                format!("ClawHub API error fetching skill: {}", name)
+            })?
             .json()
             .await
             .wrap_err("Failed to parse skill detail JSON")?;
