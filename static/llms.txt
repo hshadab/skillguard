@@ -64,6 +64,12 @@ QAT-trained with FGSM adversarial examples on 690 samples (incl. unknown-metadat
 93.9% cross-validated accuracy. Softmax temperature T=12.8 (fixed-point).
 ~53 KB proofs, ~4s proving time.
 
+Per-class metrics (5-fold CV mean):
+  SAFE:      P=91.5% R=96.9% F1=94.1%
+  CAUTION:   P=93.2% R=90.6% F1=91.8%
+  DANGEROUS: P=94.8% R=95.3% F1=94.9%
+  MALICIOUS: P=98.0% R=92.7% F1=95.2%
+
 The model extracts 35 numeric features from each skill (shell exec counts, network calls,
 obfuscation score, reverse shell patterns, credential access, author reputation, download
 counts, byte entropy, density ratios, interaction terms). When a skill has no separate

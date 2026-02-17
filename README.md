@@ -274,6 +274,15 @@ SkillGuard includes a full training pipeline in `training/` for reproducing or i
 | Accuracy | 93.9% ± 1.2% (CV), 100% on full dataset, 100% fixed-point decision match |
 | Calibration | Softmax temperature T=12.8 (fixed-point, float T=0.10), ECE≈0 |
 
+### Per-Class Metrics (5-fold CV, mean ± std)
+
+| Class | Precision | Recall | F1 |
+|-------|-----------|--------|----|
+| SAFE | 91.5% ± 3.0% | 96.9% ± 1.9% | 94.1% ± 2.1% |
+| CAUTION | 93.2% ± 2.8% | 90.6% ± 4.2% | 91.8% ± 2.4% |
+| DANGEROUS | 94.8% ± 2.4% | 95.3% ± 6.2% | 94.9% ± 3.4% |
+| MALICIOUS | 98.0% ± 2.6% | 92.7% ± 3.3% | 95.2% ± 1.7% |
+
 ### Improvements over previous model (28→35 features, 2,116→4,460 params)
 
 - **+7 features:** Density ratios (shell/line, network/script, credential/doc), interaction terms (shell×network, obfuscation×exec), file extension diversity, shebang detection

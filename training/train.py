@@ -249,6 +249,27 @@ def train_kfold(
             best_fold_acc = result["best_val_acc"]
             best_fold_idx = fold_idx
 
+    # Aggregate per-class metrics across folds
+    per_class_metrics = {}
+    for cls_name in CLASS_NAMES:
+        precisions = []
+        recalls = []
+        f1s = []
+        for r in fold_results:
+            report = r["classification_report"]
+            if cls_name in report:
+                precisions.append(report[cls_name]["precision"])
+                recalls.append(report[cls_name]["recall"])
+                f1s.append(report[cls_name]["f1-score"])
+        per_class_metrics[cls_name] = {
+            "precision_mean": float(np.mean(precisions)),
+            "precision_std": float(np.std(precisions)),
+            "recall_mean": float(np.mean(recalls)),
+            "recall_std": float(np.std(recalls)),
+            "f1_mean": float(np.mean(f1s)),
+            "f1_std": float(np.std(f1s)),
+        }
+
     # Summary
     accs = [r["best_val_acc"] for r in fold_results]
     summary = {
@@ -258,12 +279,23 @@ def train_kfold(
         "best_fold": best_fold_idx,
         "best_accuracy": best_fold_acc,
         "per_fold_accuracy": accs,
+        "per_class_metrics": per_class_metrics,
     }
 
     if verbose:
         print(f"\n=== Cross-Validation Summary ===")
         print(f"Mean accuracy: {summary['mean_accuracy']:.4f} +/- {summary['std_accuracy']:.4f}")
         print(f"Best fold: {summary['best_fold'] + 1} ({summary['best_accuracy']:.4f})")
+        print(f"\nPer-class metrics (mean +/- std across {n_folds} folds):")
+        print(f"  {'Class':10s}  {'Precision':>12s}  {'Recall':>12s}  {'F1':>12s}")
+        for cls_name in CLASS_NAMES:
+            m = per_class_metrics[cls_name]
+            print(
+                f"  {cls_name:10s}  "
+                f"{m['precision_mean']:.3f}+/-{m['precision_std']:.3f}  "
+                f"{m['recall_mean']:.3f}+/-{m['recall_std']:.3f}  "
+                f"{m['f1_mean']:.3f}+/-{m['f1_std']:.3f}"
+            )
 
     return fold_results[best_fold_idx], summary
 
