@@ -50,7 +50,7 @@ urlencoding = "2.1"
 tower-http = { version = "0.6", features = ["cors"] }
 
 # Redis for durable metrics persistence
-redis = { version = "0.27", features = ["aio", "tokio-comp", "connection-manager"] }
+redis = { version = "1", features = ["aio", "tokio-comp", "connection-manager", "tokio-native-tls-comp"] }
 
 # Constant-time comparison
 subtle = "2.6"
