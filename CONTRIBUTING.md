@@ -30,6 +30,17 @@ cargo test --all
 
 Regression tests in `tests/regression.rs` verify that known-safe and known-malicious skills classify correctly. If you change model weights or feature extraction, ensure these still pass.
 
+### Crawler / Batch Scanner
+
+The `crawl` and `scan` CLI commands are behind a feature gate. To build and test them:
+
+```bash
+cargo build --release --features crawler
+cargo test --features crawler
+```
+
+See `src/crawler.rs` and `src/batch.rs` for implementation details.
+
 ## Pull Request Guidelines
 
 1. Create a feature branch from `main`

@@ -15,6 +15,7 @@
 - [How the Model Works](#how-the-model-works-plain-english)
 - [Architecture](#architecture)
 - [Model Training](#model-training)
+- [Batch Scanning](#batch-scanning)
 - [Environment Variables](#environment-variables)
 - [Links](#links)
 - [License](#license)
@@ -319,6 +320,56 @@ python export_weights.py --validate --output data/weights.rs
 # Copy weights into src/model.rs and run tests
 cd .. && cargo test
 ```
+
+---
+
+## Batch Scanning
+
+SkillGuard includes CLI commands for crawling and batch-scanning OpenClaw skills. These are behind the `crawler` feature gate:
+
+```bash
+cargo build --release --features crawler
+```
+
+### Crawl
+
+Fetch SKILL.md files from the [awesome-openclaw-skills](https://github.com/OpenClaw/awesome-openclaw-skills) list:
+
+```bash
+skillguard crawl --output-dir crawled-skills --concurrency 5 --delay-ms 200
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--awesome-url` | URL of the awesome list README (raw markdown) | built-in |
+| `--limit` | Maximum skills to crawl (0 = all) | `0` |
+| `--concurrency` | Maximum concurrent fetches | `5` |
+| `--delay-ms` | Delay between fetches in milliseconds | `200` |
+| `--output-dir` | Output directory for crawled SKILL.md files | `crawled-skills` |
+
+### Scan
+
+Batch-classify skills and produce a report. Supports two modes:
+
+**Live mode** — fetch and classify directly from the awesome list:
+```bash
+skillguard scan --from-awesome --format json --output scan-report.json
+```
+
+**Directory mode** — classify previously crawled skills:
+```bash
+skillguard scan --input-dir crawled-skills --format csv --output scan-report.csv
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--from-awesome` | Fetch and scan from the awesome list (live mode) | `false` |
+| `--input-dir` | Input directory of crawled SKILL.md files (directory mode) | `crawled-skills` |
+| `--format` | Output format: `json`, `csv`, or `summary` | `summary` |
+| `--output` | Output file (defaults to stdout) | stdout |
+| `--filter` | Filter by classification (comma-separated, e.g. `DANGEROUS,MALICIOUS`) | all |
+| `--concurrency` | Maximum concurrent classifications | `5` |
+| `--limit` | Max skills to scan from awesome list (live mode, 0 = all) | `0` |
 
 ---
 

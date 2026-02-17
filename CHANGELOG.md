@@ -2,6 +2,19 @@
 
 All notable changes to SkillGuard are documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Per-class metrics** — precision, recall, and F1 reported per class (5-fold CV, mean ± std) in training summary, README, web dashboard, and LLM/OpenAPI docs
+- **Batch scanning CLI** — `scan` and `crawl` subcommands (behind `--features crawler`) for crawling the awesome-openclaw-skills list and batch-classifying skills
+- **Redis metrics persistence** — durable proof/classification counters via Redis (three-tier: Redis → disk → env baseline) so metrics survive container redeploys
+- **Per-class metrics in training pipeline** — `train.py` aggregates per-class P/R/F1 across folds into `training_summary.json`
+
+### Changed
+- **Redis crate upgraded to v1** with `tokio-native-tls-comp` feature for TLS support on Render's `rediss://` URLs (was v0.27 without async TLS)
+- **Web dashboard** updated with color-coded per-class metrics table
+- **OpenAPI spec** and **llms.txt** updated with per-class F1 scores
+
 ## [0.1.0] - 2026-02-16
 
 ### Initial Release
