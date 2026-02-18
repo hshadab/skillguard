@@ -113,6 +113,7 @@ async fn evaluate_handler(
                 error: Some(format!("Invalid JSON: {}", e)),
                 evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
+                model_version: None,
             });
         }
     };
@@ -127,6 +128,7 @@ async fn evaluate_handler(
                 ),
                 evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
+                model_version: None,
             });
         }
     };
@@ -161,6 +163,7 @@ async fn evaluate_handler(
                     proof: proof_bundle,
                 }),
                 processing_time_ms: start.elapsed().as_millis() as u64,
+                model_version: None,
             })
         }
         Ok(Err(e)) => axum::Json(ProveEvaluateResponse {
@@ -168,12 +171,14 @@ async fn evaluate_handler(
             error: Some(format!("Proof generation failed: {}", e)),
             evaluation: None,
             processing_time_ms: start.elapsed().as_millis() as u64,
+            model_version: None,
         }),
         Err(e) => axum::Json(ProveEvaluateResponse {
             success: false,
             error: Some(format!("Proving task panicked: {}", e)),
             evaluation: None,
             processing_time_ms: start.elapsed().as_millis() as u64,
+            model_version: None,
         }),
     }
 }

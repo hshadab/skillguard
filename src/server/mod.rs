@@ -32,6 +32,77 @@ use tracing::{info, warn};
 
 use crate::clawhub::ClawHubClient;
 
+/// Load the pre-computed scan catalog from scan-report.json.
+///
+/// Returns a HashMap keyed by skill name for O(1) lookups.
+fn load_catalog(path: &str) -> std::collections::HashMap<String, CatalogEntry> {
+    let mut catalog = std::collections::HashMap::new();
+    let path = std::path::Path::new(path);
+    if !path.exists() {
+        info!("No catalog file at {:?}, catalog endpoint will return empty", path);
+        return catalog;
+    }
+    match std::fs::read_to_string(path) {
+        Ok(content) => {
+            match serde_json::from_str::<serde_json::Value>(&content) {
+                Ok(data) => {
+                    if let Some(results) = data.get("results").and_then(|r| r.as_array()) {
+                        for r in results {
+                            if let (Some(name), Some(cls), Some(decision)) = (
+                                r.get("skill_name").and_then(|v| v.as_str()),
+                                r.get("classification").and_then(|v| v.as_str()),
+                                r.get("decision").and_then(|v| v.as_str()),
+                            ) {
+                                let entry = CatalogEntry {
+                                    skill_name: name.to_string(),
+                                    author: r.get("author").and_then(|v| v.as_str()).unwrap_or("unknown").to_string(),
+                                    classification: cls.to_string(),
+                                    decision: decision.to_string(),
+                                    confidence: r.get("confidence").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                                    scores: r.get("scores").cloned(),
+                                    reasoning: r.get("reasoning").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                                    model_hash: r.get("model_hash").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                                };
+                                catalog.insert(name.to_string(), entry);
+                            }
+                        }
+                        info!(count = catalog.len(), "Loaded catalog from {:?}", path);
+                    }
+                }
+                Err(e) => warn!(error = %e, "Failed to parse catalog JSON"),
+            }
+        }
+        Err(e) => warn!(error = %e, "Failed to read catalog file"),
+    }
+    catalog
+}
+
+/// Load model version from data/model_versions.json (latest entry).
+fn load_model_version() -> Option<String> {
+    let path = std::path::Path::new("data/model_versions.json");
+    if !path.exists() {
+        return None;
+    }
+    match std::fs::read_to_string(path) {
+        Ok(content) => {
+            match serde_json::from_str::<serde_json::Value>(&content) {
+                Ok(data) => {
+                    if let Some(versions) = data.get("versions").and_then(|v| v.as_array()) {
+                        versions.last()
+                            .and_then(|v| v.get("version"))
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                    } else {
+                        data.get("version").and_then(|v| v.as_str()).map(|s| s.to_string())
+                    }
+                }
+                Err(_) => None,
+            }
+        }
+        Err(_) => None,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Server state
 // ---------------------------------------------------------------------------
@@ -47,6 +118,10 @@ pub struct ServerState {
     pub prover: tokio::sync::OnceCell<Arc<crate::prover::ProverState>>,
     pub skip_prover: bool,
     pub proof_cache: crate::cache::ProofCache,
+    /// Pre-computed catalog of skill classifications from scan-report.json.
+    pub catalog: std::collections::HashMap<String, CatalogEntry>,
+    /// Model version identifier (e.g., "v1.0").
+    pub model_version: Option<String>,
 }
 
 impl ServerState {
@@ -67,6 +142,10 @@ impl ServerState {
         }
 
         let proof_cache = crate::cache::ProofCache::open(Some(&config.cache_dir));
+        let catalog_path = std::env::var("SKILLGUARD_CATALOG")
+            .unwrap_or_else(|_| "scan-report.json".to_string());
+        let catalog = load_catalog(&catalog_path);
+        let model_version = load_model_version();
 
         Self {
             config,
@@ -78,6 +157,8 @@ impl ServerState {
             prover: tokio::sync::OnceCell::new(),
             skip_prover,
             proof_cache,
+            catalog,
+            model_version,
         }
     }
 
@@ -100,6 +181,10 @@ impl ServerState {
         }
 
         let proof_cache = crate::cache::ProofCache::open(Some(&config.cache_dir));
+        let catalog_path = std::env::var("SKILLGUARD_CATALOG")
+            .unwrap_or_else(|_| "scan-report.json".to_string());
+        let catalog = load_catalog(&catalog_path);
+        let model_version = load_model_version();
 
         Self {
             config,
@@ -111,6 +196,8 @@ impl ServerState {
             prover: tokio::sync::OnceCell::new(),
             skip_prover,
             proof_cache,
+            catalog,
+            model_version,
         }
     }
 
@@ -237,6 +324,7 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
         .route("/.well-known/llms.txt", get(crate::ui::llms_txt_handler))
         .route("/api/v1/verify", post(handlers::verify_handler))
         .route("/api/v1/feedback", post(handlers::feedback_handler))
+        .route("/api/v1/catalog/:skill_name", get(handlers::catalog_handler))
         .merge(api_routes)
         .layer(axum_mw::from_fn(
             move |req, next: axum::middleware::Next| {
@@ -272,7 +360,10 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
 
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
     info!(bind = %bind_addr, "SkillGuard ZKML server listening");
-    info!("Endpoints: GET / (UI), GET /health, GET /stats, GET /openapi.json, GET /.well-known/ai-plugin.json, GET /.well-known/llms.txt, POST /api/v1/evaluate, POST /api/v1/verify, POST /api/v1/feedback");
+    info!("Endpoints: GET / (UI), GET /health, GET /stats, GET /openapi.json, GET /.well-known/ai-plugin.json, GET /.well-known/llms.txt, POST /api/v1/evaluate, POST /api/v1/verify, POST /api/v1/feedback, GET /api/v1/catalog/:name");
+    if !state.catalog.is_empty() {
+        info!(catalog_size = state.catalog.len(), "Catalog loaded for instant lookups");
+    }
     if rate_limit_rpm > 0 {
         info!(rate_limit_rpm, "rate limiting enabled");
     } else {

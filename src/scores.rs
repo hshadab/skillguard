@@ -18,20 +18,20 @@ pub struct ClassScores {
     pub dangerous: f64,
 }
 
-/// Softmax temperature for fixed-point i32 logits.
+/// Softmax temperature for i32 logits from the QAT model.
 ///
-/// The float model's calibrated temperature is 0.60 (ECE=0.044). The Rust fixed-point
-/// model outputs i32 logits ~128x larger than float logits (due to scale=7
-/// arithmetic). The equivalent fixed-point temperature is 0.60 * 128 = 76.8.
+/// The QAT model simulates the exact Rust i32 inference path during training,
+/// so logits are already in integer scale (range approx -34 to +46). The temperature
+/// is calibrated directly on these integer-scale logits (ECE=0.045 on real data).
 ///
 /// Calibrated via `training/calibrate.py --dataset real --num-classes 3`.
-const SOFTMAX_TEMPERATURE: f64 = 76.8;
+const SOFTMAX_TEMPERATURE: f64 = 0.95;
 
 /// Normalized entropy threshold for flagging uncertain predictions.
 /// If the normalized entropy of the softmax distribution exceeds this value,
 /// the model is too uncertain and the prediction should be flagged for review.
-/// Calibrated at 5% flag rate on the real dataset (0.5938).
-pub const ENTROPY_ABSTAIN_THRESHOLD: f64 = 0.60;
+/// Calibrated at 5% flag rate on the real dataset (0.6659).
+pub const ENTROPY_ABSTAIN_THRESHOLD: f64 = 0.67;
 
 impl ClassScores {
     pub fn from_raw_scores(raw: &[i32; NUM_CLASSES]) -> Self {

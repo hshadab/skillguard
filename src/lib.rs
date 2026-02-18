@@ -17,6 +17,7 @@ pub mod cache;
 pub mod clawhub;
 #[cfg(feature = "crawler")]
 pub mod crawler;
+pub mod mcp;
 pub mod model;
 pub mod patterns;
 pub mod prover;

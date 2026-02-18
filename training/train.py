@@ -28,6 +28,7 @@ from dataset import (
     NUM_FEATURES,
     SkillDataset,
     generate_dataset,
+    generate_dangerous_augmentation,
     load_real_dataset,
     save_dataset_jsonl,
 )
@@ -209,6 +210,7 @@ def train_kfold(
     epochs: int = 200,
     adversarial: bool = True,
     verbose: bool = True,
+    patience: int = 30,
 ) -> tuple[dict, dict]:
     """Train with k-fold stratified cross-validation.
 
@@ -244,6 +246,7 @@ def train_kfold(
             class_names=class_names,
             class_weights=class_weights,
             epochs=epochs,
+            patience=patience,
             adversarial=adversarial,
             verbose=verbose,
         )
@@ -346,6 +349,15 @@ def main():
         "--real-labels", type=str, default="training/real-labels.json",
         help="Path to real labeled dataset (used with --dataset real)"
     )
+    parser.add_argument(
+        "--augment-dangerous", type=int, default=0, metavar="N",
+        help="Generate N synthetic DANGEROUS samples and mix with real data. "
+             "Useful when real DANGEROUS samples are scarce (e.g., <40)."
+    )
+    parser.add_argument(
+        "--patience", type=int, default=None,
+        help="Early-stopping patience (default: 30 for small datasets, 50 for large)"
+    )
     args = parser.parse_args()
 
     verbose = not args.quiet
@@ -368,6 +380,18 @@ def main():
         if len(features) == 0:
             print("ERROR: No samples loaded from real dataset", file=sys.stderr)
             return 1
+
+        # Augment with synthetic samples if requested
+        if args.augment_dangerous > 0:
+            aug_features, aug_labels = generate_dangerous_augmentation(
+                n=args.augment_dangerous, seed=args.seed
+            )
+            features = np.concatenate([features, aug_features])
+            labels = np.concatenate([labels, aug_labels])
+            n_aug_dangerous = (aug_labels == 2).sum()
+            n_aug_safe = (aug_labels == 0).sum()
+            if verbose:
+                print(f"Augmented with {n_aug_dangerous} DANGEROUS + {n_aug_safe} SAFE synthetic samples")
 
         if verbose:
             print(f"Dataset: {features.shape[0]} samples, {features.shape[1]} features")
@@ -398,6 +422,13 @@ def main():
                 if count > 0:
                     print(f"  {name}: {count}")
 
+    # Determine early-stopping patience: default 50 for large datasets, 30 otherwise
+    patience = args.patience
+    if patience is None:
+        patience = 50 if len(features) >= 300 else 30
+    if verbose:
+        print(f"Early-stopping patience: {patience}")
+
     # Train
     torch.manual_seed(args.seed)
     best_result, summary = train_kfold(
@@ -411,6 +442,7 @@ def main():
         epochs=args.epochs,
         adversarial=not args.no_adversarial,
         verbose=verbose,
+        patience=patience,
     )
 
     # Save summary

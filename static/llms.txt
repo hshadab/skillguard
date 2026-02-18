@@ -35,6 +35,17 @@ Content-Type: application/json
 
 Returns: {"valid": true, "verification_time_ms": 74}
 
+### Catalog lookup (free, no auth, instant)
+GET /api/v1/catalog/{skill_name}
+
+Returns cached classification data for a previously evaluated skill without re-running
+the model or generating a new proof. Instant response, no authentication required.
+
+Example: GET /api/v1/catalog/4claw
+Returns: {"success": true, "entry": {"skill_name": "4claw", "classification": "SAFE", "decision": "ALLOW", "confidence": 0.97, "scores": {...}, "model_version": "...", "evaluated_at": "..."}}
+
+Returns 404 if the skill has not been evaluated before.
+
 ### Health check (free)
 GET /health
 
@@ -57,11 +68,13 @@ curl -X POST https://skillguard.onrender.com/api/v1/evaluate \
   -H "Content-Type: application/json" \
   -d '{"skill": "4claw"}'
 
-## Model
+## Model (v2.0)
 3-layer MLP: 35 inputs → 56 hidden (ReLU) → 40 hidden (ReLU) → 3 outputs.
 4,419 parameters. Fixed-point i32 arithmetic (scale=7, rounding division).
-QAT-trained with FGSM adversarial examples on LLM-labeled real OpenClaw skills.
-Softmax temperature T=76.8 (fixed-point, float T=0.60, ECE=0.044). ~53 KB proofs, ~4s proving time.
+QAT-trained with exact i32 integer-division simulation + FGSM adversarial examples
+on 425 LLM-labeled real OpenClaw skills + 106 augmented samples.
+Softmax temperature T=0.95 on integer-scale logits (ECE=0.045).
+~53 KB proofs, ~4s proving time. DANGEROUS recall: 80%, F1: 0.80.
 
 The model extracts 35 numeric features from each skill (shell exec counts, network calls,
 obfuscation score, reverse shell patterns, credential access, author reputation, download
@@ -69,7 +82,13 @@ counts, byte entropy, density ratios, interaction terms). When a skill has no se
 scripts, code blocks inside SKILL.md are extracted and analyzed. Features are scaled to
 0-128 and fed through the network. The highest of the 3 output scores (SAFE, CAUTION,
 DANGEROUS) determines the classification. Confidence is the softmax probability
-of the top class. High-entropy (uncertain) predictions are flagged for human review.
+of the top class. High-entropy (uncertain, >0.67 normalized) predictions are flagged for review.
+
+## Model versioning
+Every evaluation response includes a model_version field containing the SHA-256 hash
+of the model bytecode used for that classification. Catalog entries also include the
+model_version so you can tell whether a cached result was produced by the current model
+or an older one. Check /health for the active model_hash.
 
 ## Links
 - OpenAPI spec: https://skillguard.onrender.com/openapi.json

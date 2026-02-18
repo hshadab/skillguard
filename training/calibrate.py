@@ -70,7 +70,7 @@ def calibrate_temperature(
         logits = model(x).numpy()
 
     # Grid search
-    temperatures = list(np.arange(0.1, 1.05, 0.05)) + [1.5, 2.0, 3.0, 5.0]
+    temperatures = list(np.arange(0.1, 1.05, 0.05)) + [1.5, 2.0, 3.0, 5.0, 7.0, 10.0, 15.0, 20.0]
     best_temp = 1.0
     best_ece = float("inf")
     results = []
@@ -176,7 +176,7 @@ def main():
 
     verbose = not args.quiet
 
-    model = SkillSafetyMLP(input_dim=NUM_FEATURES, num_classes=args.num_classes, qat=False)
+    model = SkillSafetyMLP(input_dim=NUM_FEATURES, num_classes=args.num_classes, qat=True)
     state_dict = torch.load(args.model, map_location="cpu", weights_only=True)
     model.load_state_dict(state_dict)
 

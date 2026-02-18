@@ -128,7 +128,7 @@ pub struct ProvedEvaluationResult {
     /// Normalized Shannon entropy of the softmax distribution (0=certain, 1=uniform).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entropy: Option<f64>,
-    /// ZK proof bundle — every classification includes a cryptographic proof.
+    /// Mandatory ZK proof bundle — every classification includes a cryptographic proof.
     pub proof: crate::prover::ProofBundle,
 }
 
@@ -155,6 +155,9 @@ pub struct ProveEvaluateResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub evaluation: Option<ProvedEvaluationResult>,
     pub processing_time_ms: u64,
+    /// Model version identifier (e.g., "v1.0").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_version: Option<String>,
 }
 
 /// Health check response
@@ -242,4 +245,44 @@ pub struct FeedbackResponse {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Catalog types (pre-computed classification lookups)
+// ---------------------------------------------------------------------------
+
+/// A pre-computed classification entry from the batch scan catalog.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CatalogEntry {
+    pub skill_name: String,
+    #[serde(default)]
+    pub author: String,
+    pub classification: String,
+    pub decision: String,
+    pub confidence: f64,
+    #[serde(default)]
+    pub scores: Option<serde_json::Value>,
+    #[serde(default)]
+    pub reasoning: Option<String>,
+    #[serde(default)]
+    pub model_hash: Option<String>,
+}
+
+/// Response from the catalog lookup endpoint.
+#[derive(Debug, Serialize)]
+pub struct CatalogResponse {
+    pub success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entry: Option<CatalogEntry>,
+    /// Hint for unknown skills.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hint: Option<String>,
+    /// Total skills in the catalog.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub catalog_size: Option<usize>,
+    /// Model version identifier.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_version: Option<String>,
 }

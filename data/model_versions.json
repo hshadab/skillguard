@@ -1,0 +1,27 @@
+{
+  "versions": [
+    {
+      "version": "v1.0",
+      "date": "2026-02-17",
+      "sample_count": 159,
+      "cv_accuracy": 0.567,
+      "dangerous_f1": 0.0,
+      "notes": "Initial model: 159 LLM-labeled real skills (60 SAFE, 95 CAUTION, 4 DANGEROUS). DANGEROUS class underrepresented."
+    },
+    {
+      "version": "v2.0",
+      "date": "2026-02-18",
+      "sample_count": 425,
+      "augmented_dangerous": 80,
+      "augmented_safe": 26,
+      "cv_accuracy": 0.68,
+      "dangerous_f1": 0.799,
+      "dangerous_recall": 0.798,
+      "safe_recall": 0.618,
+      "ece": 0.045,
+      "softmax_temperature": 0.95,
+      "hash": "sha256:06d86aa7c62e",
+      "notes": "QAT model with exact i32 integer-division simulation. 425 LLM-labeled real skills + 80 DANGEROUS + 26 SAFE anchor augmentation. Fixed quantization gap between Python float and Rust i32 inference."
+    }
+  ]
+}

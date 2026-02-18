@@ -9,6 +9,7 @@
 ---
 
 ## Table of Contents
+- [Plain English: What Does This Do?](#plain-english-what-does-this-do)
 - [What Is This?](#what-is-this)
 - [Quick Start](#quick-start)
 - [API Reference](#api-reference)
@@ -16,9 +17,46 @@
 - [Architecture](#architecture)
 - [Model Training](#model-training)
 - [Batch Scanning](#batch-scanning)
+- [MCP Server](#mcp-server)
 - [Environment Variables](#environment-variables)
 - [Links](#links)
 - [License](#license)
+
+---
+
+## Plain English: What Does This Do?
+
+AI agents are starting to install third-party plugins ("skills") from open marketplaces, just like humans install apps from an app store. The problem: **there's no app review process.** Any skill could contain a reverse shell, steal your API keys, or trick the AI into leaking secrets.
+
+SkillGuard is a safety scanner for these skills. You send it a skill, and it tells you whether it's **safe**, **suspicious**, or **dangerous** — similar to how an antivirus scans a file before you open it, except:
+
+1. **It's built for AI agent code**, not desktop malware. It understands patterns like prompt injection, LLM secret exfiltration, and obfuscated shell payloads that traditional scanners miss.
+2. **Every answer comes with a cryptographic proof.** You don't have to trust the SkillGuard server. The proof mathematically guarantees the neural network actually produced that classification — anyone can verify it independently in milliseconds.
+3. **It's fast enough for agents to use in real time.** Classification with a full cryptographic proof takes ~4 seconds. For instant lookups, use the catalog endpoint which returns pre-computed results in <10ms.
+
+### Why would an agent use this?
+
+SkillGuard is a **first line of defense** — not a complete solution, but a fast, cheap, verifiable check that catches the obvious threats before anything else runs.
+
+An AI agent about to install a community skill from [OpenClaw](https://openclaw.ai) can call SkillGuard first:
+- **ALLOW** → install the skill
+- **FLAG** → ask the human for approval
+- **DENY** → refuse to install
+
+Without SkillGuard, the agent has no signal at all — it either trusts everything (dangerous) or trusts nothing (useless). SkillGuard gives it a concrete, verifiable answer in under 100ms. It won't catch every attack (novel obfuscation, time-delayed payloads, runtime-only behavior), but it reliably catches reverse shells, credential harvesters, obfuscated payloads, and other common patterns. Pair it with sandboxing, human review for flagged skills, and runtime monitoring for a proper defense-in-depth setup.
+
+### Current model performance
+
+| Metric | Value |
+|--------|-------|
+| Training data | 425 real OpenClaw skills + 106 augmented samples |
+| Cross-validation accuracy | 68% (5-fold, macro-averaged) |
+| DANGEROUS recall | 80% (catches 4 out of 5 truly dangerous skills) |
+| DANGEROUS F1 | 0.80 |
+| Regression tests | 111 passing (29 regression + 58 unit + 24 integration) |
+| Model version | v2.0 (QAT, 2026-02-18) |
+
+The 68% overall accuracy reflects SAFE/CAUTION boundary confusion (benign skills with shell commands get cautioned), not DANGEROUS misses. The model is deliberately conservative — it's better to flag a safe skill for review than to let a dangerous one through.
 
 ---
 
@@ -131,8 +169,9 @@ skillguard check --input SKILL.md --prove --format json
 | Method | Path | Auth | Price | Description |
 |--------|------|------|-------|-------------|
 | POST | `/api/v1/evaluate` | API key or x402 | $0.001 USDC | Classify a skill with mandatory zkML proof (auto-detects name lookup vs full data) |
+| GET | `/api/v1/catalog/{name}` | None | Free | Instant cached classification lookup |
 | POST | `/api/v1/verify` | None | Free | Verify a zkML proof |
-| GET | `/health` | None | Free | Health check (includes `zkml_enabled`, `pay_to`) |
+| GET | `/health` | None | Free | Health check (includes `zkml_enabled`, `model_version`, `pay_to`) |
 | GET | `/stats` | None | Free | Usage statistics and proof counts |
 | POST | `/api/v1/feedback` | None | Free | Submit classification feedback/disputes |
 | GET | `/openapi.json` | None | Free | OpenAPI 3.1 specification |
@@ -144,7 +183,7 @@ The `/api/v1/evaluate` endpoint accepts two request formats:
 - **Name lookup:** `{"skill": "skill-slug"}` — fetches skill data from ClawHub, then classifies
 - **Full skill data:** `{"skill": {"name": "...", "version": "...", ...}}` — classifies directly
 
-Both formats return the same response with classification, confidence, scores, reasoning, and a zkML proof bundle. The proof is mandatory — if the prover is still initializing, the endpoint returns an error until it is ready.
+Both formats return the same response with classification, confidence, scores, reasoning, and a mandatory zkML proof bundle. Every classification is cryptographically verified — there is no proof-optional mode. Every response includes a `model_version` field.
 
 ---
 
@@ -174,29 +213,31 @@ The fingerprint feeds into a **3-layer neural network** — three stacked layers
 - **Layer 2** (56 → 40 neurons): Combines the first layer's patterns into higher-level concepts. This is where the network builds compound indicators like "this looks like a credential stealer" vs "this looks like a legitimate API client."
 - **Layer 3** (40 → 3 outputs): Produces three scores — one for each safety class: SAFE, CAUTION, DANGEROUS. The highest score wins.
 
-The raw output scores are converted to probabilities using a **softmax function** (with a calibrated temperature of T=76.8 for the fixed-point logits, equivalent to T=0.60 in float space). This turns the scores into percentages that sum to 100%, giving a confidence level for each class.
+The raw output scores are converted to probabilities using a **softmax function** (with a calibrated temperature of T=0.95, ECE=0.045). This turns the scores into percentages that sum to 100%, giving a confidence level for each class.
 
 ### How it handles uncertainty
 
 The model doesn't just pick the top class and move on. It checks how confident it is:
 
 - If the top probability is high and the others are low (low **entropy**), the model is confident. SAFE/CAUTION skills get **ALLOW**. DANGEROUS skills get **DENY**.
-- If the probabilities are spread out (high entropy, above 0.60 normalized), the model isn't sure. These predictions get **FLAG**ged for human review regardless of the top class.
+- If the probabilities are spread out (high entropy, above 0.67 normalized), the model isn't sure. These predictions get **FLAG**ged for human review regardless of the top class.
 - DANGEROUS classifications with less than 50% confidence also get **FLAG** instead of **DENY** — the model errs on the side of caution rather than blocking something it's unsure about.
 
 ### Why fixed-point arithmetic?
 
-All the math inside the network uses integers instead of floating-point numbers (every weight is multiplied by 128 and stored as an `i32`). This is unusual for neural networks, but it's required because the entire forward pass runs inside a **zero-knowledge proof system** (Jolt Atlas). ZK circuits work with integers, not floats. The training process (quantization-aware training) ensures the integer version of the network makes the same decisions as the floating-point version.
+All the math inside the network uses integers instead of floating-point numbers (every weight is multiplied by 128 and stored as an `i32`). This is unusual for neural networks, but it's required because the entire forward pass runs inside a **zero-knowledge proof system** (Jolt Atlas). ZK circuits work with integers, not floats.
+
+The training process uses **quantization-aware training (QAT)** — during training, every forward pass simulates the exact Rust i32 integer path: `matmul → (result + 64) // 128 → add bias → ReLU`. Gradients flow through these integer operations using straight-through estimators (STE). This means the model learns to produce correct classifications despite the rounding and truncation that integer arithmetic introduces. The result: zero gap between the Python training model and the Rust production inference.
 
 ### What it was trained on
 
-The model is trained on LLM-labeled real OpenClaw skills across three safety classes:
+The current model (v2.0) is trained on 425 LLM-labeled real OpenClaw skills plus 106 augmented samples, across three safety classes:
 
 - **Safe skills:** Documentation tools, calculators, formatters, API wrappers — typical utility skills with no concerning patterns.
 - **Caution skills:** Legitimate tools that use shell commands, network calls, or file writes in normal ways, or have minimal metadata.
 - **Dangerous skills:** Credential harvesters, reverse shells, obfuscated payloads, persistence installers, crypto miners, privilege escalation, data exfiltration, multi-vector attacks.
 
-The training pipeline uses Claude API to label skills at scale, ensuring consistent labeling across thousands of real-world examples. Training uses **adversarial examples** (FGSM perturbations on 30% of batches) to make the model robust against skills that are deliberately crafted to sit on the edge of the decision boundary.
+The training pipeline uses Claude API to label skills at scale, ensuring consistent labeling across real-world examples. Training uses **adversarial examples** (FGSM perturbations on 30% of batches) to make the model robust against skills crafted to sit on the edge of the decision boundary, and **sparse anchor augmentation** to ensure the model handles the full range of metadata feature combinations seen in production.
 
 ---
 
@@ -204,10 +245,11 @@ The training pipeline uses Claude API to label skills at scale, ensuring consist
 
 | Component | Details |
 |-----------|---------|
-| Model | 3-layer MLP: 35→56→40→3 (ReLU). 4,419 parameters. Fixed-point i32 arithmetic (scale=7, rounding division). QAT-trained with FGSM adversarial examples on LLM-labeled real skills. |
+| Model | 3-layer MLP: 35→56→40→3 (ReLU). 4,419 parameters. Fixed-point i32 arithmetic (scale=7, rounding division). QAT with exact i32 simulation + FGSM adversarial training on 425 LLM-labeled real skills + 106 augmented. |
 | Proving | [Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas) SNARK with Dory commitment (BN254 curve). ~53 KB proofs, ~4s proving time. |
 | Payment | [x402](https://www.x402.org/) HTTP 402 protocol. $0.001 USDC on Base. [OpenFacilitator](https://openfacilitator.io). |
 | Server | Axum async HTTP. LRU per-IP rate limiting (IPv6 /64 aggregation), constant-time API key auth, CORS, graceful shutdown, JSONL access logging. |
+| MCP | stdio-based MCP server (`skillguard-mcp`) for zero-code agent integration via `skillguard_evaluate` tool. |
 | Runtime | Docker on Render. Rust nightly. Pre-generated Dory SRS bundled in image. |
 
 ### Feature List
@@ -266,19 +308,23 @@ SkillGuard includes a full training pipeline in `training/` for reproducing or i
 | Parameters | 4,419 |
 | Classes | 3 (SAFE, CAUTION, DANGEROUS) |
 | Arithmetic | Fixed-point i32, scale=7 (×128), rounding division `(x+64)/128` |
-| Training | QAT (quantization-aware training) with straight-through estimator |
+| Training | QAT with exact i32 integer-division simulation + STE gradient flow |
 | Adversarial | FGSM perturbations during training (ε=2.0, 30% of batches) |
+| Augmentation | 80 DANGEROUS + 26 SAFE sparse anchor samples |
 | Validation | 5-fold stratified cross-validation |
-| Dataset | LLM-labeled real OpenClaw skills (3-class) |
-| Calibration | Softmax temperature T=76.8 (fixed-point, float T=0.60), ECE=0.044 |
+| Dataset | 425 LLM-labeled real OpenClaw skills + 106 augmented (3-class) |
+| CV accuracy | 68% macro, 80% DANGEROUS recall, 0.80 DANGEROUS F1 |
+| Calibration | Softmax temperature T=0.95 on integer logits, ECE=0.045 |
+| Entropy threshold | 0.67 normalized (5% flag rate) |
+| Model version | v2.0 (2026-02-18) |
 
 ### Training Pipeline
 
 The training pipeline (`training/`) supports both synthetic and real data modes:
 
 ```bash
-# Real data mode (3-class, LLM-labeled)
-python train.py --dataset real --num-classes 3 --export
+# Real data mode (3-class, LLM-labeled) — recommended
+python train.py --dataset real --num-classes 3 --augment-dangerous 80 --export
 
 # Synthetic data mode (4-class, legacy)
 python train.py --dataset synthetic --export
@@ -286,15 +332,17 @@ python train.py --dataset synthetic --export
 
 **Real data pipeline:**
 1. `training/fetch_and_label.py` — Fetches SKILL.md from GitHub, labels via Claude API
-2. `training/dataset.py` — Loads labeled data, extracts features via `skillguard extract-features`
-3. `training/train.py` — Trains with class weighting for imbalanced data, 5-fold CV
-4. `training/export_weights.py` — Exports fixed-point weights to Rust `model.rs`
-5. `training/calibrate.py` — Calibrates softmax temperature on real distribution
+2. `training/dataset.py` — Loads labeled data, extracts features via `skillguard extract-features`, generates augmented DANGEROUS + SAFE anchor samples
+3. `training/train.py` — QAT training with exact i32 simulation, class weighting, FGSM adversarial examples, 5-fold CV
+4. `training/export_weights.py` — Exports fixed-point weights to Rust `model.rs`, validates against Rust i32 simulation
+5. `training/calibrate.py` — Calibrates softmax temperature on QAT integer-scale logits
 
 ### Key Design Decisions
 
 - **3 classes (not 4):** The original MALICIOUS class was merged into DANGEROUS. In practice, the distinction between "dangerous" and "malicious" was subjective and inconsistent. Three classes (safe / use-with-caution / block) map cleanly to agent policy actions.
 - **LLM-labeled data:** Claude API labels real OpenClaw skills at scale, replacing synthetic data. This ensures the model sees real-world feature distributions.
+- **QAT with exact i32 simulation:** The forward pass during training simulates the exact Rust integer arithmetic path (`matmul → (result + 64) // 128 → add bias → relu`) using straight-through estimators. This eliminates the quantization gap between float training and integer inference — the Python model and Rust binary produce identical outputs.
+- **Sparse anchor augmentation:** Synthetic DANGEROUS and SAFE samples with specific feature combinations ensure the model handles the full range of metadata values (high stars, old accounts, etc.) seen in real deployment.
 - **Class weighting:** Inverse-frequency weighting handles the natural imbalance (most skills are safe).
 - **Feature parity:** The `skillguard extract-features` CLI subcommand ensures training uses the exact same feature extraction as production.
 
@@ -307,17 +355,17 @@ pip install -r requirements.txt
 # Label real skills (requires ANTHROPIC_API_KEY)
 python fetch_and_label.py --existing-only
 
-# Train on real data (3-class)
-python train.py --dataset real --num-classes 3 --export
+# Train on real data (3-class) with DANGEROUS augmentation
+python train.py --dataset real --num-classes 3 --augment-dangerous 80 --export
 
-# Calibrate temperature
-python calibrate.py --dataset real --num-classes 3
+# Calibrate temperature on QAT integer-scale logits
+cd .. && python training/calibrate.py --dataset real --num-classes 3
 
 # Export & validate fixed-point weights
-python export_weights.py --num-classes 3 --dataset real --validate --output data/weights.rs
+python training/export_weights.py --num-classes 3 --dataset real --validate --output data/weights.rs
 
-# Copy weights into src/model.rs and run tests
-cd .. && cargo test
+# Run all tests (111 tests: 58 unit + 24 integration + 29 regression)
+cargo test
 ```
 
 ---
@@ -369,6 +417,38 @@ skillguard scan --input-dir crawled-skills --format csv --output scan-report.csv
 | `--filter` | Filter by classification (comma-separated, e.g. `DANGEROUS,CAUTION`) | all |
 | `--concurrency` | Maximum concurrent classifications | `5` |
 | `--limit` | Max skills to scan from awesome list (live mode, 0 = all) | `0` |
+
+---
+
+## MCP Server
+
+SkillGuard includes an MCP (Model Context Protocol) server for zero-code integration with AI agents like Claude Code. The MCP server exposes a `skillguard_evaluate` tool over stdio transport.
+
+### Setup
+
+Add to your agent's MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "skillguard": {
+      "command": "/path/to/skillguard-mcp"
+    }
+  }
+}
+```
+
+### Usage
+
+The MCP server exposes one tool:
+
+- **`skillguard_evaluate`** — Classify a skill by name or by raw SKILL.md content. Returns classification, decision, confidence, scores, and reasoning.
+
+Parameters (provide one):
+- `skill_name` (string) — Skill slug to look up on ClawHub
+- `skill_md` (string) — Raw SKILL.md content to classify directly
+
+No ZK proof is generated over MCP (proofs are too large for stdio). Use the HTTP API when you need cryptographic verification.
 
 ---
 

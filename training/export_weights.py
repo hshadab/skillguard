@@ -29,6 +29,50 @@ def fixed_to_float(fixed: np.ndarray) -> np.ndarray:
     return fixed.astype(np.float32) / SCALE
 
 
+def rust_i32_forward(features_i32: np.ndarray, state: dict) -> np.ndarray:
+    """Simulate the exact Rust i32 inference path for a batch of samples.
+
+    Matches model.rs: matmul → (result + 64) / 128 → + bias → relu → repeat.
+    All arithmetic uses i32 integer operations.
+
+    Args:
+        features_i32: (N, 35) array of i32 feature values
+        state: model state_dict with float weights
+
+    Returns:
+        (N, num_classes) array of i32 logits
+    """
+    # Quantize all weights and biases to i32
+    w1 = float_to_fixed(state["fc1.weight"].numpy())  # [56, 35]
+    b1 = float_to_fixed(state["fc1.bias"].numpy())     # [56]
+    w2 = float_to_fixed(state["fc2.weight"].numpy())  # [40, 56]
+    b2 = float_to_fixed(state["fc2.bias"].numpy())     # [40]
+    w3 = float_to_fixed(state["fc3.weight"].numpy())  # [C, 40]
+    b3 = float_to_fixed(state["fc3.bias"].numpy())     # [C]
+
+    x = features_i32.astype(np.int64)  # use i64 to avoid overflow
+
+    # Layer 1: [N, 35] @ [35, 56] -> [N, 56]
+    mm1 = x @ w1.astype(np.int64).T           # [N, 56]
+    mm1 = (mm1 + 64) // 128                    # integer floor division
+    mm1 = mm1 + b1.astype(np.int64)            # add bias
+    mm1 = np.maximum(mm1, 0)                    # ReLU
+
+    # Layer 2: [N, 56] @ [56, 40] -> [N, 40]
+    mm2 = mm1 @ w2.astype(np.int64).T         # [N, 40]
+    mm2 = (mm2 + 64) // 128
+    mm2 = mm2 + b2.astype(np.int64)
+    mm2 = np.maximum(mm2, 0)                    # ReLU
+
+    # Layer 3: [N, 40] @ [40, C] -> [N, C]
+    mm3 = mm2 @ w3.astype(np.int64).T         # [N, C]
+    mm3 = (mm3 + 64) // 128
+    mm3 = mm3 + b3.astype(np.int64)
+    # No ReLU on output
+
+    return mm3.astype(np.int32)
+
+
 def validate_roundtrip(
     model: SkillSafetyMLP,
     features: np.ndarray,
@@ -38,16 +82,14 @@ def validate_roundtrip(
 ) -> tuple[float, float]:
     """Validate that fixed-point conversion preserves classification accuracy.
 
-    Simulates the Rust fixed-point inference path:
-    1. Quantize weights to i32 (round(w * 128))
-    2. Run inference with quantized weights
-    3. Compare classifications
+    Simulates the EXACT Rust i32 inference path:
+      matmul(x_i32, w_i32) → (result + 64) // 128 → + bias_i32 → relu → repeat
 
     Returns (float_accuracy, fixed_accuracy).
     """
     model.eval()
 
-    # Float inference
+    # Float inference (QAT model)
     with torch.no_grad():
         x = torch.tensor(features, dtype=torch.float32)
         y = torch.tensor(labels, dtype=torch.long)
@@ -55,39 +97,38 @@ def validate_roundtrip(
         _, float_pred = float_output.max(1)
         float_acc = float_pred.eq(y).sum().item() / len(y)
 
-    # Fixed-point inference simulation
+    # True i32 integer inference (matches Rust exactly)
+    features_i32 = np.round(features).astype(np.int32)
     state = model.state_dict()
-    fixed_state = {}
-    for key, val in state.items():
-        w_np = val.numpy()
-        w_fixed = float_to_fixed(w_np)
-        w_back = fixed_to_float(w_fixed)
-        fixed_state[key] = torch.tensor(w_back, dtype=torch.float32)
+    i32_logits = rust_i32_forward(features_i32, state)
+    fixed_pred_np = np.argmax(i32_logits, axis=1)
+    y_np = labels.astype(np.int64)
+    fixed_acc = (fixed_pred_np == y_np).sum() / len(y_np)
 
-    # Create a copy of the model with fixed-point weights
-    fixed_model = SkillSafetyMLP(input_dim=NUM_FEATURES, num_classes=num_classes, qat=False)
-    fixed_model.load_state_dict(fixed_state)
-    fixed_model.eval()
-
-    with torch.no_grad():
-        fixed_output = fixed_model(x)
-        _, fixed_pred = fixed_output.max(1)
-        fixed_acc = fixed_pred.eq(y).sum().item() / len(y)
-
-    # Decision match: for 3-class, DANGEROUS (idx 2) is deny; for 4-class, idx >= 2 is deny
+    # Decision match
     deny_threshold = 2
-    float_decisions = (float_pred >= deny_threshold).long()
-    fixed_decisions = (fixed_pred >= deny_threshold).long()
-    decision_match = float_decisions.eq(fixed_decisions).sum().item() / len(y)
+    float_decisions = (float_pred.numpy() >= deny_threshold).astype(int)
+    fixed_decisions = (fixed_pred_np >= deny_threshold).astype(int)
+    decision_match = (float_decisions == fixed_decisions).sum() / len(y_np)
 
     if verbose:
-        print(f"\n=== Roundtrip Validation ===")
-        print(f"Float accuracy:     {float_acc:.4f}")
-        print(f"Fixed-point accuracy: {fixed_acc:.4f}")
-        print(f"Decision match:     {decision_match:.4f}")
-        print(f"Classification diff: {(float_pred != fixed_pred).sum().item()} samples")
+        print(f"\n=== Roundtrip Validation (true i32 simulation) ===")
+        print(f"Float (QAT) accuracy:  {float_acc:.4f}")
+        print(f"Fixed-point i32 accuracy: {fixed_acc:.4f}")
+        print(f"Decision match:        {decision_match:.4f}")
+        mismatches = (float_pred.numpy() != fixed_pred_np).sum()
+        print(f"Classification diff:   {mismatches} samples")
 
-    return float_acc, fixed_acc
+        # Show per-class i32 accuracy
+        class_names = CLASS_NAMES_3 if num_classes == 3 else CLASS_NAMES
+        for cls_idx, cls_name in enumerate(class_names):
+            mask = (y_np == cls_idx)
+            if mask.sum() > 0:
+                cls_acc = (fixed_pred_np[mask] == cls_idx).sum() / mask.sum()
+                float_cls_acc = (float_pred.numpy()[mask] == cls_idx).sum() / mask.sum()
+                print(f"  {cls_name:10s}: float={float_cls_acc:.3f}  i32={cls_acc:.3f}")
+
+    return float_acc, float(fixed_acc)
 
 
 def format_rust_array(arr: np.ndarray, name: str, shape_comment: str) -> str:

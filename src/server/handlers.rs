@@ -55,6 +55,7 @@ fn try_get_prover(
                 ),
                 evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
+                model_version: state.model_version.clone(),
             })
         }
     }
@@ -168,6 +169,7 @@ async fn classify_and_respond(
                     proof: proof_bundle,
                 }),
                 processing_time_ms,
+                model_version: state.model_version.clone(),
             };
 
             // Cache the successful proof response
@@ -185,6 +187,7 @@ async fn classify_and_respond(
                 error: Some(format!("Proof generation failed: {}", e)),
                 evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
+                model_version: state.model_version.clone(),
             }
         }
         Err(e) => {
@@ -195,6 +198,7 @@ async fn classify_and_respond(
                 error: Some(format!("Proving task panicked: {}", e)),
                 evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
+                model_version: state.model_version.clone(),
             }
         }
     }
@@ -228,11 +232,44 @@ pub async fn health_handler(
     axum::Json(response)
 }
 
+/// Catalog lookup endpoint.
+///
+/// Returns pre-computed classification from the batch scan catalog.
+/// No proof generated, <10ms response.
+pub async fn catalog_handler(
+    axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
+    axum::extract::Path(skill_name): axum::extract::Path<String>,
+) -> impl axum::response::IntoResponse {
+    if let Some(entry) = state.catalog.get(&skill_name) {
+        axum::Json(CatalogResponse {
+            success: true,
+            error: None,
+            entry: Some(entry.clone()),
+            hint: None,
+            catalog_size: Some(state.catalog.len()),
+            model_version: state.model_version.clone(),
+        })
+    } else {
+        axum::Json(CatalogResponse {
+            success: false,
+            error: Some(format!("Skill '{}' not found in catalog", skill_name)),
+            entry: None,
+            hint: Some(
+                "Use POST /api/v1/evaluate to classify skills not in the catalog.".into(),
+            ),
+            catalog_size: Some(state.catalog.len()),
+            model_version: state.model_version.clone(),
+        })
+    }
+}
+
 /// Unified evaluate endpoint.
 ///
 /// Accepts two request formats:
 /// - **By name:** `{ "skill": "skill-slug" }` — fetches from ClawHub, then classifies
 /// - **Full skill:** `{ "skill": { "name": "...", ... } }` — classifies directly
+///
+/// Every classification includes a mandatory ZK proof.
 pub async fn evaluate_handler(
     axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
     axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<SocketAddr>,
@@ -250,6 +287,7 @@ pub async fn evaluate_handler(
                 error: Some(format!("Failed to read request body: {}", e)),
                 evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
+                model_version: state.model_version.clone(),
             });
         }
     };
@@ -267,6 +305,7 @@ pub async fn evaluate_handler(
                 )),
                 evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
+                model_version: state.model_version.clone(),
             });
         }
     }
@@ -280,6 +319,7 @@ pub async fn evaluate_handler(
                 error: Some(format!("Invalid JSON: {}", e)),
                 evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
+                model_version: state.model_version.clone(),
             });
         }
     };
@@ -294,6 +334,7 @@ pub async fn evaluate_handler(
                     error: Some(format!("Invalid request: {}", e)),
                     evaluation: None,
                     processing_time_ms: start.elapsed().as_millis() as u64,
+                    model_version: state.model_version.clone(),
                 });
             }
         };
@@ -316,6 +357,7 @@ pub async fn evaluate_handler(
                     error: Some(format!("Failed to fetch skill '{}': {}", name_req.skill, e)),
                     evaluation: None,
                     processing_time_ms: start.elapsed().as_millis() as u64,
+                    model_version: state.model_version.clone(),
                 });
             }
         };
@@ -326,6 +368,7 @@ pub async fn evaluate_handler(
                 error: Some(msg),
                 evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
+                model_version: state.model_version.clone(),
             });
         }
 
@@ -353,6 +396,7 @@ pub async fn evaluate_handler(
                     error: Some(format!("Invalid JSON: {}", e)),
                     evaluation: None,
                     processing_time_ms: start.elapsed().as_millis() as u64,
+                    model_version: state.model_version.clone(),
                 });
             }
         };
@@ -365,6 +409,7 @@ pub async fn evaluate_handler(
                 error: Some(msg),
                 evaluation: None,
                 processing_time_ms: start.elapsed().as_millis() as u64,
+                model_version: state.model_version.clone(),
             });
         }
 

@@ -2,7 +2,12 @@
 PyTorch MLP matching the Rust SkillGuard architecture.
 
 Architecture: 35 -> 56 -> 40 -> 4 (4,460 params)
-Fixed-point scale=7 (multiply by 128).
+Fixed-point scale=7 (multiply by 2^7 = 128).
+
+QAT simulates the exact Rust i32 inference path:
+  matmul(x_i32, w_i32) → (result + 64) // 128 + bias_i32 → relu → repeat
+This forces the model to learn weight configurations that produce correct
+classifications even after integer truncation at each layer.
 """
 
 import torch
@@ -10,10 +15,18 @@ import torch.nn as nn
 
 
 class FixedPointLinear(nn.Module):
-    """Linear layer that simulates fixed-point quantization during forward pass.
+    """Linear layer that simulates the full Rust fixed-point inference path.
 
-    Uses straight-through estimator for gradient flow through quantization.
-    This ensures trained weights are robust to i32 conversion.
+    Rust inference for each layer:
+      1. mm = matmul(input_i32, weight_i32)   — both at scale=128
+      2. mm_rounded = mm + 64                  — rounding bias
+      3. mm_rescaled = mm_rounded / 128        — integer division (floor)
+      4. biased = mm_rescaled + bias_i32       — add bias at scale=128
+      5. output = relu(biased)
+
+    QAT simulates this using straight-through estimators (STE):
+    the forward pass computes the quantized result, but gradients flow
+    through as if the operations were identity functions.
     """
 
     def __init__(self, in_features: int, out_features: int, scale: int = 128):
@@ -30,14 +43,43 @@ class FixedPointLinear(nn.Module):
         nn.init.zeros_(self.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Quantize weights: round(w * scale) / scale (straight-through estimator)
-        w_q = self.weight + (
-            torch.round(self.weight * self.scale) / self.scale - self.weight
-        ).detach()
-        b_q = self.bias + (
-            torch.round(self.bias * self.scale) / self.scale - self.bias
-        ).detach()
-        return nn.functional.linear(x, w_q, b_q)
+        """Simulate Rust i32 inference with straight-through gradient estimation.
+
+        The entire forward pass operates in "i32 integer units".
+        Input x should be integer-valued (features in [0, 128] or i32 from prev layer).
+        Output is integer-valued (i32 logits or activations for next layer).
+
+        Rust path per layer:
+          mm = x_i32 @ W_i32.T             (integer matmul)
+          rescaled = (mm + 64) // 128       (integer floor-division)
+          output = rescaled + B_i32         (integer bias add)
+
+        STE: gradients flow through round/floor as identity.
+        """
+        S = self.scale  # 128
+
+        # Get i32 weights and bias via STE
+        # Forward: round(w * S), Backward: w * S (identity through round)
+        w_i32 = self.weight * S + (torch.round(self.weight * S) - self.weight * S).detach()
+        b_i32 = self.bias * S + (torch.round(self.bias * S) - self.bias * S).detach()
+
+        # Quantize input to integers via STE
+        x_int = x + (torch.round(x) - x).detach()
+
+        # Integer matmul: x_int @ w_i32.T
+        mm = nn.functional.linear(x_int, w_i32, None)
+
+        # Integer floor division: (mm + 64) // 128
+        # STE: forward = floor((mm+64)/128), backward = mm/128
+        half = S // 2  # 64
+        divided_exact = (mm + half) / S  # smooth version for gradient
+        divided_floor = torch.floor(divided_exact)  # integer floor
+        divided = divided_exact + (divided_floor - divided_exact).detach()
+
+        # Add i32 bias
+        result = divided + b_i32
+
+        return result
 
 
 class SkillSafetyMLP(nn.Module):

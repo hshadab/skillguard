@@ -65,13 +65,24 @@ To reproduce or improve the classifier:
 ```bash
 cd training
 pip install -r requirements.txt
-python train.py --export
-python calibrate.py
-python export_weights.py --validate --output data/weights.rs
-cd .. && cargo test
+
+# Label real skills (requires ANTHROPIC_API_KEY)
+python fetch_and_label.py --existing-only
+
+# Train with QAT and DANGEROUS augmentation
+python train.py --dataset real --num-classes 3 --augment-dangerous 80 --export
+
+# Calibrate softmax temperature
+cd .. && python training/calibrate.py --dataset real --num-classes 3
+
+# Export weights and validate against Rust i32 simulation
+python training/export_weights.py --num-classes 3 --dataset real --validate
+
+# Run all 111 tests
+cargo test
 ```
 
-See `training/README.md` for details on dataset generation and model architecture.
+See `training/` for details on dataset generation, QAT model architecture, and augmentation.
 
 ## Reporting Security Issues
 

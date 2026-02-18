@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "SkillGuard: SSL for Agent Skills",
-    "version": "0.1.0",
+    "version": "2.0.0",
     "description": "SSL for Agent Skills — every classification is a verifiable certificate. SkillGuard evaluates AI agent skill metadata and scripts using a 3-layer MLP (35 features, 4,419 parameters), producing a safety classification (SAFE, CAUTION, DANGEROUS) backed by a zero-knowledge machine learning proof via Jolt/Dory SNARK. The model extracts 35 security signals from each skill (shell exec, obfuscation, reverse shells, credential access, entropy, etc.) and classifies using fixed-point integer arithmetic inside a ZK circuit. Like SSL proves server identity, SkillGuard proofs prove classification integrity.\n\nQuick start: `curl -X POST https://skillguard.onrender.com/api/v1/evaluate -H 'Content-Type: application/json' -d '{\"skill\": \"4claw\"}'`\n\nAgent discovery: GET /.well-known/ai-plugin.json | LLM info: GET /.well-known/llms.txt",
     "license": {
       "name": "MIT",
@@ -135,6 +135,7 @@
         "operationId": "evaluateSkill",
         "summary": "Classify a skill",
         "description": "Single endpoint for all skill classifications. Every response includes a mandatory zkML proof.\n\nAccepts two request formats:\n\n1. **Name lookup:** `{\"skill\": \"skill-slug\"}` — fetches skill data from ClawHub, then classifies.\n2. **Full skill data:** `{\"skill\": {\"name\": \"...\", ...}}` — classifies the provided skill directly.\n\nBoth formats return the same response with classification, scores, reasoning, and a zkML proof bundle. If the prover is still initializing, the endpoint returns an error until it is ready.",
+        "parameters": [],
         "x-x402-pricing": {
           "amount": "0.001",
           "currency": "USDC",
@@ -227,6 +228,37 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/{skill_name}": {
+      "get": {
+        "operationId": "getCatalogEntry",
+        "summary": "Look up a skill in the catalog",
+        "description": "Returns cached classification data for a known skill. Free, no authentication required, instant response. If the skill has been previously evaluated, returns the most recent classification, scores, and metadata without re-running the model or generating a new proof.",
+        "parameters": [
+          {
+            "name": "skill_name",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Skill slug (e.g. '4claw')"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Catalog entry for the skill",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Skill not found in catalog"
           }
         }
       }
@@ -365,11 +397,11 @@
           },
           "entropy": {
             "type": "number",
-            "description": "Normalized Shannon entropy of the softmax distribution (0.0 = certain, 1.0 = uniform). Predictions with entropy > 0.60 are flagged for review."
+            "description": "Normalized Shannon entropy of the softmax distribution (0.0 = certain, 1.0 = uniform). Predictions with entropy > 0.67 are flagged for review."
           },
           "proof": {
             "$ref": "#/components/schemas/ProofBundle",
-            "description": "zkML proof bundle — every successful classification includes a cryptographic proof."
+            "description": "Mandatory zkML proof bundle — every classification includes a cryptographic proof that the neural network produced this result."
           }
         }
       },
@@ -380,7 +412,8 @@
           "success": { "type": "boolean" },
           "error": { "type": "string" },
           "evaluation": { "$ref": "#/components/schemas/EvaluationResult" },
-          "processing_time_ms": { "type": "integer" }
+          "processing_time_ms": { "type": "integer" },
+          "model_version": { "type": "string", "description": "Model version hash used for this classification" }
         }
       },
       "VerifyRequest": {
@@ -397,6 +430,29 @@
         "properties": {
           "valid": { "type": "boolean" },
           "verification_time_ms": { "type": "integer" }
+        }
+      },
+      "CatalogEntry": {
+        "type": "object",
+        "description": "Cached classification data for a previously evaluated skill.",
+        "required": ["skill_name", "classification", "decision", "confidence", "scores", "model_version", "evaluated_at"],
+        "properties": {
+          "skill_name": { "type": "string" },
+          "classification": { "type": "string", "enum": ["SAFE", "CAUTION", "DANGEROUS"] },
+          "decision": { "type": "string", "enum": ["ALLOW", "DENY", "FLAG"] },
+          "confidence": { "type": "number" },
+          "scores": { "$ref": "#/components/schemas/ClassScores" },
+          "model_version": { "type": "string", "description": "Model version hash used for this classification" },
+          "evaluated_at": { "type": "string", "format": "date-time", "description": "ISO 8601 timestamp of when the skill was last evaluated" }
+        }
+      },
+      "CatalogResponse": {
+        "type": "object",
+        "description": "Response wrapper for catalog lookups.",
+        "required": ["success", "entry"],
+        "properties": {
+          "success": { "type": "boolean" },
+          "entry": { "$ref": "#/components/schemas/CatalogEntry" }
         }
       },
       "HealthResponse": {

@@ -19,15 +19,14 @@ import sys
 import time
 from pathlib import Path
 
-try:
-    import requests
-except ImportError:
-    print("ERROR: requests not installed. Run: pip install requests", file=sys.stderr)
-    sys.exit(1)
+import urllib.request
+import urllib.error
+import urllib.parse
 
 from llm_label import label_batch
 
 
+CLAWHUB_API = "https://clawhub.ai/api/v1"
 AWESOME_LIST_URL = (
     "https://raw.githubusercontent.com/VoltAgent/awesome-openclaw-skills/main/README.md"
 )
@@ -58,22 +57,45 @@ def load_existing_skills(training_dir: str = "training") -> list[dict]:
     return skills
 
 
-def load_scan_report(path: str) -> list[dict]:
-    """Load skill names from scan-report.json."""
+def load_scan_report(path: str, prioritize_dangerous: bool = False) -> list[dict]:
+    """Load skill names from scan-report.json.
+
+    If prioritize_dangerous is True, sorts skills so those classified as
+    DANGEROUS or MALICIOUS by the current model come first, followed by
+    highest-confidence DANGEROUS predictions. This yields more DANGEROUS
+    samples per labeling dollar.
+    """
     data = json.loads(Path(path).read_text())
     results = data.get("results", [])
-    return [
-        {"skill_name": r["skill_name"], "author": r.get("author", "unknown")}
-        for r in results
-    ]
+
+    entries = []
+    for r in results:
+        entry = {
+            "skill_name": r["skill_name"],
+            "author": r.get("author", "unknown"),
+            "classification": r.get("classification", ""),
+            "dangerous_score": 0.0,
+        }
+        # Extract DANGEROUS confidence from scores if available
+        scores = r.get("scores", {})
+        if isinstance(scores, dict):
+            entry["dangerous_score"] = scores.get("DANGEROUS", 0.0)
+        entries.append(entry)
+
+    if prioritize_dangerous:
+        # Sort: DANGEROUS/MALICIOUS first, then by descending dangerous_score
+        def sort_key(e):
+            cls = e["classification"].upper()
+            is_danger = 1 if cls in ("DANGEROUS", "MALICIOUS") else 0
+            return (-is_danger, -e["dangerous_score"])
+        entries.sort(key=sort_key)
+
+    return entries
 
 
-def github_skill_url(author: str, skill_name: str) -> str:
-    """Construct raw GitHub URL for a skill's SKILL.md."""
-    return (
-        f"https://raw.githubusercontent.com/{author}/skills/main/"
-        f"skills/{skill_name}/SKILL.md"
-    )
+def clawhub_skill_url(skill_name: str) -> str:
+    """Construct ClawHub API URL for a skill's SKILL.md."""
+    return f"{CLAWHUB_API}/skills/{urllib.parse.quote(skill_name, safe='')}/file?path=SKILL.md"
 
 
 def fetch_skill_md(
@@ -82,18 +104,13 @@ def fetch_skill_md(
     github_token: str | None = None,
     timeout: int = 15,
 ) -> str | None:
-    """Fetch SKILL.md content from GitHub."""
-    url = github_skill_url(author, skill_name)
-    headers = {}
-    if github_token:
-        headers["Authorization"] = f"token {github_token}"
-
+    """Fetch SKILL.md content from ClawHub API."""
+    url = clawhub_skill_url(skill_name)
     try:
-        resp = requests.get(url, headers=headers, timeout=timeout)
-        if resp.status_code == 200:
-            return resp.text
-        return None
-    except requests.RequestException:
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
         return None
 
 
@@ -163,6 +180,11 @@ def main():
         "--skip-labeling", action="store_true",
         help="Only fetch, don't label (useful for building content dataset first)"
     )
+    parser.add_argument(
+        "--prioritize-dangerous", action="store_true",
+        help="Sort skills by DANGEROUS/MALICIOUS probability from scan-report before fetching. "
+             "Fetches skills most likely to be DANGEROUS first to fix class imbalance."
+    )
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
 
@@ -184,7 +206,10 @@ def main():
     if not args.existing_only:
         if verbose:
             print(f"\nLoading scan report from {args.scan_report}...")
-        scan_skills = load_scan_report(args.scan_report)
+        scan_skills = load_scan_report(args.scan_report, prioritize_dangerous=args.prioritize_dangerous)
+        if args.prioritize_dangerous and verbose:
+            n_danger = sum(1 for s in scan_skills if s.get("classification", "").upper() in ("DANGEROUS", "MALICIOUS"))
+            print(f"  Prioritizing DANGEROUS: {n_danger} DANGEROUS/MALICIOUS skills sorted to front")
         if verbose:
             print(f"  {len(scan_skills)} skills in scan report")
             n_missing = sum(1 for s in scan_skills if s["skill_name"] not in existing_names)
