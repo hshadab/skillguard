@@ -22,8 +22,8 @@
   --caution-bg: rgba(234,179,8,0.12);
   --dangerous: #f97316;
   --dangerous-bg: rgba(249,115,22,0.12);
-  --malicious: #ef4444;
-  --malicious-bg: rgba(239,68,68,0.12);
+  --deny: #ef4444;
+  --deny-bg: rgba(239,68,68,0.12);
   --radius: 8px;
   --radius-lg: 12px;
 }
@@ -132,7 +132,7 @@ header .tagline a:hover { text-decoration: underline; }
   padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600;
 }
 .status-badge.online { background: var(--safe-bg); color: var(--safe); }
-.status-badge.offline { background: var(--malicious-bg); color: var(--malicious); }
+.status-badge.offline { background: var(--deny-bg); color: var(--deny); }
 .status-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .status-meta { color: var(--text-secondary); font-size: 0.82rem; }
 .status-meta span { margin-right: 16px; }
@@ -230,7 +230,6 @@ footer a:hover { text-decoration: underline; }
 .result-badge.safe { background: var(--safe-bg); color: var(--safe); }
 .result-badge.caution { background: var(--caution-bg); color: var(--caution); }
 .result-badge.dangerous { background: var(--dangerous-bg); color: var(--dangerous); }
-.result-badge.malicious { background: var(--malicious-bg); color: var(--malicious); }
 .result-decision { font-size: 0.85rem; color: var(--text-secondary); }
 .result-decision strong { color: var(--text-primary); }
 .result-confidence { font-size: 0.85rem; color: var(--text-secondary); }
@@ -255,8 +254,8 @@ footer a:hover { text-decoration: underline; }
 }
 
 .try-error {
-  margin-top: 12px; padding: 12px 14px; background: var(--malicious-bg);
-  border-radius: var(--radius); color: var(--malicious); font-size: 0.85rem;
+  margin-top: 12px; padding: 12px 14px; background: var(--deny-bg);
+  border-radius: var(--radius); color: var(--deny); font-size: 0.85rem;
 }
 
 .try-loading {
@@ -319,7 +318,7 @@ footer a:hover { text-decoration: underline; }
   padding: 2px 10px; border-radius: 12px; font-size: 0.72rem; font-weight: 600;
 }
 .wallet-network.base { background: rgba(59,130,246,0.15); color: var(--accent); }
-.wallet-network.wrong { background: var(--malicious-bg); color: var(--malicious); }
+.wallet-network.wrong { background: var(--deny-bg); color: var(--deny); }
 .payment-badge {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;
@@ -444,11 +443,11 @@ footer a:hover { text-decoration: underline; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .form-errors {
-  padding: 10px 14px; background: var(--malicious-bg); border: 1px solid var(--malicious);
+  padding: 10px 14px; background: var(--deny-bg); border: 1px solid var(--deny);
   border-radius: var(--radius); margin-bottom: 10px; display: none;
 }
 .form-errors ul { list-style: none; padding: 0; margin: 0; }
-.form-errors li { color: var(--malicious); font-size: 0.82rem; padding: 2px 0; }
+.form-errors li { color: var(--deny); font-size: 0.82rem; padding: 2px 0; }
 .form-errors li::before { content: "\2716 "; }
 
 @media (max-width: 600px) {
@@ -558,7 +557,7 @@ footer a:hover { text-decoration: underline; }
     <div class="how-body">
       <div class="how-intro">
         The classifier is a small neural network that learned to spot dangerous patterns by studying
-        hundreds of examples of safe and malicious skills. It doesn't "understand" code — it counts
+        hundreds of examples of safe and dangerous skills. It doesn't "understand" code — it counts
         security-relevant signals and uses learned patterns to decide.
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px">
@@ -573,19 +572,19 @@ footer a:hover { text-decoration: underline; }
           </div>
         </div>
         <div style="padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius)">
-          <div style="font-weight:600;font-size:0.82rem;margin-bottom:6px;color:var(--text-primary)">Neural Network (4,460 params)</div>
+          <div style="font-weight:600;font-size:0.82rem;margin-bottom:6px;color:var(--text-primary)">Neural Network (4,419 params)</div>
           <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.55">
-            Three layers of neurons (35&rarr;56&rarr;40&rarr;4) mix the features into progressively
+            Three layers of neurons (35&rarr;56&rarr;40&rarr;3) mix the features into progressively
             higher-level patterns. Layer 1 detects basic combinations ("obfuscation + shell exec").
             Layer 2 builds compound indicators ("credential stealer" vs "API client").
-            Layer 3 outputs four scores: SAFE, CAUTION, DANGEROUS, MALICIOUS. Highest wins.
+            Layer 3 outputs three scores: SAFE, CAUTION, DANGEROUS. Highest wins.
           </div>
         </div>
         <div style="padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius)">
           <div style="font-weight:600;font-size:0.82rem;margin-bottom:6px;color:var(--text-primary)">Confidence &amp; Decisions</div>
           <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.55">
-            Raw scores are converted to probabilities via softmax (T=12.8). If the distribution
-            is spread out (high entropy), the model flags it for human review. DANGEROUS/MALICIOUS
+            Raw scores are converted to probabilities via softmax (T=76.8). If the distribution
+            is spread out (high entropy), the model flags it for human review. DANGEROUS
             results need &ge;50% confidence for DENY; otherwise they're flagged. SAFE/CAUTION
             results get ALLOW unless entropy is too high.
           </div>
@@ -601,25 +600,15 @@ footer a:hover { text-decoration: underline; }
         </div>
       </div>
       <div class="how-cert" style="margin-top:14px">
-        Trained on <strong>690 skill profiles</strong> (balanced across 4 classes, including unknown-metadata samples).
-        <strong>93.9%</strong> cross-validated accuracy. Adversarially hardened with FGSM perturbations.
+        Trained on <strong>LLM-labeled real OpenClaw skills</strong> (3 classes: SAFE, CAUTION, DANGEROUS).
+        Adversarially hardened with FGSM perturbations.
       </div>
-      <table style="width:100%;margin-top:14px;border-collapse:collapse;font-size:0.78rem;color:var(--text-secondary)">
-        <thead>
-          <tr style="border-bottom:1px solid var(--border);text-align:left">
-            <th style="padding:6px 8px;color:var(--text-primary)">Class</th>
-            <th style="padding:6px 8px;color:var(--text-primary)">Precision</th>
-            <th style="padding:6px 8px;color:var(--text-primary)">Recall</th>
-            <th style="padding:6px 8px;color:var(--text-primary)">F1</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td style="padding:4px 8px;color:var(--safe)">SAFE</td><td style="padding:4px 8px">91.5%</td><td style="padding:4px 8px">96.9%</td><td style="padding:4px 8px">94.1%</td></tr>
-          <tr><td style="padding:4px 8px;color:var(--caution)">CAUTION</td><td style="padding:4px 8px">93.2%</td><td style="padding:4px 8px">90.6%</td><td style="padding:4px 8px">91.8%</td></tr>
-          <tr><td style="padding:4px 8px;color:var(--dangerous)">DANGEROUS</td><td style="padding:4px 8px">94.8%</td><td style="padding:4px 8px">95.3%</td><td style="padding:4px 8px">94.9%</td></tr>
-          <tr><td style="padding:4px 8px;color:var(--malicious)">MALICIOUS</td><td style="padding:4px 8px">98.0%</td><td style="padding:4px 8px">92.7%</td><td style="padding:4px 8px">95.2%</td></tr>
-        </tbody>
-      </table>
+      <div style="margin-top:14px;display:flex;gap:16px;flex-wrap:wrap;font-size:0.78rem;color:var(--text-secondary)">
+        <span>Dataset: <strong style="color:var(--text-primary)">159</strong> real OpenClaw skills</span>
+        <span>Classes: <strong style="color:var(--safe)">60 SAFE</strong> &middot; <strong style="color:var(--caution)">95 CAUTION</strong> &middot; <strong style="color:var(--dangerous)">4 DANGEROUS</strong></span>
+        <span>Calibration: <strong style="color:var(--text-primary)">ECE 0.044</strong></span>
+        <span>Entropy threshold: <strong style="color:var(--text-primary)">0.60</strong> (5% flag rate)</span>
+      </div>
     </div>
   </details>
 
@@ -747,7 +736,7 @@ This skill fetches current weather data from a public API and returns a friendly
       </div>
       <div class="x402-item">
         <div class="x402-label">Model Size</div>
-        <div class="x402-value">4,460 params (35-56-40-4)</div>
+        <div class="x402-value">4,419 params (35-56-40-3)</div>
       </div>
       <div class="x402-item">
         <div class="x402-label">Proofs Generated</div>
@@ -811,11 +800,6 @@ This skill fetches current weather data from a public API and returns a friendly
         <div class="breakdown-track"><div class="breakdown-fill" id="bar-dangerous" style="width:0%;background:var(--dangerous)"></div></div>
         <div class="breakdown-count" id="ct-dangerous">0</div>
       </div>
-      <div class="breakdown-row">
-        <div class="breakdown-label">Malicious</div>
-        <div class="breakdown-track"><div class="breakdown-fill" id="bar-malicious" style="width:0%;background:var(--malicious)"></div></div>
-        <div class="breakdown-count" id="ct-malicious">0</div>
-      </div>
     </div>
   </div>
 
@@ -824,7 +808,7 @@ This skill fetches current weather data from a public API and returns a friendly
     <div class="card-title">Decisions</div>
     <div class="stats-grid">
       <div class="stat-card"><div class="stat-value" id="st-allow" style="color:var(--safe)">-</div><div class="stat-label">Allow</div></div>
-      <div class="stat-card"><div class="stat-value" id="st-deny" style="color:var(--malicious)">-</div><div class="stat-label">Deny</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-deny" style="color:var(--deny)">-</div><div class="stat-label">Deny</div></div>
       <div class="stat-card"><div class="stat-value" id="st-flag" style="color:var(--caution)">-</div><div class="stat-label">Flag</div></div>
     </div>
   </div>
@@ -915,18 +899,16 @@ function loadStats() {
       $('proof-counter-value').textContent = d.proofs.total_generated;
 
       var cls = d.classifications;
-      var total = cls.safe + cls.caution + cls.dangerous + cls.malicious;
-      var max = Math.max(cls.safe, cls.caution, cls.dangerous, cls.malicious, 1);
+      var total = cls.safe + cls.caution + cls.dangerous;
+      var max = Math.max(cls.safe, cls.caution, cls.dangerous, 1);
 
       $('ct-safe').textContent = cls.safe;
       $('ct-caution').textContent = cls.caution;
       $('ct-dangerous').textContent = cls.dangerous;
-      $('ct-malicious').textContent = cls.malicious;
 
       $('bar-safe').style.width = (cls.safe / max * 100) + '%';
       $('bar-caution').style.width = (cls.caution / max * 100) + '%';
       $('bar-dangerous').style.width = (cls.dangerous / max * 100) + '%';
-      $('bar-malicious').style.width = (cls.malicious / max * 100) + '%';
     })
     .catch(function() {});
 }
@@ -1338,8 +1320,7 @@ async function signX402Payment(requirements) {
     var c = cls.toLowerCase();
     if (c === 'safe') return 'safe';
     if (c === 'caution') return 'caution';
-    if (c === 'dangerous') return 'dangerous';
-    return 'malicious';
+    return 'dangerous';
   }
 
   function pct(v) { return (v * 100).toFixed(1) + '%'; }
@@ -1348,8 +1329,7 @@ async function signX402Payment(requirements) {
     var cats = [
       { key: 'SAFE', label: 'Safe', color: 'var(--safe)' },
       { key: 'CAUTION', label: 'Caution', color: 'var(--caution)' },
-      { key: 'DANGEROUS', label: 'Dangerous', color: 'var(--dangerous)' },
-      { key: 'MALICIOUS', label: 'Malicious', color: 'var(--malicious)' }
+      { key: 'DANGEROUS', label: 'Dangerous', color: 'var(--dangerous)' }
     ];
     var html = '<div class="result-scores">';
     html += '<div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:6px">Class Probabilities</div>';
@@ -1372,11 +1352,11 @@ async function signX402Payment(requirements) {
     // ev.confidence is the top-class softmax probability (0.0–1.0)
     var confidence = (typeof ev.confidence === 'number') ? ev.confidence : 0;
     var confPct = (confidence * 100).toFixed(1);
-    // For a 4-class classifier, random chance is 25%. Tiers are calibrated accordingly:
+    // For a 3-class classifier, random chance is 33%. Tiers are calibrated accordingly:
     //   >= 50%  → High   (clearly dominant class)
-    //   >= 33%  → Moderate (above uniform, some separation)
-    //   <  33%  → Low    (near-uniform, model genuinely uncertain)
-    var isLowCertainty = confidence < 0.33;
+    //   >= 40%  → Moderate (above uniform, some separation)
+    //   <  40%  → Low    (near-uniform, model genuinely uncertain)
+    var isLowCertainty = confidence < 0.40;
 
     var html = '<div class="result-card">';
     html += '<div class="result-header">';
@@ -1385,7 +1365,7 @@ async function signX402Payment(requirements) {
     if (typeof ev.confidence === 'number') {
       var tierLabel, tierColor;
       if (confidence >= 0.50) { tierLabel = 'High'; tierColor = 'var(--safe)'; }
-      else if (confidence >= 0.33) { tierLabel = 'Moderate'; tierColor = 'var(--caution)'; }
+      else if (confidence >= 0.40) { tierLabel = 'Moderate'; tierColor = 'var(--caution)'; }
       else { tierLabel = 'Low'; tierColor = 'var(--dangerous)'; }
       html += '<span class="result-confidence" style="color:' + tierColor + '">Confidence: <strong>' + tierLabel + '</strong> <span style="font-size:0.78rem;color:var(--text-muted)">(' + confPct + '%)</span></span>';
     }
@@ -1461,7 +1441,7 @@ async function signX402Payment(requirements) {
         el.style.fontWeight = '600';
       } else {
         el.innerHTML = 'Verification failed <code>' + verifySec + 's</code>';
-        el.style.color = 'var(--malicious)';
+        el.style.color = 'var(--deny)';
       }
     })
     .catch(function() {

@@ -24,9 +24,11 @@ from sklearn.model_selection import StratifiedKFold
 
 from dataset import (
     CLASS_NAMES,
+    CLASS_NAMES_3,
     NUM_FEATURES,
     SkillDataset,
     generate_dataset,
+    load_real_dataset,
     save_dataset_jsonl,
 )
 from model import SkillSafetyMLP
@@ -75,6 +77,8 @@ def train_one_fold(
     train_labels: np.ndarray,
     val_features: np.ndarray,
     val_labels: np.ndarray,
+    class_names: list[str] | None = None,
+    class_weights: torch.Tensor | None = None,
     epochs: int = 200,
     lr: float = 0.001,
     patience: int = 30,
@@ -87,12 +91,15 @@ def train_one_fold(
 
     Returns dict with best metrics and model state_dict.
     """
+    if class_names is None:
+        class_names = CLASS_NAMES
+
     train_dataset = SkillDataset(train_features, train_labels)
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=64, shuffle=True
     )
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=10
@@ -179,7 +186,7 @@ def train_one_fold(
         val_y_np = val_y.numpy()
 
     report = classification_report(
-        val_y_np, val_pred_np, target_names=CLASS_NAMES, output_dict=True
+        val_y_np, val_pred_np, target_names=class_names, output_dict=True
     )
     cm = confusion_matrix(val_y_np, val_pred_np)
 
@@ -194,6 +201,9 @@ def train_one_fold(
 def train_kfold(
     features: np.ndarray,
     labels: np.ndarray,
+    num_classes: int = 4,
+    class_names: list[str] | None = None,
+    class_weights: torch.Tensor | None = None,
     n_folds: int = 5,
     seed: int = 42,
     epochs: int = 200,
@@ -204,6 +214,9 @@ def train_kfold(
 
     Returns (best_fold_result, summary).
     """
+    if class_names is None:
+        class_names = CLASS_NAMES if num_classes == 4 else CLASS_NAMES_3
+
     skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=seed)
 
     fold_results = []
@@ -219,7 +232,7 @@ def train_kfold(
         val_features = features[val_idx]
         val_labels = labels[val_idx]
 
-        model = SkillSafetyMLP(input_dim=NUM_FEATURES, qat=True)
+        model = SkillSafetyMLP(input_dim=NUM_FEATURES, num_classes=num_classes, qat=True)
         torch.manual_seed(seed + fold_idx)
 
         result = train_one_fold(
@@ -228,6 +241,8 @@ def train_kfold(
             train_labels,
             val_features,
             val_labels,
+            class_names=class_names,
+            class_weights=class_weights,
             epochs=epochs,
             adversarial=adversarial,
             verbose=verbose,
@@ -238,7 +253,7 @@ def train_kfold(
         if verbose:
             print(f"  Best val accuracy: {result['best_val_acc']:.4f}")
             report = result["classification_report"]
-            for cls_name in CLASS_NAMES:
+            for cls_name in class_names:
                 if cls_name in report:
                     p = report[cls_name]["precision"]
                     r = report[cls_name]["recall"]
@@ -251,7 +266,7 @@ def train_kfold(
 
     # Aggregate per-class metrics across folds
     per_class_metrics = {}
-    for cls_name in CLASS_NAMES:
+    for cls_name in class_names:
         precisions = []
         recalls = []
         f1s = []
@@ -288,7 +303,7 @@ def train_kfold(
         print(f"Best fold: {summary['best_fold'] + 1} ({summary['best_accuracy']:.4f})")
         print(f"\nPer-class metrics (mean +/- std across {n_folds} folds):")
         print(f"  {'Class':10s}  {'Precision':>12s}  {'Recall':>12s}  {'F1':>12s}")
-        for cls_name in CLASS_NAMES:
+        for cls_name in class_names:
             m = per_class_metrics[cls_name]
             print(
                 f"  {cls_name:10s}  "
@@ -300,6 +315,15 @@ def train_kfold(
     return fold_results[best_fold_idx], summary
 
 
+def compute_class_weights(labels: np.ndarray, num_classes: int) -> torch.Tensor:
+    """Compute inverse-frequency class weights for imbalanced data."""
+    counts = np.bincount(labels, minlength=num_classes).astype(np.float32)
+    # Avoid division by zero
+    counts = np.maximum(counts, 1.0)
+    weights = len(labels) / (num_classes * counts)
+    return torch.tensor(weights, dtype=torch.float32)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Train SkillGuard safety classifier")
     parser.add_argument("--seed", type=int, default=42)
@@ -309,31 +333,79 @@ def main():
     parser.add_argument("--no-adversarial", action="store_true")
     parser.add_argument("--export", action="store_true", help="Export weights to Rust")
     parser.add_argument("--quiet", action="store_true")
+    parser.add_argument(
+        "--dataset", type=str, default="synthetic",
+        choices=["synthetic", "real"],
+        help="Dataset type: synthetic (4-class) or real (3-class LLM-labeled)"
+    )
+    parser.add_argument(
+        "--num-classes", type=int, default=None,
+        help="Number of output classes (default: 4 for synthetic, 3 for real)"
+    )
+    parser.add_argument(
+        "--real-labels", type=str, default="training/real-labels.json",
+        help="Path to real labeled dataset (used with --dataset real)"
+    )
     args = parser.parse_args()
 
     verbose = not args.quiet
 
-    if verbose:
-        print(f"Generating dataset (seed={args.seed})...")
+    # Determine num_classes
+    if args.num_classes is not None:
+        num_classes = args.num_classes
+    elif args.dataset == "real":
+        num_classes = 3
+    else:
+        num_classes = 4
 
-    features, labels = generate_dataset(
-        n_per_class=args.n_per_class,
-        seed=args.seed,
-    )
+    class_names = CLASS_NAMES_3 if num_classes == 3 else CLASS_NAMES
 
-    # Save dataset
-    save_dataset_jsonl(features, labels)
+    if args.dataset == "real":
+        if verbose:
+            print(f"Loading real dataset from {args.real_labels}...")
+        features, labels = load_real_dataset(args.real_labels)
 
-    if verbose:
-        print(f"Dataset: {features.shape[0]} samples, {features.shape[1]} features")
-        for i, name in enumerate(CLASS_NAMES):
-            print(f"  {name}: {(labels == i).sum()}")
+        if len(features) == 0:
+            print("ERROR: No samples loaded from real dataset", file=sys.stderr)
+            return 1
+
+        if verbose:
+            print(f"Dataset: {features.shape[0]} samples, {features.shape[1]} features")
+            for i, name in enumerate(class_names):
+                print(f"  {name}: {(labels == i).sum()}")
+
+        # Compute class weights for imbalanced real data
+        class_weights = compute_class_weights(labels, num_classes)
+        if verbose:
+            print(f"Class weights: {class_weights.tolist()}")
+    else:
+        if verbose:
+            print(f"Generating synthetic dataset (seed={args.seed})...")
+
+        features, labels = generate_dataset(
+            n_per_class=args.n_per_class,
+            seed=args.seed,
+        )
+        class_weights = None
+
+        # Save dataset
+        save_dataset_jsonl(features, labels)
+
+        if verbose:
+            print(f"Dataset: {features.shape[0]} samples, {features.shape[1]} features")
+            for i, name in enumerate(class_names):
+                count = (labels == i).sum()
+                if count > 0:
+                    print(f"  {name}: {count}")
 
     # Train
     torch.manual_seed(args.seed)
     best_result, summary = train_kfold(
         features,
         labels,
+        num_classes=num_classes,
+        class_names=class_names,
+        class_weights=class_weights,
         n_folds=args.folds,
         seed=args.seed,
         epochs=args.epochs,
@@ -343,6 +415,7 @@ def main():
 
     # Save summary
     summary_path = Path("data/training_summary.json")
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
     with open(summary_path, "w") as f:
         json.dump(summary, f, indent=2)
     if verbose:
@@ -351,7 +424,7 @@ def main():
     # Retrain on full dataset with best hyperparameters
     if verbose:
         print("\nRetraining on full dataset...")
-    final_model = SkillSafetyMLP(input_dim=NUM_FEATURES, qat=True)
+    final_model = SkillSafetyMLP(input_dim=NUM_FEATURES, num_classes=num_classes, qat=True)
     torch.manual_seed(args.seed)
 
     final_result = train_one_fold(
@@ -360,6 +433,8 @@ def main():
         labels,
         features,  # Validate on training data (we already have CV results)
         labels,
+        class_names=class_names,
+        class_weights=class_weights,
         epochs=args.epochs,
         adversarial=not args.no_adversarial,
         verbose=verbose,
@@ -367,6 +442,7 @@ def main():
 
     # Save model
     model_path = Path("data/model.pt")
+    model_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(final_model.state_dict(), model_path)
     if verbose:
         print(f"Saved model to {model_path}")
@@ -376,7 +452,7 @@ def main():
     if args.export:
         from export_weights import export_to_rust
 
-        export_to_rust(final_model, verbose=verbose)
+        export_to_rust(final_model, num_classes=num_classes, verbose=verbose)
 
     return 0 if summary["mean_accuracy"] >= 0.90 else 1
 

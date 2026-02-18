@@ -41,9 +41,11 @@ import torch
 from torch.utils.data import Dataset
 
 
-# Label mapping
+# Label mapping — 4-class (legacy synthetic) and 3-class (real LLM-labeled)
 CLASS_NAMES = ["SAFE", "CAUTION", "DANGEROUS", "MALICIOUS"]
+CLASS_NAMES_3 = ["SAFE", "CAUTION", "DANGEROUS"]
 NUM_FEATURES = 35
+LABEL_MAP_3 = {"SAFE": 0, "CAUTION": 1, "DANGEROUS": 2}
 
 
 def clip(val: float, lo: float = 0.0, hi: float = 128.0) -> float:
@@ -598,6 +600,89 @@ def load_dataset_jsonl(
             entry = json.loads(line)
             features.append(entry["features"])
             labels.append(entry["label"])
+    return np.array(features, dtype=np.float32), np.array(labels, dtype=np.int64)
+
+
+def load_real_dataset(
+    path: str = "training/real-labels.json",
+    skillguard_bin: str = "target/release/skillguard",
+) -> tuple[np.ndarray, np.ndarray]:
+    """Load real LLM-labeled dataset and extract features via the Rust binary.
+
+    Each entry in the JSON must have:
+      - skill_name: str
+      - llm_label: "SAFE" | "CAUTION" | "DANGEROUS"
+      - skill_md: str (full SKILL.md content)
+
+    Calls `skillguard extract-features` for each skill to get the 35-dim
+    feature vector, guaranteeing feature parity with production inference.
+
+    Returns:
+        features: (N, 35) array of i32 feature vectors
+        labels: (N,) array of class labels (0=SAFE, 1=CAUTION, 2=DANGEROUS)
+    """
+    import subprocess
+    import shutil
+
+    # Find the skillguard binary
+    bin_path = shutil.which("skillguard") or skillguard_bin
+    if not Path(bin_path).exists():
+        # Try debug build
+        alt = "target/debug/skillguard"
+        if Path(alt).exists():
+            bin_path = alt
+        else:
+            raise FileNotFoundError(
+                f"skillguard binary not found at '{bin_path}'. "
+                "Build it first: cargo build --release"
+            )
+
+    data = json.loads(Path(path).read_text())
+    if not isinstance(data, list):
+        raise ValueError(f"Expected JSON array in {path}")
+
+    features = []
+    labels = []
+    errors = 0
+
+    for entry in data:
+        label_str = entry.get("llm_label", "").upper()
+        if label_str not in LABEL_MAP_3:
+            print(f"  Skipping {entry.get('skill_name', '?')}: unknown label '{label_str}'")
+            continue
+
+        skill_md = entry.get("skill_md", "")
+        if not skill_md.strip():
+            continue
+
+        # Call skillguard extract-features via subprocess
+        try:
+            result = subprocess.run(
+                [bin_path, "extract-features"],
+                input=skill_md,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode != 0:
+                errors += 1
+                continue
+
+            vec = json.loads(result.stdout.strip())
+            if len(vec) != NUM_FEATURES:
+                print(f"  Skipping {entry['skill_name']}: got {len(vec)} features, expected {NUM_FEATURES}")
+                continue
+
+            features.append(vec)
+            labels.append(LABEL_MAP_3[label_str])
+
+        except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError) as e:
+            errors += 1
+            continue
+
+    if errors > 0:
+        print(f"  {errors} extraction errors")
+
     return np.array(features, dtype=np.float32), np.array(labels, dtype=np.int64)
 
 

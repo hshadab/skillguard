@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from dataset import CLASS_NAMES, NUM_FEATURES, generate_dataset, SkillDataset
+from dataset import CLASS_NAMES, CLASS_NAMES_3, NUM_FEATURES, generate_dataset, load_real_dataset, SkillDataset
 from model import SkillSafetyMLP
 
 
@@ -33,6 +33,7 @@ def validate_roundtrip(
     model: SkillSafetyMLP,
     features: np.ndarray,
     labels: np.ndarray,
+    num_classes: int = 4,
     verbose: bool = True,
 ) -> tuple[float, float]:
     """Validate that fixed-point conversion preserves classification accuracy.
@@ -64,7 +65,7 @@ def validate_roundtrip(
         fixed_state[key] = torch.tensor(w_back, dtype=torch.float32)
 
     # Create a copy of the model with fixed-point weights
-    fixed_model = SkillSafetyMLP(input_dim=NUM_FEATURES, qat=False)
+    fixed_model = SkillSafetyMLP(input_dim=NUM_FEATURES, num_classes=num_classes, qat=False)
     fixed_model.load_state_dict(fixed_state)
     fixed_model.eval()
 
@@ -73,9 +74,10 @@ def validate_roundtrip(
         _, fixed_pred = fixed_output.max(1)
         fixed_acc = fixed_pred.eq(y).sum().item() / len(y)
 
-    # Decision match (SAFE/CAUTION -> allow, DANGEROUS/MALICIOUS -> deny)
-    float_decisions = (float_pred >= 2).long()
-    fixed_decisions = (fixed_pred >= 2).long()
+    # Decision match: for 3-class, DANGEROUS (idx 2) is deny; for 4-class, idx >= 2 is deny
+    deny_threshold = 2
+    float_decisions = (float_pred >= deny_threshold).long()
+    fixed_decisions = (fixed_pred >= deny_threshold).long()
     decision_match = float_decisions.eq(fixed_decisions).sum().item() / len(y)
 
     if verbose:
@@ -110,6 +112,7 @@ def format_rust_array(arr: np.ndarray, name: str, shape_comment: str) -> str:
 
 def export_to_rust(
     model: SkillSafetyMLP,
+    num_classes: int = 4,
     output_path: str = None,
     verbose: bool = True,
 ):
@@ -129,7 +132,7 @@ def export_to_rust(
     layer_descriptions = [
         ("Layer 1 weights", "[56 hidden neurons, 35 input features]"),
         ("Layer 2 weights", "[40 hidden neurons, 56 neurons from layer 1]"),
-        ("Layer 3 (output) weights", "[4 output neurons, 40 hidden neurons]"),
+        ("Layer 3 (output) weights", f"[{num_classes} output neurons, 40 hidden neurons]"),
     ]
 
     output_lines = []
@@ -183,24 +186,42 @@ def main():
         default=None,
         help="Output file path (default: stdout)",
     )
+    parser.add_argument(
+        "--num-classes", type=int, default=4,
+        help="Number of output classes (3 for real data, 4 for synthetic)"
+    )
+    parser.add_argument(
+        "--dataset", type=str, default="synthetic",
+        choices=["synthetic", "real"],
+        help="Dataset type for validation"
+    )
+    parser.add_argument(
+        "--real-labels", type=str, default="training/real-labels.json",
+        help="Path to real labeled dataset (used with --dataset real)"
+    )
     parser.add_argument("--validate", action="store_true", help="Run roundtrip validation")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
 
     verbose = not args.quiet
 
-    model = SkillSafetyMLP(input_dim=NUM_FEATURES, qat=False)
+    model = SkillSafetyMLP(input_dim=NUM_FEATURES, num_classes=args.num_classes, qat=False)
     state_dict = torch.load(args.model, map_location="cpu", weights_only=True)
     model.load_state_dict(state_dict)
 
     if args.validate:
-        features, labels = generate_dataset()
-        float_acc, fixed_acc = validate_roundtrip(model, features, labels, verbose=verbose)
+        if args.dataset == "real":
+            features, labels = load_real_dataset(args.real_labels)
+        else:
+            features, labels = generate_dataset()
+        float_acc, fixed_acc = validate_roundtrip(
+            model, features, labels, num_classes=args.num_classes, verbose=verbose
+        )
         if fixed_acc < 0.90:
             print(f"WARNING: Fixed-point accuracy ({fixed_acc:.4f}) below 90% threshold")
             return 1
 
-    export_to_rust(model, output_path=args.output, verbose=verbose)
+    export_to_rust(model, num_classes=args.num_classes, output_path=args.output, verbose=verbose)
     return 0
 
 

@@ -492,7 +492,6 @@ pub async fn stats_handler(
             safe: state.usage.safe.load(Ordering::Relaxed),
             caution: state.usage.caution.load(Ordering::Relaxed),
             dangerous: state.usage.dangerous.load(Ordering::Relaxed),
-            malicious: state.usage.malicious.load(Ordering::Relaxed),
         },
         decisions: DecisionStats {
             allow: state.usage.allow.load(Ordering::Relaxed),

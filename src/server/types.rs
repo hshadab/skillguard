@@ -124,7 +124,7 @@ pub struct ProvedEvaluationResult {
     pub reasoning: String,
     /// Raw i32 logits from the fixed-point MLP (before softmax).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub raw_logits: Option<[i32; 4]>,
+    pub raw_logits: Option<[i32; crate::scores::NUM_CLASSES]>,
     /// Normalized Shannon entropy of the softmax distribution (0=certain, 1=uniform).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entropy: Option<f64>,
@@ -195,7 +195,6 @@ pub struct ClassificationStats {
     pub safe: u64,
     pub caution: u64,
     pub dangerous: u64,
-    pub malicious: u64,
 }
 
 #[derive(Debug, Serialize)]

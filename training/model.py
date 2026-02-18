@@ -43,22 +43,23 @@ class FixedPointLinear(nn.Module):
 class SkillSafetyMLP(nn.Module):
     """3-layer MLP for skill safety classification.
 
-    Architecture: input_dim -> 56 -> 40 -> 4
+    Architecture: input_dim -> 56 -> 40 -> num_classes
     Activation: ReLU between hidden layers, no activation on output.
     """
 
-    def __init__(self, input_dim: int = 35, qat: bool = True):
+    def __init__(self, input_dim: int = 35, num_classes: int = 4, qat: bool = True):
         super().__init__()
         self.qat = qat
+        self.num_classes = num_classes
 
         if qat:
             self.fc1 = FixedPointLinear(input_dim, 56)
             self.fc2 = FixedPointLinear(56, 40)
-            self.fc3 = FixedPointLinear(40, 4)
+            self.fc3 = FixedPointLinear(40, num_classes)
         else:
             self.fc1 = nn.Linear(input_dim, 56)
             self.fc2 = nn.Linear(56, 40)
-            self.fc3 = nn.Linear(40, 4)
+            self.fc3 = nn.Linear(40, num_classes)
 
         self.relu = nn.ReLU()
 
@@ -73,13 +74,20 @@ class SkillSafetyMLP(nn.Module):
 
 
 if __name__ == "__main__":
-    model = SkillSafetyMLP(input_dim=35, qat=True)
-    print(f"Architecture: 35 -> 56 -> 40 -> 4")
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--num-classes", type=int, default=4)
+    args = parser.parse_args()
+
+    nc = args.num_classes
+    model = SkillSafetyMLP(input_dim=35, num_classes=nc, qat=True)
+    print(f"Architecture: 35 -> 56 -> 40 -> {nc}")
     print(f"Total parameters: {model.param_count()}")
     print(f"  Layer 1: {35 * 56 + 56} = {35 * 56 + 56}")
     print(f"  Layer 2: {56 * 40 + 40} = {56 * 40 + 40}")
-    print(f"  Layer 3: {40 * 4 + 4} = {40 * 4 + 4}")
-    print(f"  Total: {35 * 56 + 56 + 56 * 40 + 40 + 40 * 4 + 4}")
+    print(f"  Layer 3: {40 * nc + nc} = {40 * nc + nc}")
+    print(f"  Total: {35 * 56 + 56 + 56 * 40 + 40 + 40 * nc + nc}")
 
     # Test forward pass
     x = torch.randn(1, 35)

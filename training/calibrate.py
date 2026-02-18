@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from dataset import NUM_FEATURES, generate_dataset, CLASS_NAMES
+from dataset import NUM_FEATURES, generate_dataset, load_real_dataset, CLASS_NAMES, CLASS_NAMES_3
 from model import SkillSafetyMLP
 
 
@@ -104,6 +104,7 @@ def compute_entropy_threshold(
     features: np.ndarray,
     labels: np.ndarray,
     temperature: float,
+    num_classes: int = 4,
     target_flag_rate: float = 0.05,
     verbose: bool = True,
 ) -> float:
@@ -120,7 +121,7 @@ def compute_entropy_threshold(
 
     # Compute entropy for each sample
     entropies = -np.sum(probs * np.log(probs + 1e-10), axis=1)
-    max_entropy = np.log(4)  # max entropy for 4 classes
+    max_entropy = np.log(num_classes)  # max entropy for num_classes classes
 
     # Normalize to [0, 1]
     norm_entropies = entropies / max_entropy
@@ -157,30 +158,50 @@ def main():
         "--model", type=str, default="data/model.pt", help="Path to model checkpoint"
     )
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--num-classes", type=int, default=4,
+        help="Number of output classes (3 for real data, 4 for synthetic)"
+    )
+    parser.add_argument(
+        "--dataset", type=str, default="synthetic",
+        choices=["synthetic", "real"],
+        help="Dataset type for calibration"
+    )
+    parser.add_argument(
+        "--real-labels", type=str, default="training/real-labels.json",
+        help="Path to real labeled dataset"
+    )
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
 
     verbose = not args.quiet
 
-    model = SkillSafetyMLP(input_dim=NUM_FEATURES, qat=False)
+    model = SkillSafetyMLP(input_dim=NUM_FEATURES, num_classes=args.num_classes, qat=False)
     state_dict = torch.load(args.model, map_location="cpu", weights_only=True)
     model.load_state_dict(state_dict)
 
-    features, labels = generate_dataset(seed=args.seed)
+    if args.dataset == "real":
+        features, labels = load_real_dataset(args.real_labels)
+    else:
+        features, labels = generate_dataset(seed=args.seed)
 
     best_temp, best_ece = calibrate_temperature(model, features, labels, verbose=verbose)
     entropy_threshold = compute_entropy_threshold(
-        model, features, labels, best_temp, verbose=verbose
+        model, features, labels, best_temp,
+        num_classes=args.num_classes, verbose=verbose
     )
 
     # Save results
+    import json as json_mod
     results = {
         "optimal_temperature": best_temp,
         "ece": best_ece,
         "entropy_threshold": entropy_threshold,
+        "num_classes": args.num_classes,
     }
     output_path = Path("data/calibration.json")
-    output_path.write_text(__import__("json").dumps(results, indent=2))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json_mod.dumps(results, indent=2))
     if verbose:
         print(f"\nSaved calibration results to {output_path}")
 

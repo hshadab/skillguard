@@ -85,6 +85,9 @@ enum Commands {
         output_dir: PathBuf,
     },
 
+    /// Extract the 35-dim feature vector from a SKILL.md (read from stdin), output as JSON
+    ExtractFeatures,
+
     /// Batch scan crawled skills and produce reports
     #[cfg(feature = "crawler")]
     Scan {
@@ -104,7 +107,7 @@ enum Commands {
         #[arg(long)]
         output: Option<PathBuf>,
 
-        /// Filter results by classification (comma-separated, e.g. DANGEROUS,MALICIOUS)
+        /// Filter results by classification (comma-separated, e.g. DANGEROUS,CAUTION)
         #[arg(long)]
         filter: Option<String>,
 
@@ -251,6 +254,33 @@ fn cmd_scan(
     Ok(())
 }
 
+fn cmd_extract_features() -> Result<()> {
+    use std::io::Read as _;
+
+    let mut input = String::new();
+    std::io::stdin()
+        .read_to_string(&mut input)
+        .wrap_err("Failed to read SKILL.md from stdin")?;
+
+    // Build a minimal Skill from the raw markdown
+    let skill = Skill {
+        name: "stdin".into(),
+        version: "1.0.0".into(),
+        author: "unknown".into(),
+        description: String::new(),
+        skill_md: input,
+        scripts: Vec::new(),
+        metadata: skillguard::skill::SkillMetadata::default(),
+        files: Vec::new(),
+    };
+
+    let features = SkillFeatures::extract(&skill, None);
+    let vec = features.to_normalized_vec();
+    println!("{}", serde_json::to_string(&vec)?);
+
+    Ok(())
+}
+
 fn cmd_check(
     input: PathBuf,
     vt_report_path: Option<PathBuf>,
@@ -327,11 +357,10 @@ fn cmd_check(
             println!("  SAFE:       {:.1}%", scores.safe * 100.0);
             println!("  CAUTION:    {:.1}%", scores.caution * 100.0);
             println!("  DANGEROUS:  {:.1}%", scores.dangerous * 100.0);
-            println!("  MALICIOUS:  {:.1}%", scores.malicious * 100.0);
             println!();
             println!(
-                "Raw logits:  [{}, {}, {}, {}]",
-                raw_scores[0], raw_scores[1], raw_scores[2], raw_scores[3]
+                "Raw logits:  [{}, {}, {}]",
+                raw_scores[0], raw_scores[1], raw_scores[2]
             );
             println!("Entropy:     {:.4}", scores.entropy());
             println!();
@@ -415,6 +444,7 @@ fn main() {
             cache_dir,
             env_config,
         ),
+        Commands::ExtractFeatures => cmd_extract_features(),
         Commands::Check {
             input,
             vt_report,

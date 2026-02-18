@@ -35,7 +35,6 @@ const COUNTER_FIELDS: &[&str] = &[
     "safe",
     "caution",
     "dangerous",
-    "malicious",
     "allow",
     "deny",
     "flag",
@@ -54,7 +53,6 @@ pub struct UsageMetrics {
     pub safe: AtomicU64,
     pub caution: AtomicU64,
     pub dangerous: AtomicU64,
-    pub malicious: AtomicU64,
 
     pub allow: AtomicU64,
     pub deny: AtomicU64,
@@ -97,7 +95,6 @@ impl UsageMetrics {
             safe: AtomicU64::new(v("safe")),
             caution: AtomicU64::new(v("caution")),
             dangerous: AtomicU64::new(v("dangerous")),
-            malicious: AtomicU64::new(v("malicious")),
             allow: AtomicU64::new(v("allow")),
             deny: AtomicU64::new(v("deny")),
             flag: AtomicU64::new(v("flag")),
@@ -183,7 +180,6 @@ impl UsageMetrics {
             safe: AtomicU64::new(v("safe")),
             caution: AtomicU64::new(v("caution")),
             dangerous: AtomicU64::new(v("dangerous")),
-            malicious: AtomicU64::new(v("malicious")),
             allow: AtomicU64::new(v("allow")),
             deny: AtomicU64::new(v("deny")),
             flag: AtomicU64::new(v("flag")),
@@ -361,7 +357,6 @@ impl UsageMetrics {
         map.insert("safe".into(), self.safe.load(Ordering::Relaxed));
         map.insert("caution".into(), self.caution.load(Ordering::Relaxed));
         map.insert("dangerous".into(), self.dangerous.load(Ordering::Relaxed));
-        map.insert("malicious".into(), self.malicious.load(Ordering::Relaxed));
         map.insert("allow".into(), self.allow.load(Ordering::Relaxed));
         map.insert("deny".into(), self.deny.load(Ordering::Relaxed));
         map.insert("flag".into(), self.flag.load(Ordering::Relaxed));
@@ -456,9 +451,6 @@ impl UsageMetrics {
             SafetyClassification::Dangerous => {
                 self.dangerous.fetch_add(1, Ordering::Relaxed);
             }
-            SafetyClassification::Malicious => {
-                self.malicious.fetch_add(1, Ordering::Relaxed);
-            }
         }
 
         match decision {
@@ -539,7 +531,6 @@ impl UsageMetrics {
             "safe": self.safe.load(Ordering::Relaxed),
             "caution": self.caution.load(Ordering::Relaxed),
             "dangerous": self.dangerous.load(Ordering::Relaxed),
-            "malicious": self.malicious.load(Ordering::Relaxed),
             "allow": self.allow.load(Ordering::Relaxed),
             "deny": self.deny.load(Ordering::Relaxed),
             "flag": self.flag.load(Ordering::Relaxed),

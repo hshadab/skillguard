@@ -2,7 +2,7 @@
 > Verifiable AI skill safety classification with zero-knowledge ML proofs
 
 ## What this API does
-SkillGuard classifies AI agent skills as SAFE, CAUTION, DANGEROUS, or MALICIOUS.
+SkillGuard classifies AI agent skills as SAFE, CAUTION, or DANGEROUS.
 Every classification includes a mandatory cryptographic zkML proof (SNARK via Jolt/Dory)
 that anyone can verify independently. Think of it as an SSL certificate for agent skills:
 the proof guarantees the classification was computed correctly by the neural network.
@@ -58,24 +58,17 @@ curl -X POST https://skillguard.onrender.com/api/v1/evaluate \
   -d '{"skill": "4claw"}'
 
 ## Model
-3-layer MLP: 35 inputs → 56 hidden (ReLU) → 40 hidden (ReLU) → 4 outputs.
-4,460 parameters. Fixed-point i32 arithmetic (scale=7, rounding division).
-QAT-trained with FGSM adversarial examples on 690 samples (incl. unknown-metadata augmentation).
-93.9% cross-validated accuracy. Softmax temperature T=12.8 (fixed-point).
-~53 KB proofs, ~4s proving time.
-
-Per-class metrics (5-fold CV mean):
-  SAFE:      P=91.5% R=96.9% F1=94.1%
-  CAUTION:   P=93.2% R=90.6% F1=91.8%
-  DANGEROUS: P=94.8% R=95.3% F1=94.9%
-  MALICIOUS: P=98.0% R=92.7% F1=95.2%
+3-layer MLP: 35 inputs → 56 hidden (ReLU) → 40 hidden (ReLU) → 3 outputs.
+4,419 parameters. Fixed-point i32 arithmetic (scale=7, rounding division).
+QAT-trained with FGSM adversarial examples on LLM-labeled real OpenClaw skills.
+Softmax temperature T=76.8 (fixed-point, float T=0.60, ECE=0.044). ~53 KB proofs, ~4s proving time.
 
 The model extracts 35 numeric features from each skill (shell exec counts, network calls,
 obfuscation score, reverse shell patterns, credential access, author reputation, download
 counts, byte entropy, density ratios, interaction terms). When a skill has no separate
 scripts, code blocks inside SKILL.md are extracted and analyzed. Features are scaled to
-0-128 and fed through the network. The highest of the 4 output scores (SAFE, CAUTION,
-DANGEROUS, MALICIOUS) determines the classification. Confidence is the softmax probability
+0-128 and fed through the network. The highest of the 3 output scores (SAFE, CAUTION,
+DANGEROUS) determines the classification. Confidence is the softmax probability
 of the top class. High-entropy (uncertain) predictions are flagged for human review.
 
 ## Links

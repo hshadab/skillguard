@@ -384,7 +384,6 @@ mod tests {
                 safe: 80,
                 caution: 10,
                 dangerous: 7,
-                malicious: 3,
             },
             decisions: DecisionStats {
                 allow: 90,

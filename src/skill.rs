@@ -86,14 +86,13 @@ pub struct VTReport {
 // Safety classification
 // ---------------------------------------------------------------------------
 
-/// Safety classification result
+/// Safety classification result (3-class model)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum SafetyClassification {
     Safe,
     Caution,
     Dangerous,
-    Malicious,
 }
 
 impl SafetyClassification {
@@ -102,7 +101,6 @@ impl SafetyClassification {
             0 => Self::Safe,
             1 => Self::Caution,
             2 => Self::Dangerous,
-            3 => Self::Malicious,
             _ => Self::Safe,
         }
     }
@@ -112,21 +110,21 @@ impl SafetyClassification {
             Self::Safe => "SAFE",
             Self::Caution => "CAUTION",
             Self::Dangerous => "DANGEROUS",
-            Self::Malicious => "MALICIOUS",
         }
     }
 
     pub fn is_deny(&self) -> bool {
-        matches!(self, Self::Dangerous | Self::Malicious)
+        matches!(self, Self::Dangerous)
     }
 
-    /// Parse from the uppercase string representation (e.g. "SAFE", "MALICIOUS").
+    /// Parse from the uppercase string representation (e.g. "SAFE", "DANGEROUS").
     pub fn parse_str(s: &str) -> Self {
         match s {
             "SAFE" => Self::Safe,
             "CAUTION" => Self::Caution,
             "DANGEROUS" => Self::Dangerous,
-            "MALICIOUS" => Self::Malicious,
+            // Map legacy MALICIOUS to DANGEROUS
+            "MALICIOUS" => Self::Dangerous,
             _ => Self::Safe,
         }
     }
@@ -166,28 +164,24 @@ impl SafetyDecision {
 /// If the model's entropy exceeds the abstain threshold, the prediction is flagged
 /// regardless of the top class ("Model uncertainty too high").
 ///
-/// Decision matrix (no catch-all fallthrough):
+/// Decision matrix (3-class model, no catch-all fallthrough):
 /// - Safe         → Allow ("No concerning patterns detected")
 /// - Caution      → Allow ("Minor concerns noted; functional skill")
 /// - Dangerous:
 ///   score >= 0.5 → Deny  ("Significant risk patterns detected")
 ///   score <  0.5 → Flag  ("Risk patterns detected but confidence below threshold")
-/// - Malicious:
-///   score >= 0.5 → Deny  ("Active malware indicators detected")
-///   score <  0.5 → Flag  ("Malware indicators detected with low confidence")
 ///
-/// MALICIOUS and DANGEROUS are **never** allowed.
+/// DANGEROUS is **never** allowed.
 pub fn derive_decision(
     classification: SafetyClassification,
-    scores: &[f64; 4],
+    scores: &[f64; crate::scores::NUM_CLASSES],
 ) -> (SafetyDecision, String) {
     // Check entropy-based abstain: if the model is too uncertain, flag for human review.
-    // This only upgrades SAFE/CAUTION to Flag; DANGEROUS/MALICIOUS are already at least Flag.
+    // This only upgrades SAFE/CAUTION to Flag; DANGEROUS is already at least Flag.
     let class_scores = crate::scores::ClassScores {
         safe: scores[0],
         caution: scores[1],
         dangerous: scores[2],
-        malicious: scores[3],
     };
     if class_scores.is_uncertain() {
         match classification {
@@ -197,7 +191,7 @@ pub fn derive_decision(
                     "Model uncertainty too high; flagged for review".into(),
                 );
             }
-            // For Dangerous/Malicious, fall through to normal logic (already ≥ Flag)
+            // For Dangerous, fall through to normal logic (already ≥ Flag)
             _ => {}
         }
     }
@@ -221,19 +215,6 @@ pub fn derive_decision(
                 (
                     SafetyDecision::Flag,
                     "Risk patterns detected but confidence below threshold".into(),
-                )
-            }
-        }
-        SafetyClassification::Malicious => {
-            if scores[3] >= 0.5 {
-                (
-                    SafetyDecision::Deny,
-                    "Active malware indicators detected".into(),
-                )
-            } else {
-                (
-                    SafetyDecision::Flag,
-                    "Malware indicators detected with low confidence".into(),
                 )
             }
         }

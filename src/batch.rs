@@ -85,7 +85,6 @@ pub struct ClassificationCounts {
     pub safe: usize,
     pub caution: usize,
     pub dangerous: usize,
-    pub malicious: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -402,7 +401,6 @@ fn build_report(results: Vec<ScanResult>, errors: Vec<ScanError>, model_hash: &s
             "SAFE" => classification_counts.safe += 1,
             "CAUTION" => classification_counts.caution += 1,
             "DANGEROUS" => classification_counts.dangerous += 1,
-            "MALICIOUS" => classification_counts.malicious += 1,
             _ => {}
         }
         match r.decision.as_str() {
@@ -492,12 +490,8 @@ fn format_summary(report: &BatchReport, filtered: &[&ScanResult]) -> String {
         report.classification_counts.caution
     ));
     out.push_str(&format!(
-        "  DANGEROUS:  {}\n",
+        "  DANGEROUS:  {}\n\n",
         report.classification_counts.dangerous
-    ));
-    out.push_str(&format!(
-        "  MALICIOUS:  {}\n\n",
-        report.classification_counts.malicious
     ));
 
     out.push_str("Decisions:\n");
@@ -598,7 +592,7 @@ mod tests {
         // Check that classifications are valid
         for r in &results {
             assert!(
-                ["SAFE", "CAUTION", "DANGEROUS", "MALICIOUS"].contains(&r.classification.as_str()),
+                ["SAFE", "CAUTION", "DANGEROUS"].contains(&r.classification.as_str()),
                 "Invalid classification: {}",
                 r.classification
             );

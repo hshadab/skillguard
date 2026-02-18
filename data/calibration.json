@@ -1,0 +1,6 @@
+{
+  "optimal_temperature": 0.6000000000000002,
+  "ece": 0.04425732619714638,
+  "entropy_threshold": 0.5937556428522411,
+  "num_classes": 3
+}

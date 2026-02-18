@@ -82,8 +82,11 @@ impl ProverState {
 
     /// Prove an inference over the given feature vector.
     ///
-    /// Returns the proof bundle and the raw model output (4 scores).
-    pub fn prove_inference(&self, features: &[i32]) -> Result<(ProofBundle, [i32; 4])> {
+    /// Returns the proof bundle and the raw model output (3 scores).
+    pub fn prove_inference(
+        &self,
+        features: &[i32],
+    ) -> Result<(ProofBundle, [i32; crate::scores::NUM_CLASSES])> {
         let input = Tensor::new(Some(features), &[1, 35])
             .map_err(|e| eyre::eyre!("Tensor error: {:?}", e))?;
 
@@ -97,18 +100,15 @@ impl ProverState {
 
         // Extract raw output from program IO
         let output_data = program_io.output.data();
-        if output_data.len() < 4 {
+        if output_data.len() < crate::scores::NUM_CLASSES {
             eyre::bail!(
-                "Expected at least 4 output values, got {}",
+                "Expected at least {} output values, got {}",
+                crate::scores::NUM_CLASSES,
                 output_data.len()
             );
         }
-        let raw_scores: [i32; 4] = [
-            output_data[0],
-            output_data[1],
-            output_data[2],
-            output_data[3],
-        ];
+        let raw_scores: [i32; crate::scores::NUM_CLASSES] =
+            [output_data[0], output_data[1], output_data[2]];
 
         // Serialize the proof
         let mut proof_bytes = Vec::new();

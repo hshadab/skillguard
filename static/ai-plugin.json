@@ -3,7 +3,7 @@
   "name_for_human": "SkillGuard: SSL for Agent Skills",
   "name_for_model": "skillguard",
   "description_for_human": "Verifiable AI skill safety classification with zero-knowledge ML proofs",
-  "description_for_model": "Classify AI agent skills as SAFE/CAUTION/DANGEROUS/MALICIOUS with mandatory cryptographic zkML proof. To classify by name: POST /api/v1/evaluate with {\"skill\": \"slug-name\"}. To classify with full data: POST /api/v1/evaluate with {\"skill\": {\"name\": \"...\", \"version\": \"1.0.0\", \"author\": \"...\", \"skill_md\": \"...\", \"scripts\": [], \"files\": []}}. Costs $0.001 USDC via x402 on Base. Verify proofs free: POST /api/v1/verify with {\"proof_b64\": \"...\", \"program_io\": {...}}. Every response includes a SNARK proof certifying the classification was computed correctly. LLM-readable docs at /.well-known/llms.txt.",
+  "description_for_model": "Classify AI agent skills as SAFE/CAUTION/DANGEROUS with mandatory cryptographic zkML proof. To classify by name: POST /api/v1/evaluate with {\"skill\": \"slug-name\"}. To classify with full data: POST /api/v1/evaluate with {\"skill\": {\"name\": \"...\", \"version\": \"1.0.0\", \"author\": \"...\", \"skill_md\": \"...\", \"scripts\": [], \"files\": []}}. Costs $0.001 USDC via x402 on Base. Verify proofs free: POST /api/v1/verify with {\"proof_b64\": \"...\", \"program_io\": {...}}. Every response includes a SNARK proof certifying the classification was computed correctly. LLM-readable docs at /.well-known/llms.txt.",
   "auth": { "type": "none" },
   "api": { "type": "openapi", "url": "https://skillguard.onrender.com/openapi.json" },
   "logo_url": "https://cdn.prod.website-files.com/65d52b07d5bc41614daa723f/665df12739c532f45b665fe7_logo-novanet.svg",
