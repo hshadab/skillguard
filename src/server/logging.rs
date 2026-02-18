@@ -525,22 +525,7 @@ impl UsageMetrics {
 
     /// Persist current metrics snapshot to disk, then fire-and-forget to Redis.
     pub fn persist_to_disk(&self) {
-        let snapshot = serde_json::json!({
-            "total_requests": self.total_requests.load(Ordering::Relaxed),
-            "total_errors": self.total_errors.load(Ordering::Relaxed),
-            "safe": self.safe.load(Ordering::Relaxed),
-            "caution": self.caution.load(Ordering::Relaxed),
-            "dangerous": self.dangerous.load(Ordering::Relaxed),
-            "allow": self.allow.load(Ordering::Relaxed),
-            "deny": self.deny.load(Ordering::Relaxed),
-            "flag": self.flag.load(Ordering::Relaxed),
-            "ep_evaluate": self.ep_evaluate.load(Ordering::Relaxed),
-            "ep_evaluate_by_name": self.ep_evaluate_by_name.load(Ordering::Relaxed),
-            "ep_verify": self.ep_verify.load(Ordering::Relaxed),
-            "ep_stats": self.ep_stats.load(Ordering::Relaxed),
-            "total_proofs_generated": self.total_proofs_generated.load(Ordering::Relaxed),
-            "total_proofs_verified": self.total_proofs_verified.load(Ordering::Relaxed),
-        });
+        let snapshot = self.snapshot_counters();
         match serde_json::to_vec_pretty(&snapshot) {
             Ok(data) => {
                 if let Err(e) = std::fs::write(&self.metrics_path, &data) {

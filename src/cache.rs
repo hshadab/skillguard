@@ -12,10 +12,7 @@ use std::sync::Mutex;
 use sha2::{Digest, Sha256};
 use tracing::{info, warn};
 
-use crate::server::ProveEvaluateResponse;
-
-/// Default cache directory (Render persistent disk mount point).
-const DEFAULT_CACHE_DIR: &str = "/var/data/skillguard-cache";
+use crate::server::{ProveEvaluateResponse, DEFAULT_CACHE_DIR};
 
 /// Maximum number of cached proof entries before cleanup.
 const MAX_CACHE_ENTRIES: usize = 1000;

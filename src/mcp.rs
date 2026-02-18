@@ -15,7 +15,10 @@ use eyre::Result;
 use serde_json::{json, Value};
 
 use crate::scores::ClassScores;
-use crate::skill::{derive_decision, Skill, SkillFeatures, SkillMetadata};
+use crate::skill::{
+    derive_decision, extract_file_refs, neutral_metadata, parse_yaml_frontmatter, Skill,
+    SkillFeatures,
+};
 
 // ---------------------------------------------------------------------------
 // JSON-RPC helpers
@@ -94,11 +97,6 @@ fn tool_definition() -> Value {
 
 /// Build a `Skill` from a name string (minimal, no content analysis).
 fn skill_from_name(name: &str) -> Skill {
-    // Use neutral metadata defaults so the model relies on the (empty) content
-    // features rather than penalising missing metadata.
-    let neutral_author_date = (chrono::Utc::now() - chrono::Duration::days(180))
-        .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-
     Skill {
         name: name.to_string(),
         version: "1.0.0".into(),
@@ -106,41 +104,19 @@ fn skill_from_name(name: &str) -> Skill {
         description: String::new(),
         skill_md: String::new(),
         scripts: Vec::new(),
-        metadata: SkillMetadata {
-            stars: 50,
-            downloads: 500,
-            author_account_created: neutral_author_date,
-            author_total_skills: 5,
-            ..Default::default()
-        },
+        metadata: neutral_metadata(),
         files: Vec::new(),
     }
 }
 
 /// Build a `Skill` from raw SKILL.md content.
 fn skill_from_markdown(skill_md: &str) -> Skill {
-    // Parse optional YAML frontmatter for name/description/author,
-    // mirroring the approach in `skill::skill_from_skill_md` but
-    // operating on a string rather than a file path.
-    let fm = parse_frontmatter(skill_md);
+    let fm = parse_yaml_frontmatter(skill_md);
 
     let name = fm.name.unwrap_or_else(|| "mcp-input".into());
     let description = fm.description.unwrap_or_default();
     let author = fm.author.unwrap_or_else(|| "unknown".into());
-
-    // Detect file references in markdown for extension-diversity features.
-    let file_ref_re =
-        regex::Regex::new(r"\b[\w./-]+\.(sh|py|js|ts|rb|lua|php|ps1|bat|exe|zip|tar|gz)\b")
-            .expect("valid regex");
-    let files: Vec<String> = file_ref_re
-        .find_iter(skill_md)
-        .map(|m| m.as_str().to_string())
-        .collect::<std::collections::HashSet<_>>()
-        .into_iter()
-        .collect();
-
-    let neutral_author_date = (chrono::Utc::now() - chrono::Duration::days(180))
-        .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    let files = extract_file_refs(skill_md);
 
     Skill {
         name,
@@ -149,68 +125,8 @@ fn skill_from_markdown(skill_md: &str) -> Skill {
         description,
         skill_md: skill_md.to_string(),
         scripts: Vec::new(),
-        metadata: SkillMetadata {
-            stars: 50,
-            downloads: 500,
-            author_account_created: neutral_author_date,
-            author_total_skills: 5,
-            ..Default::default()
-        },
+        metadata: neutral_metadata(),
         files,
-    }
-}
-
-/// Minimal frontmatter parser (mirrors `skill::parse_yaml_frontmatter`).
-struct FrontmatterFields {
-    name: Option<String>,
-    description: Option<String>,
-    author: Option<String>,
-}
-
-fn parse_frontmatter(content: &str) -> FrontmatterFields {
-    let trimmed = content.trim_start();
-    if !trimmed.starts_with("---") {
-        return FrontmatterFields {
-            name: None,
-            description: None,
-            author: None,
-        };
-    }
-
-    let after_open = &trimmed[3..];
-    let close_pos = after_open.find("\n---");
-    let frontmatter = match close_pos {
-        Some(pos) => &after_open[..pos],
-        None => {
-            return FrontmatterFields {
-                name: None,
-                description: None,
-                author: None,
-            }
-        }
-    };
-
-    let mut name = None;
-    let mut description = None;
-    let mut author = None;
-
-    for line in frontmatter.lines() {
-        let line = line.trim();
-        let extract =
-            |val: &str| -> String { val.trim().trim_matches('"').trim_matches('\'').to_string() };
-        if let Some(val) = line.strip_prefix("name:") {
-            name = Some(extract(val));
-        } else if let Some(val) = line.strip_prefix("description:") {
-            description = Some(extract(val));
-        } else if let Some(val) = line.strip_prefix("author:") {
-            author = Some(extract(val));
-        }
-    }
-
-    FrontmatterFields {
-        name,
-        description,
-        author,
     }
 }
 
@@ -421,10 +337,7 @@ mod tests {
         let response = handle_request(&request).expect("initialize should return a response");
         assert_eq!(response["id"], 1);
         assert!(response.get("error").is_none());
-        assert_eq!(
-            response["result"]["protocolVersion"],
-            PROTOCOL_VERSION
-        );
+        assert_eq!(response["result"]["protocolVersion"], PROTOCOL_VERSION);
         assert_eq!(response["result"]["serverInfo"]["name"], SERVER_NAME);
         assert!(response["result"]["capabilities"]["tools"].is_object());
     }
@@ -437,7 +350,10 @@ mod tests {
         });
 
         let response = handle_request(&request);
-        assert!(response.is_none(), "notifications should not produce a response");
+        assert!(
+            response.is_none(),
+            "notifications should not produce a response"
+        );
     }
 
     #[test]
@@ -520,7 +436,11 @@ mod tests {
         });
 
         let response = handle_request(&request).expect("should return a response");
-        assert!(response.get("error").is_none(), "unexpected error: {:?}", response.get("error"));
+        assert!(
+            response.get("error").is_none(),
+            "unexpected error: {:?}",
+            response.get("error")
+        );
         let content = response["result"]["content"].as_array().unwrap();
         assert_eq!(content.len(), 1);
         assert_eq!(content[0]["type"], "text");
@@ -550,7 +470,11 @@ mod tests {
         });
 
         let response = handle_request(&request).expect("should return a response");
-        assert!(response.get("error").is_none(), "unexpected error: {:?}", response.get("error"));
+        assert!(
+            response.get("error").is_none(),
+            "unexpected error: {:?}",
+            response.get("error")
+        );
         let content = response["result"]["content"].as_array().unwrap();
         let text = content[0]["text"].as_str().unwrap();
         let result: Value = serde_json::from_str(text).unwrap();
@@ -560,7 +484,7 @@ mod tests {
     #[test]
     fn test_frontmatter_parsing() {
         let md = "---\nname: my-skill\nauthor: alice\ndescription: Does things\n---\n# Content";
-        let fm = parse_frontmatter(md);
+        let fm = parse_yaml_frontmatter(md);
         assert_eq!(fm.name.as_deref(), Some("my-skill"));
         assert_eq!(fm.author.as_deref(), Some("alice"));
         assert_eq!(fm.description.as_deref(), Some("Does things"));
@@ -569,7 +493,7 @@ mod tests {
     #[test]
     fn test_frontmatter_missing() {
         let md = "# No Frontmatter\n\nJust markdown.";
-        let fm = parse_frontmatter(md);
+        let fm = parse_yaml_frontmatter(md);
         assert!(fm.name.is_none());
         assert!(fm.author.is_none());
     }

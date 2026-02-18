@@ -271,8 +271,11 @@ pub static CARGO_ADD_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"cargo\s
 pub static REQUIRE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"require\s*\(\s*['"][^./]"#).unwrap());
 
-pub static IMPORT_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"from\s+\S+\s+import|import\s+\S+").unwrap());
+/// File reference pattern for detecting referenced files in markdown.
+/// Matches paths like `payload.sh`, `helper.py`, `build.ts`, etc.
+pub static FILE_REF_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\b[\w./-]+\.(sh|py|js|ts|rb|lua|php|ps1|bat|exe|zip|tar|gz)\b").unwrap()
+});
 
 /// Password-protected archive patterns
 pub static ARCHIVE_RE: LazyLock<Regex> =

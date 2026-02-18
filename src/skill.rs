@@ -634,6 +634,39 @@ pub fn parse_skill_from_json(json: &str) -> eyre::Result<Skill> {
     serde_json::from_str(json).map_err(|e| eyre::eyre!("Failed to parse skill JSON: {}", e))
 }
 
+/// Build neutral metadata defaults for local/unknown skills.
+///
+/// When metadata (stars, downloads, author reputation) is unavailable,
+/// use neutral midpoint defaults rather than zeros — zeros look identical
+/// to a brand-new throwaway account, which the training data strongly
+/// associates with malicious skills. These midpoints place the skill in a
+/// "no opinion" zone so the model relies on content-based features instead.
+pub fn neutral_metadata() -> SkillMetadata {
+    let neutral_author_date = (chrono::Utc::now() - chrono::Duration::days(180))
+        .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    SkillMetadata {
+        stars: 50,
+        downloads: 500,
+        author_account_created: neutral_author_date,
+        author_total_skills: 5,
+        ..Default::default()
+    }
+}
+
+/// Extract unique file references from markdown text.
+///
+/// Detects paths like `payload.sh`, `script.py`, etc. using the shared
+/// `FILE_REF_RE` pattern so the `files` list is populated for
+/// extension-diversity and archive-detection features.
+pub fn extract_file_refs(text: &str) -> Vec<String> {
+    crate::patterns::FILE_REF_RE
+        .find_iter(text)
+        .map(|m| m.as_str().to_string())
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect()
+}
+
 /// Create a skill from a SKILL.md file path (for local testing).
 ///
 /// If the file contains YAML frontmatter (between `---` markers),
@@ -657,26 +690,8 @@ pub fn skill_from_skill_md(path: &std::path::Path) -> eyre::Result<Skill> {
 
     let description = fm.description.unwrap_or_default();
     let author = fm.author.unwrap_or_else(|| "unknown".into());
+    let files = extract_file_refs(&skill_md);
 
-    // Detect file references in markdown (paths like foo.sh, script.py, etc.)
-    let file_ref_re =
-        regex::Regex::new(r"\b[\w./-]+\.(sh|py|js|ts|rb|lua|php|ps1|bat|exe|zip|tar|gz)\b")
-            .unwrap();
-    let files: Vec<String> = file_ref_re
-        .find_iter(&skill_md)
-        .map(|m| m.as_str().to_string())
-        .collect::<std::collections::HashSet<_>>()
-        .into_iter()
-        .collect();
-
-    // When loading from a local file, metadata (stars, downloads, author
-    // reputation) is unavailable. Use neutral midpoint defaults rather than
-    // zeros — zeros look identical to a brand-new throwaway account, which
-    // the training data strongly associates with malicious skills. These
-    // midpoints place the skill in a "no opinion" zone so the model relies
-    // on content-based features instead of missing metadata.
-    let neutral_author_date = (chrono::Utc::now() - chrono::Duration::days(180))
-        .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
     Ok(Skill {
         name,
         version: "1.0.0".into(),
@@ -684,26 +699,20 @@ pub fn skill_from_skill_md(path: &std::path::Path) -> eyre::Result<Skill> {
         description,
         skill_md,
         scripts: Vec::new(),
-        metadata: SkillMetadata {
-            stars: 50,
-            downloads: 500,
-            author_account_created: neutral_author_date,
-            author_total_skills: 5,
-            ..Default::default()
-        },
+        metadata: neutral_metadata(),
         files,
     })
 }
 
 /// Parsed YAML frontmatter fields from a SKILL.md file.
-struct Frontmatter {
-    name: Option<String>,
-    description: Option<String>,
-    author: Option<String>,
+pub struct Frontmatter {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub author: Option<String>,
 }
 
 /// Parse YAML frontmatter from a SKILL.md file.
-fn parse_yaml_frontmatter(content: &str) -> Frontmatter {
+pub fn parse_yaml_frontmatter(content: &str) -> Frontmatter {
     let trimmed = content.trim_start();
     if !trimmed.starts_with("---") {
         return Frontmatter {

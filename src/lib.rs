@@ -42,10 +42,7 @@ use crate::scores::NUM_CLASSES;
 /// Process raw model output scores into a classification and confidence.
 ///
 /// Shared by both `classify()` and `classify_with_proof()`.
-fn process_raw_scores(
-    raw_scores: &[i32; NUM_CLASSES],
-    label: &str,
-) -> (SafetyClassification, f64) {
+fn process_raw_scores(raw_scores: &[i32; NUM_CLASSES], label: &str) -> (SafetyClassification, f64) {
     let (best_idx, _) = raw_scores
         .iter()
         .enumerate()
@@ -71,9 +68,7 @@ fn process_raw_scores(
 /// Run the classifier on a 35-element feature vector.
 ///
 /// Returns (classification, raw_scores, confidence).
-pub fn classify(
-    features: &[i32],
-) -> Result<(SafetyClassification, [i32; NUM_CLASSES], f64)> {
+pub fn classify(features: &[i32]) -> Result<(SafetyClassification, [i32; NUM_CLASSES], f64)> {
     let model = skill_safety_model();
     let input =
         Tensor::new(Some(features), &[1, 35]).map_err(|e| eyre::eyre!("Tensor error: {:?}", e))?;
@@ -84,7 +79,11 @@ pub fn classify(
 
     let data = &result.outputs[0].inner;
     if data.len() < NUM_CLASSES {
-        eyre::bail!("Expected {} output classes, got {}", NUM_CLASSES, data.len());
+        eyre::bail!(
+            "Expected {} output classes, got {}",
+            NUM_CLASSES,
+            data.len()
+        );
     }
 
     let raw_scores: [i32; NUM_CLASSES] = [data[0], data[1], data[2]];
@@ -99,7 +98,12 @@ pub fn classify(
 pub fn classify_with_proof(
     prover: &prover::ProverState,
     features: &[i32],
-) -> Result<(SafetyClassification, [i32; NUM_CLASSES], f64, prover::ProofBundle)> {
+) -> Result<(
+    SafetyClassification,
+    [i32; NUM_CLASSES],
+    f64,
+    prover::ProofBundle,
+)> {
     let (bundle, raw_scores) = prover.prove_inference(features)?;
 
     if raw_scores.len() < NUM_CLASSES {
@@ -171,7 +175,7 @@ mod tests {
             "Expected valid classification, got {:?}",
             classification
         );
-        assert!(confidence >= 0.0 && confidence <= 1.0);
+        assert!((0.0..=1.0).contains(&confidence));
         assert_eq!(logits.len(), 3, "Should produce 3 logits");
         // Logits should not all be zero (model is producing output)
         assert!(

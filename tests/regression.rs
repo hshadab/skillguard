@@ -286,9 +286,17 @@ fn regression_malicious_reverse_shell() {
         }],
     );
     let (cls, confidence) = classify_skill(&skill);
-    assert!(cls.is_deny(), "Reverse shell should be DENIED, got {:?} (confidence={})", cls, confidence);
+    assert!(
+        cls.is_deny(),
+        "Reverse shell should be DENIED, got {:?} (confidence={})",
+        cls,
+        confidence
+    );
     let features = SkillFeatures::extract(&skill, None);
-    assert!(features.reverse_shell_patterns > 0, "Should detect reverse shell patterns");
+    assert!(
+        features.reverse_shell_patterns > 0,
+        "Should detect reverse shell patterns"
+    );
 }
 
 #[test]
@@ -303,9 +311,17 @@ fn regression_malicious_credential_harvester() {
         }],
     );
     let (cls, confidence) = classify_skill(&skill);
-    assert!(cls.is_deny(), "Credential harvester should be DENIED, got {:?} (confidence={})", cls, confidence);
+    assert!(
+        cls.is_deny(),
+        "Credential harvester should be DENIED, got {:?} (confidence={})",
+        cls,
+        confidence
+    );
     let features = SkillFeatures::extract(&skill, None);
-    assert!(features.credential_patterns > 0, "Should detect credential patterns");
+    assert!(
+        features.credential_patterns > 0,
+        "Should detect credential patterns"
+    );
 }
 
 #[test]
@@ -320,9 +336,17 @@ fn regression_malicious_data_exfiltrator() {
         }],
     );
     let (cls, confidence) = classify_skill(&skill);
-    assert!(cls.is_deny(), "Data exfiltrator should be DENIED, got {:?} (confidence={})", cls, confidence);
+    assert!(
+        cls.is_deny(),
+        "Data exfiltrator should be DENIED, got {:?} (confidence={})",
+        cls,
+        confidence
+    );
     let features = SkillFeatures::extract(&skill, None);
-    assert!(features.data_exfiltration_patterns > 0, "Should detect data exfiltration");
+    assert!(
+        features.data_exfiltration_patterns > 0,
+        "Should detect data exfiltration"
+    );
 }
 
 #[test]
@@ -337,9 +361,17 @@ fn regression_malicious_privilege_escalation() {
         }],
     );
     let (cls, confidence) = classify_skill(&skill);
-    assert!(cls.is_deny(), "Privilege escalation should be DENIED, got {:?} (confidence={})", cls, confidence);
+    assert!(
+        cls.is_deny(),
+        "Privilege escalation should be DENIED, got {:?} (confidence={})",
+        cls,
+        confidence
+    );
     let features = SkillFeatures::extract(&skill, None);
-    assert!(features.privilege_escalation, "Should detect privilege escalation");
+    assert!(
+        features.privilege_escalation,
+        "Should detect privilege escalation"
+    );
 }
 
 #[test]
@@ -354,9 +386,17 @@ fn regression_malicious_obfuscated_payload() {
         }],
     );
     let (cls, confidence) = classify_skill(&skill);
-    assert!(cls.is_deny(), "Obfuscated payload should be DENIED, got {:?} (confidence={})", cls, confidence);
+    assert!(
+        cls.is_deny(),
+        "Obfuscated payload should be DENIED, got {:?} (confidence={})",
+        cls,
+        confidence
+    );
     let features = SkillFeatures::extract(&skill, None);
-    assert!(features.obfuscation_score > 0.0, "Should detect obfuscation");
+    assert!(
+        features.obfuscation_score > 0.0,
+        "Should detect obfuscation"
+    );
 }
 
 #[test]
@@ -371,9 +411,17 @@ fn regression_malicious_persistence_installer() {
         }],
     );
     let (cls, confidence) = classify_skill(&skill);
-    assert!(cls.is_deny(), "Persistence installer should be DENIED, got {:?} (confidence={})", cls, confidence);
+    assert!(
+        cls.is_deny(),
+        "Persistence installer should be DENIED, got {:?} (confidence={})",
+        cls,
+        confidence
+    );
     let features = SkillFeatures::extract(&skill, None);
-    assert!(features.persistence_mechanisms > 0, "Should detect persistence mechanisms");
+    assert!(
+        features.persistence_mechanisms > 0,
+        "Should detect persistence mechanisms"
+    );
 }
 
 #[test]
@@ -388,9 +436,17 @@ fn regression_malicious_crypto_miner() {
         }],
     );
     let (cls, confidence) = classify_skill(&skill);
-    assert!(cls.is_deny(), "Crypto miner should be DENIED, got {:?} (confidence={})", cls, confidence);
+    assert!(
+        cls.is_deny(),
+        "Crypto miner should be DENIED, got {:?} (confidence={})",
+        cls,
+        confidence
+    );
     let features = SkillFeatures::extract(&skill, None);
-    assert!(features.external_download, "Should detect external download");
+    assert!(
+        features.external_download,
+        "Should detect external download"
+    );
 }
 
 #[test]
@@ -401,9 +457,17 @@ fn regression_malicious_llm_secret_exposure() {
         vec![],
     );
     let (cls, confidence) = classify_skill(&skill);
-    assert!(cls.is_deny(), "LLM secret exposure should be DENIED, got {:?} (confidence={})", cls, confidence);
+    assert!(
+        cls.is_deny(),
+        "LLM secret exposure should be DENIED, got {:?} (confidence={})",
+        cls,
+        confidence
+    );
     let features = SkillFeatures::extract(&skill, None);
-    assert!(features.llm_secret_exposure, "Should detect LLM secret exposure");
+    assert!(
+        features.llm_secret_exposure,
+        "Should detect LLM secret exposure"
+    );
 }
 
 #[test]
@@ -418,9 +482,17 @@ fn regression_malicious_curl_pipe_bash() {
         }],
     );
     let (cls, confidence) = classify_skill(&skill);
-    assert!(cls.is_deny(), "curl|bash installer should be DENIED, got {:?} (confidence={})", cls, confidence);
+    assert!(
+        cls.is_deny(),
+        "curl|bash installer should be DENIED, got {:?} (confidence={})",
+        cls,
+        confidence
+    );
     let features = SkillFeatures::extract(&skill, None);
-    assert!(features.external_download, "Should detect external download");
+    assert!(
+        features.external_download,
+        "Should detect external download"
+    );
     assert!(features.shell_exec_count > 0, "Should detect shell exec");
 }
 
@@ -436,10 +508,21 @@ fn regression_malicious_multi_vector() {
         }],
     );
     let (cls, confidence) = classify_skill(&skill);
-    assert!(cls.is_deny(), "Multi-vector attack should be DENIED, got {:?} (confidence={})", cls, confidence);
+    assert!(
+        cls.is_deny(),
+        "Multi-vector attack should be DENIED, got {:?} (confidence={})",
+        cls,
+        confidence
+    );
     let features = SkillFeatures::extract(&skill, None);
-    assert!(features.reverse_shell_patterns > 0, "Should detect reverse shell");
-    assert!(features.privilege_escalation, "Should detect privilege escalation");
+    assert!(
+        features.reverse_shell_patterns > 0,
+        "Should detect reverse shell"
+    );
+    assert!(
+        features.privilege_escalation,
+        "Should detect privilege escalation"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -518,7 +601,12 @@ fn regression_malicious_confidence_threshold() {
         }],
     );
     let (cls, confidence) = classify_skill(&skill);
-    assert!(cls.is_deny(), "Malicious skill should be DENIED, got {:?} (confidence={})", cls, confidence);
+    assert!(
+        cls.is_deny(),
+        "Malicious skill should be DENIED, got {:?} (confidence={})",
+        cls,
+        confidence
+    );
     assert!(
         confidence >= 0.70,
         "Malicious skill confidence too low: {}",

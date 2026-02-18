@@ -110,11 +110,7 @@ mod tests {
             "SAFE should be highest with gap of 100: {:?}",
             scores
         );
-        assert!(
-            scores.safe > 0.50,
-            "SAFE should exceed 50%: {:?}",
-            scores
-        );
+        assert!(scores.safe > 0.50, "SAFE should exceed 50%: {:?}", scores);
         let total = scores.safe + scores.caution + scores.dangerous;
         assert!((total - 1.0).abs() < 0.001);
     }

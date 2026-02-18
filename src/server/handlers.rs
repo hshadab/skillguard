@@ -254,9 +254,7 @@ pub async fn catalog_handler(
             success: false,
             error: Some(format!("Skill '{}' not found in catalog", skill_name)),
             entry: None,
-            hint: Some(
-                "Use POST /api/v1/evaluate to classify skills not in the catalog.".into(),
-            ),
+            hint: Some("Use POST /api/v1/evaluate to classify skills not in the catalog.".into()),
             catalog_size: Some(state.catalog.len()),
             model_version: state.model_version.clone(),
         })
@@ -441,11 +439,10 @@ pub async fn verify_handler(
     let prover = match try_get_prover(&state, start) {
         Ok(p) => p,
         Err(_) => {
-            return axum::Json(serde_json::json!({
-                "error": "ZKML prover not available",
-                "valid": false,
-                "verification_time_ms": start.elapsed().as_millis() as u64,
-            }));
+            return axum::Json(VerifyResponse {
+                valid: false,
+                verification_time_ms: start.elapsed().as_millis() as u64,
+            });
         }
     };
 
@@ -467,12 +464,10 @@ pub async fn verify_handler(
         .fetch_add(1, Ordering::Relaxed);
     state.usage.persist_to_disk();
 
-    let verification_time_ms = start.elapsed().as_millis() as u64;
-
-    axum::Json(serde_json::json!({
-        "valid": valid,
-        "verification_time_ms": verification_time_ms,
-    }))
+    axum::Json(VerifyResponse {
+        valid,
+        verification_time_ms: start.elapsed().as_millis() as u64,
+    })
 }
 
 pub async fn feedback_handler(
