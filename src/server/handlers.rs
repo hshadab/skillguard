@@ -166,6 +166,10 @@ async fn classify_and_respond(
                 .total_proofs_generated
                 .fetch_add(1, Ordering::Relaxed);
 
+            // Persist counters to disk (and Redis) immediately after proof generation
+            // so the cumulative count survives unexpected process termination.
+            state.usage.persist_to_disk();
+
             let entropy = scores.entropy();
             let response = ProveEvaluateResponse {
                 success: true,
@@ -436,6 +440,9 @@ pub async fn verify_handler(
         .usage
         .total_proofs_verified
         .fetch_add(1, Ordering::Relaxed);
+
+    // Persist counters immediately so verification count survives restarts.
+    state.usage.persist_to_disk();
 
     let verification_time_ms = start.elapsed().as_millis() as u64;
 
