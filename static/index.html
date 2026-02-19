@@ -776,7 +776,6 @@ This skill fetches current weather data from a public API and returns a friendly
       <div class="stat-card"><div class="stat-value" id="st-errors">-</div><div class="stat-label">Errors</div></div>
       <div class="stat-card"><div class="stat-value" id="st-ep-eval">-</div><div class="stat-label">Evaluate</div></div>
       <div class="stat-card"><div class="stat-value" id="st-ep-name">-</div><div class="stat-label">By Name</div></div>
-      <div class="stat-card"><div class="stat-value" id="st-ep-prove">-</div><div class="stat-label">Prove</div></div>
       <div class="stat-card"><div class="stat-value" id="st-ep-verify">-</div><div class="stat-label">Verify</div></div>
     </div>
   </div>
@@ -888,7 +887,6 @@ function loadStats() {
       $('st-errors').textContent = d.requests.errors;
       $('st-ep-eval').textContent = d.endpoints.evaluate;
       $('st-ep-name').textContent = d.endpoints.evaluate_by_name;
-      $('st-ep-prove').textContent = d.endpoints.prove;
       $('st-ep-verify').textContent = d.endpoints.verify;
       $('st-allow').textContent = d.decisions.allow;
       $('st-deny').textContent = d.decisions.deny;
