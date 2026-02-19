@@ -1389,16 +1389,33 @@ async function signX402Payment(requirements) {
     if (ev.reasoning) {
       html += '<div style="margin-top:10px;font-size:0.82rem;color:var(--text-secondary)"><strong>Reasoning:</strong> ' + escHtml(ev.reasoning) + '</div>';
     }
-    // Show raw logits and entropy if available (model diagnostics)
+    // Plain-language model confidence summary
+    if (typeof ev.entropy === 'number') {
+      var ent = ev.entropy;
+      var confLabel, confColor;
+      if (ent < 0.3) { confLabel = 'High'; confColor = 'var(--safe)'; }
+      else if (ent < 0.6) { confLabel = 'Moderate'; confColor = 'var(--caution)'; }
+      else { confLabel = 'Low'; confColor = 'var(--dangerous)'; }
+      html += '<div style="margin-top:8px;font-size:0.82rem;color:var(--text-secondary)">';
+      html += 'Model confidence: <strong style="color:' + confColor + '">' + confLabel + '</strong>';
+      if (confLabel === 'Low') {
+        html += ' &mdash; the model is uncertain about this classification';
+      } else if (confLabel === 'Moderate') {
+        html += ' &mdash; the model is fairly confident but not definitive';
+      }
+      html += '</div>';
+    }
+    // Collapsible technical details (raw logits + entropy)
     if (ev.raw_logits || typeof ev.entropy === 'number') {
-      html += '<div style="margin-top:8px;display:flex;gap:16px;font-size:0.75rem;color:var(--text-muted);font-family:monospace">';
+      html += '<details style="margin-top:6px"><summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;user-select:none">Show technical details</summary>';
+      html += '<div style="margin-top:4px;display:flex;gap:16px;font-size:0.75rem;color:var(--text-muted);font-family:monospace">';
       if (ev.raw_logits) {
         html += '<span>Logits: [' + ev.raw_logits.join(', ') + ']</span>';
       }
       if (typeof ev.entropy === 'number') {
         html += '<span>Entropy: ' + ev.entropy.toFixed(4) + '</span>';
       }
-      html += '</div>';
+      html += '</div></details>';
     }
     if (sourceUrl) {
       html += '<div style="margin-top:10px"><a href="' + escHtml(sourceUrl) + '" target="_blank" rel="noopener" style="font-size:0.82rem;color:var(--accent);text-decoration:none">View skill source on GitHub &#x2197;</a></div>';

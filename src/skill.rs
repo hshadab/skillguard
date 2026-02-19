@@ -166,23 +166,29 @@ impl SafetyDecision {
 /// regardless of the top class ("Model uncertainty too high").
 ///
 /// Decision matrix (3-class model, no catch-all fallthrough):
-/// - Safe         → Allow ("No concerning patterns detected")
-/// - Caution      → Allow ("Minor concerns noted; functional skill")
+/// - Safe         → Allow (reasoning varies based on dangerous score)
+/// - Caution      → Allow (reasoning varies based on dangerous score)
 /// - Dangerous:
 ///   score >= 0.5 → Deny  ("Significant risk patterns detected")
 ///   score <  0.5 → Flag  ("Risk patterns detected but confidence below threshold")
 ///
 /// DANGEROUS is **never** allowed.
+///
+/// When the top class is Safe or Caution but the dangerous score is >= 15%,
+/// the reasoning acknowledges the residual risk signal instead of saying
+/// "no concerning patterns."
 pub fn derive_decision(
     classification: SafetyClassification,
     scores: &[f64; crate::scores::NUM_CLASSES],
 ) -> (SafetyDecision, String) {
+    let dangerous_score = scores[2];
+
     // Check entropy-based abstain: if the model is too uncertain, flag for human review.
     // This only upgrades SAFE/CAUTION to Flag; DANGEROUS is already at least Flag.
     let class_scores = crate::scores::ClassScores {
         safe: scores[0],
         caution: scores[1],
-        dangerous: scores[2],
+        dangerous: dangerous_score,
     };
     if class_scores.is_uncertain() {
         match classification {
@@ -197,15 +203,39 @@ pub fn derive_decision(
         }
     }
 
+    /// Threshold above which the dangerous score is mentioned in reasoning
+    /// even when it's not the top class.
+    const DANGEROUS_MENTION_THRESHOLD: f64 = 0.15;
+
     match classification {
-        SafetyClassification::Safe => (
-            SafetyDecision::Allow,
-            "No concerning patterns detected".into(),
-        ),
-        SafetyClassification::Caution => (
-            SafetyDecision::Allow,
-            "Minor concerns noted; functional skill".into(),
-        ),
+        SafetyClassification::Safe => {
+            if dangerous_score >= DANGEROUS_MENTION_THRESHOLD {
+                let pct = (dangerous_score * 100.0).round() as u32;
+                (
+                    SafetyDecision::Allow,
+                    format!("Classified safe, but {}% dangerous signal — review recommended", pct),
+                )
+            } else {
+                (
+                    SafetyDecision::Allow,
+                    "No concerning patterns detected".into(),
+                )
+            }
+        }
+        SafetyClassification::Caution => {
+            if dangerous_score >= DANGEROUS_MENTION_THRESHOLD {
+                let pct = (dangerous_score * 100.0).round() as u32;
+                (
+                    SafetyDecision::Allow,
+                    format!("Minor concerns noted; {}% dangerous signal — review recommended", pct),
+                )
+            } else {
+                (
+                    SafetyDecision::Allow,
+                    "Minor concerns noted; functional skill".into(),
+                )
+            }
+        }
         SafetyClassification::Dangerous => {
             if scores[2] >= 0.5 {
                 (
