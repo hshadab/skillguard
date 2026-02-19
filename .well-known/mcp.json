@@ -1,0 +1,35 @@
+{
+  "name": "skillguard",
+  "display_name": "SkillGuard",
+  "description": "Verifiable AI skill safety classifier with zero-knowledge ML proofs. Classifies agent skills as SAFE/CAUTION/DANGEROUS with a cryptographic ZK proof that the neural network produced the result.",
+  "repository": "https://github.com/hshadab/skillguard",
+  "homepage": "https://skillguard.onrender.com",
+  "version": "2.0.0",
+  "authors": ["hshadab"],
+  "license": "MIT",
+  "categories": ["security", "ai-safety", "verification"],
+  "transport": "stdio",
+  "install": {
+    "cargo": {
+      "package": "skillguard",
+      "binary": "skillguard-mcp",
+      "command": "cargo install --git https://github.com/hshadab/skillguard --bin skillguard-mcp"
+    }
+  },
+  "tools": [
+    {
+      "name": "skillguard_evaluate",
+      "description": "Evaluate a skill for safety. Returns classification, decision, confidence, scores, reasoning, raw logits, entropy, model hash, and a verifiable ZK proof.",
+      "parameters": {
+        "skill_name": {
+          "type": "string",
+          "description": "Skill name for minimal evaluation"
+        },
+        "skill_md": {
+          "type": "string",
+          "description": "Full SKILL.md markdown content for richer feature extraction"
+        }
+      }
+    }
+  ]
+}

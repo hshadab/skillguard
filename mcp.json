@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "skillguard": {
+      "command": "cargo",
+      "args": ["run", "--release", "--bin", "skillguard-mcp"]
+    }
+  }
+}

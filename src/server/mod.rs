@@ -19,10 +19,10 @@ pub mod types;
 pub use handlers::MAX_BODY_BYTES;
 pub use logging::{RecordEvent, UsageMetrics, METRICS_PERSIST_INTERVAL_SECS};
 pub use types::{
-    AuthMethod, CatalogEntry, CatalogResponse, ClassificationStats, DecisionStats, EndpointStats,
-    EvaluateByNameRequest, EvaluateRequest, FeedbackRequest, FeedbackResponse, HealthResponse,
-    ProofStats, ProveEvaluateResponse, ProvedEvaluationResult, RequestStats, ServerConfig,
-    StatsResponse, VerifyRequest, VerifyResponse, DEFAULT_CACHE_DIR,
+    AuthMethod, AuthStats, CatalogEntry, CatalogResponse, ClassificationStats, DecisionStats,
+    EndpointStats, EvaluateByNameRequest, EvaluateRequest, FeedbackRequest, FeedbackResponse,
+    HealthResponse, McpStats, ProofStats, ProveEvaluateResponse, ProvedEvaluationResult,
+    RequestStats, ServerConfig, StatsResponse, VerifyRequest, VerifyResponse, DEFAULT_CACHE_DIR,
 };
 
 use std::net::{IpAddr, SocketAddr};
@@ -494,12 +494,27 @@ mod tests {
                 total_generated: 10,
                 total_verified: 5,
             },
+            auth: AuthStats {
+                api_key: 5,
+                x402: 3,
+                open: 2,
+            },
+            mcp: McpStats {
+                total_evaluations: 0,
+                safe: 0,
+                caution: 0,
+                dangerous: 0,
+                proofs_generated: 0,
+            },
         };
 
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("\"total\":100"));
         assert!(json.contains("\"evaluate_by_name\":35"));
         assert!(json.contains("\"total_generated\":10"));
+        assert!(json.contains("\"auth\""));
+        assert!(json.contains("\"x402\":3"));
+        assert!(json.contains("\"mcp\""));
     }
 
     #[test]

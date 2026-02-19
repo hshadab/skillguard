@@ -293,6 +293,18 @@ pub async fn evaluate_handler(
     let start = Instant::now();
     let client_ip = addr.ip();
 
+    // Extract auth method before consuming the request body.
+    let auth_method = request
+        .extensions()
+        .get::<AuthMethod>()
+        .copied()
+        .unwrap_or(AuthMethod::Open);
+    match auth_method {
+        AuthMethod::ApiKey => state.usage.auth_api_key.fetch_add(1, Ordering::Relaxed),
+        AuthMethod::X402 => state.usage.auth_x402.fetch_add(1, Ordering::Relaxed),
+        AuthMethod::Open => state.usage.auth_open.fetch_add(1, Ordering::Relaxed),
+    };
+
     let body = request.into_body();
     let bytes = match axum::body::to_bytes(body, MAX_BODY_BYTES).await {
         Ok(b) => b,
@@ -503,6 +515,16 @@ pub async fn stats_handler(
 ) -> impl axum::response::IntoResponse {
     state.usage.ep_stats.fetch_add(1, Ordering::Relaxed);
 
+    // Read MCP metrics from shared cache file (written by skillguard-mcp binary)
+    let mcp_json = crate::mcp::load_mcp_metrics(&state.config.cache_dir);
+    let mcp_val = |field: &str| -> u64 {
+        mcp_json
+            .as_ref()
+            .and_then(|j| j.get(field))
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0)
+    };
+
     let response = StatsResponse {
         uptime_seconds: state.start_time.elapsed().as_secs(),
         model_hash: state.model_hash.clone(),
@@ -529,6 +551,18 @@ pub async fn stats_handler(
         proofs: ProofStats {
             total_generated: state.usage.total_proofs_generated.load(Ordering::Relaxed),
             total_verified: state.usage.total_proofs_verified.load(Ordering::Relaxed),
+        },
+        auth: AuthStats {
+            api_key: state.usage.auth_api_key.load(Ordering::Relaxed),
+            x402: state.usage.auth_x402.load(Ordering::Relaxed),
+            open: state.usage.auth_open.load(Ordering::Relaxed),
+        },
+        mcp: McpStats {
+            total_evaluations: mcp_val("total_evaluations"),
+            safe: mcp_val("safe"),
+            caution: mcp_val("caution"),
+            dangerous: mcp_val("dangerous"),
+            proofs_generated: mcp_val("proofs_generated"),
         },
     };
     axum::Json(response)

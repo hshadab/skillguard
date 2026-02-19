@@ -185,6 +185,8 @@ pub struct StatsResponse {
     pub decisions: DecisionStats,
     pub endpoints: EndpointStats,
     pub proofs: ProofStats,
+    pub auth: AuthStats,
+    pub mcp: McpStats,
 }
 
 #[derive(Debug, Serialize)]
@@ -219,6 +221,22 @@ pub struct EndpointStats {
 pub struct ProofStats {
     pub total_generated: u64,
     pub total_verified: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AuthStats {
+    pub api_key: u64,
+    pub x402: u64,
+    pub open: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct McpStats {
+    pub total_evaluations: u64,
+    pub safe: u64,
+    pub caution: u64,
+    pub dangerous: u64,
+    pub proofs_generated: u64,
 }
 
 // ---------------------------------------------------------------------------

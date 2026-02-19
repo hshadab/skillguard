@@ -257,6 +257,27 @@ async fn stats_handler(
                 .total_proofs_verified
                 .load(std::sync::atomic::Ordering::Relaxed),
         },
+        auth: AuthStats {
+            api_key: state
+                .usage
+                .auth_api_key
+                .load(std::sync::atomic::Ordering::Relaxed),
+            x402: state
+                .usage
+                .auth_x402
+                .load(std::sync::atomic::Ordering::Relaxed),
+            open: state
+                .usage
+                .auth_open
+                .load(std::sync::atomic::Ordering::Relaxed),
+        },
+        mcp: McpStats {
+            total_evaluations: 0,
+            safe: 0,
+            caution: 0,
+            dangerous: 0,
+            proofs_generated: 0,
+        },
     };
     axum::Json(response)
 }

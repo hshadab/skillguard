@@ -812,6 +812,28 @@ This skill fetches current weather data from a public API and returns a friendly
     </div>
   </div>
 
+  <!-- Auth Breakdown -->
+  <div class="card">
+    <div class="card-title">Auth Methods</div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-value" id="st-auth-x402" style="color:var(--safe)">0</div><div class="stat-label">x402 Paid</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-auth-apikey">0</div><div class="stat-label">API Key</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-auth-open">0</div><div class="stat-label">Open</div></div>
+    </div>
+  </div>
+
+  <!-- MCP (Model Context Protocol) -->
+  <div class="card">
+    <div class="card-title">MCP Server</div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-value" id="st-mcp-total">0</div><div class="stat-label">Evaluations</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-mcp-proofs">0</div><div class="stat-label">Proofs</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-mcp-safe" style="color:var(--safe)">0</div><div class="stat-label">Safe</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-mcp-caution" style="color:var(--caution)">0</div><div class="stat-label">Caution</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-mcp-dangerous" style="color:var(--dangerous)">0</div><div class="stat-label">Dangerous</div></div>
+    </div>
+  </div>
+
   <footer>
     <span id="footer-version">SkillGuard</span> &middot;
     <a href="https://github.com/hshadab/skillguard" target="_blank" rel="noopener">GitHub</a> &middot;
@@ -907,6 +929,18 @@ function loadStats() {
       $('bar-safe').style.width = (cls.safe / max * 100) + '%';
       $('bar-caution').style.width = (cls.caution / max * 100) + '%';
       $('bar-dangerous').style.width = (cls.dangerous / max * 100) + '%';
+
+      var auth = d.auth || {};
+      $('st-auth-x402').textContent = auth.x402 || 0;
+      $('st-auth-apikey').textContent = auth.api_key || 0;
+      $('st-auth-open').textContent = auth.open || 0;
+
+      var mcp = d.mcp || {};
+      $('st-mcp-total').textContent = mcp.total_evaluations || 0;
+      $('st-mcp-proofs').textContent = mcp.proofs_generated || 0;
+      $('st-mcp-safe').textContent = mcp.safe || 0;
+      $('st-mcp-caution').textContent = mcp.caution || 0;
+      $('st-mcp-dangerous').textContent = mcp.dangerous || 0;
     })
     .catch(function() {});
 }

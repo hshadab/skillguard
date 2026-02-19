@@ -45,6 +45,9 @@ const COUNTER_FIELDS: &[&str] = &[
     "ep_stats",
     "total_proofs_generated",
     "total_proofs_verified",
+    "auth_api_key",
+    "auth_x402",
+    "auth_open",
 ];
 
 /// Parameters for a successful classification event.
@@ -77,6 +80,10 @@ pub struct UsageMetrics {
 
     pub total_proofs_generated: AtomicU64,
     pub total_proofs_verified: AtomicU64,
+
+    pub auth_api_key: AtomicU64,
+    pub auth_x402: AtomicU64,
+    pub auth_open: AtomicU64,
 
     pub access_log: std::sync::Mutex<Option<File>>,
     access_log_path: String,
@@ -116,6 +123,9 @@ impl UsageMetrics {
             ep_stats: AtomicU64::new(v("ep_stats")),
             total_proofs_generated: AtomicU64::new(v("total_proofs_generated")),
             total_proofs_verified: AtomicU64::new(v("total_proofs_verified")),
+            auth_api_key: AtomicU64::new(v("auth_api_key")),
+            auth_x402: AtomicU64::new(v("auth_x402")),
+            auth_open: AtomicU64::new(v("auth_open")),
             access_log: std::sync::Mutex::new(access_log),
             access_log_path: access_log_path.to_string(),
             access_log_bytes: AtomicU64::new(access_log_bytes),
@@ -201,6 +211,9 @@ impl UsageMetrics {
             ep_stats: AtomicU64::new(v("ep_stats")),
             total_proofs_generated: AtomicU64::new(v("total_proofs_generated")),
             total_proofs_verified: AtomicU64::new(v("total_proofs_verified")),
+            auth_api_key: AtomicU64::new(v("auth_api_key")),
+            auth_x402: AtomicU64::new(v("auth_x402")),
+            auth_open: AtomicU64::new(v("auth_open")),
             access_log: std::sync::Mutex::new(access_log),
             access_log_path: access_log_path.to_string(),
             access_log_bytes: AtomicU64::new(access_log_bytes_val),
@@ -372,6 +385,9 @@ impl UsageMetrics {
             "ep_stats" => &self.ep_stats,
             "total_proofs_generated" => &self.total_proofs_generated,
             "total_proofs_verified" => &self.total_proofs_verified,
+            "auth_api_key" => &self.auth_api_key,
+            "auth_x402" => &self.auth_x402,
+            "auth_open" => &self.auth_open,
             _ => unreachable!("unknown counter field: {field}"),
         }
     }

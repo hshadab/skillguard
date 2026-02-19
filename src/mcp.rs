@@ -10,12 +10,101 @@
 //! 4. Client sends `tools/call` -> server classifies and responds with result
 
 use std::io::{BufRead, BufReader, Write};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use eyre::Result;
 use serde_json::{json, Value};
 
+use crate::prover::ProverState;
 use crate::scores::ClassScores;
 use crate::skill::{derive_decision, Skill, SkillFeatures, SkillMetadata};
+
+// ---------------------------------------------------------------------------
+// MCP metrics (persisted to shared cache directory)
+// ---------------------------------------------------------------------------
+
+/// Well-known filename the HTTP server reads to merge MCP stats into `/stats`.
+pub const MCP_METRICS_FILENAME: &str = "mcp_metrics.json";
+
+/// Lightweight counter set for MCP usage, persisted to disk after every
+/// classification so the HTTP dashboard can pick it up.
+pub struct McpMetrics {
+    pub total_evaluations: AtomicU64,
+    pub safe: AtomicU64,
+    pub caution: AtomicU64,
+    pub dangerous: AtomicU64,
+    pub proofs_generated: AtomicU64,
+    path: PathBuf,
+}
+
+impl McpMetrics {
+    /// Create metrics, restoring any previously persisted counts from disk.
+    pub fn new(cache_dir: &str) -> Self {
+        let dir = Path::new(cache_dir);
+        if !dir.exists() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let path = dir.join(MCP_METRICS_FILENAME);
+
+        let restored = std::fs::read(&path)
+            .ok()
+            .and_then(|data| serde_json::from_slice::<Value>(&data).ok());
+
+        let v = |field: &str| -> u64 {
+            restored
+                .as_ref()
+                .and_then(|j| j.get(field))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0)
+        };
+
+        Self {
+            total_evaluations: AtomicU64::new(v("total_evaluations")),
+            safe: AtomicU64::new(v("safe")),
+            caution: AtomicU64::new(v("caution")),
+            dangerous: AtomicU64::new(v("dangerous")),
+            proofs_generated: AtomicU64::new(v("proofs_generated")),
+            path,
+        }
+    }
+
+    /// Record a successful classification and persist to disk immediately.
+    pub fn record(&self, classification: &str) {
+        self.total_evaluations.fetch_add(1, Ordering::Relaxed);
+        self.proofs_generated.fetch_add(1, Ordering::Relaxed);
+        match classification {
+            "SAFE" => { self.safe.fetch_add(1, Ordering::Relaxed); }
+            "CAUTION" => { self.caution.fetch_add(1, Ordering::Relaxed); }
+            "DANGEROUS" => { self.dangerous.fetch_add(1, Ordering::Relaxed); }
+            _ => {}
+        }
+        self.persist();
+    }
+
+    fn persist(&self) {
+        let snapshot = json!({
+            "total_evaluations": self.total_evaluations.load(Ordering::Relaxed),
+            "safe": self.safe.load(Ordering::Relaxed),
+            "caution": self.caution.load(Ordering::Relaxed),
+            "dangerous": self.dangerous.load(Ordering::Relaxed),
+            "proofs_generated": self.proofs_generated.load(Ordering::Relaxed),
+        });
+        if let Ok(data) = serde_json::to_vec_pretty(&snapshot) {
+            let _ = std::fs::write(&self.path, &data);
+        }
+    }
+}
+
+/// Load MCP metrics snapshot from disk (called by the HTTP server).
+/// Returns `None` if the file doesn't exist or can't be parsed.
+pub fn load_mcp_metrics(cache_dir: &str) -> Option<Value> {
+    let path = Path::new(cache_dir).join(MCP_METRICS_FILENAME);
+    std::fs::read(&path)
+        .ok()
+        .and_then(|data| serde_json::from_slice(&data).ok())
+}
 
 // ---------------------------------------------------------------------------
 // JSON-RPC helpers
@@ -83,7 +172,7 @@ fn tool_input_schema() -> Value {
 fn tool_definition() -> Value {
     json!({
         "name": "skillguard_evaluate",
-        "description": "Evaluate a skill for safety. Provide either `skill_name` (minimal evaluation) or `skill_md` (full markdown content for richer feature extraction). Returns classification, decision, confidence, scores, and reasoning.",
+        "description": "Evaluate a skill for safety. Provide either `skill_name` (minimal evaluation) or `skill_md` (full markdown content for richer feature extraction). Returns classification, decision, confidence, scores, reasoning, raw logits, entropy, model hash, and a verifiable ZK proof.",
         "inputSchema": tool_input_schema()
     })
 }
@@ -215,13 +304,19 @@ fn parse_frontmatter(content: &str) -> FrontmatterFields {
 }
 
 /// Run classification on a `Skill` and return a JSON result object.
-fn evaluate_skill(skill: &Skill) -> Result<Value> {
+fn evaluate_skill(skill: &Skill, prover: &ProverState, metrics: Option<&McpMetrics>) -> Result<Value> {
     let features = SkillFeatures::extract(skill, None);
     let feature_vec = features.to_normalized_vec();
+    let model_hash = crate::model_hash();
 
-    let (classification, raw_scores, confidence) = crate::classify(&feature_vec)?;
+    let (classification, raw_scores, confidence, proof_bundle) =
+        crate::classify_with_proof(prover, &feature_vec)?;
     let scores = ClassScores::from_raw_scores(&raw_scores);
     let (decision, reasoning) = derive_decision(classification, &scores.to_array());
+
+    if let Some(m) = metrics {
+        m.record(classification.as_str());
+    }
 
     Ok(json!({
         "classification": classification.as_str(),
@@ -233,6 +328,15 @@ fn evaluate_skill(skill: &Skill) -> Result<Value> {
             "DANGEROUS": scores.dangerous,
         },
         "reasoning": reasoning,
+        "raw_logits": raw_scores,
+        "entropy": scores.entropy(),
+        "model_hash": model_hash,
+        "proof": {
+            "proof_b64": proof_bundle.proof_b64,
+            "program_io": proof_bundle.program_io,
+            "proof_size_bytes": proof_bundle.proof_size_bytes,
+            "proving_time_ms": proof_bundle.proving_time_ms,
+        }
     }))
 }
 
@@ -241,7 +345,7 @@ fn evaluate_skill(skill: &Skill) -> Result<Value> {
 // ---------------------------------------------------------------------------
 
 /// Handle a single parsed JSON-RPC request and return a response (or None for notifications).
-fn handle_request(request: &Value) -> Option<Value> {
+fn handle_request(request: &Value, prover: &ProverState, metrics: Option<&McpMetrics>) -> Option<Value> {
     let id = request.get("id");
     let method = request.get("method").and_then(Value::as_str).unwrap_or("");
 
@@ -316,7 +420,7 @@ fn handle_request(request: &Value) -> Option<Value> {
                 }
             };
 
-            match evaluate_skill(&skill) {
+            match evaluate_skill(&skill, prover, metrics) {
                 Ok(result) => Some(jsonrpc_ok(
                     id,
                     json!({
@@ -358,7 +462,11 @@ fn handle_request(request: &Value) -> Option<Value> {
 /// responses to stdout. One message per line (newline-delimited JSON).
 ///
 /// The server runs until stdin is closed (EOF).
-pub fn run_mcp_server() -> Result<()> {
+pub fn run_mcp_server(prover: Arc<ProverState>) -> Result<()> {
+    let cache_dir = std::env::var("SKILLGUARD_CACHE_DIR")
+        .unwrap_or_else(|_| "/var/data/skillguard-cache".into());
+    let metrics = McpMetrics::new(&cache_dir);
+
     let stdin = std::io::stdin();
     let reader = BufReader::new(stdin.lock());
     let mut stdout = std::io::stdout().lock();
@@ -391,7 +499,7 @@ pub fn run_mcp_server() -> Result<()> {
             continue;
         }
 
-        if let Some(response) = handle_request(&request) {
+        if let Some(response) = handle_request(&request, &prover, Some(&metrics)) {
             serde_json::to_writer(&mut stdout, &response)?;
             stdout.write_all(b"\n")?;
             stdout.flush()?;
@@ -404,6 +512,12 @@ pub fn run_mcp_server() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
+    use std::sync::LazyLock;
+
+    /// Shared prover state for all MCP tests (expensive to initialise, ~15s).
+    static TEST_PROVER: LazyLock<ProverState> =
+        LazyLock::new(|| ProverState::initialize().expect("prover init failed in test"));
 
     #[test]
     fn test_initialize_response() {
@@ -418,7 +532,8 @@ mod tests {
             }
         });
 
-        let response = handle_request(&request).expect("initialize should return a response");
+        let response =
+            handle_request(&request, &TEST_PROVER, None).expect("initialize should return a response");
         assert_eq!(response["id"], 1);
         assert!(response.get("error").is_none());
         assert_eq!(response["result"]["protocolVersion"], PROTOCOL_VERSION);
@@ -433,7 +548,7 @@ mod tests {
             "method": "notifications/initialized"
         });
 
-        let response = handle_request(&request);
+        let response = handle_request(&request, &TEST_PROVER, None);
         assert!(
             response.is_none(),
             "notifications should not produce a response"
@@ -448,7 +563,8 @@ mod tests {
             "method": "tools/list"
         });
 
-        let response = handle_request(&request).expect("tools/list should return a response");
+        let response =
+            handle_request(&request, &TEST_PROVER, None).expect("tools/list should return a response");
         assert_eq!(response["id"], 2);
         assert!(response.get("error").is_none());
 
@@ -470,7 +586,8 @@ mod tests {
             }
         });
 
-        let response = handle_request(&request).expect("should return error response");
+        let response =
+            handle_request(&request, &TEST_PROVER, None).expect("should return error response");
         assert!(response.get("error").is_some());
         assert_eq!(response["error"]["code"], INVALID_PARAMS);
     }
@@ -487,7 +604,8 @@ mod tests {
             }
         });
 
-        let response = handle_request(&request).expect("should return error response");
+        let response =
+            handle_request(&request, &TEST_PROVER, None).expect("should return error response");
         assert!(response.get("error").is_some());
         assert_eq!(response["error"]["code"], METHOD_NOT_FOUND);
     }
@@ -500,12 +618,14 @@ mod tests {
             "method": "unknown/method"
         });
 
-        let response = handle_request(&request).expect("should return error response");
+        let response =
+            handle_request(&request, &TEST_PROVER, None).expect("should return error response");
         assert!(response.get("error").is_some());
         assert_eq!(response["error"]["code"], METHOD_NOT_FOUND);
     }
 
     #[test]
+    #[serial]
     fn test_tools_call_with_skill_name() {
         let request = json!({
             "jsonrpc": "2.0",
@@ -519,7 +639,8 @@ mod tests {
             }
         });
 
-        let response = handle_request(&request).expect("should return a response");
+        let response =
+            handle_request(&request, &TEST_PROVER, None).expect("should return a response");
         assert!(
             response.get("error").is_none(),
             "unexpected error: {:?}",
@@ -537,9 +658,19 @@ mod tests {
         assert!(result.get("confidence").is_some());
         assert!(result.get("scores").is_some());
         assert!(result.get("reasoning").is_some());
+        // New ZK proof / parity fields
+        assert!(result.get("raw_logits").is_some());
+        assert!(result.get("entropy").is_some());
+        assert!(result.get("model_hash").is_some());
+        assert!(result.get("proof").is_some());
+        assert!(result["proof"].get("proof_b64").is_some());
+        assert!(result["proof"].get("program_io").is_some());
+        assert!(result["proof"].get("proof_size_bytes").is_some());
+        assert!(result["proof"].get("proving_time_ms").is_some());
     }
 
     #[test]
+    #[serial]
     fn test_tools_call_with_skill_md() {
         let request = json!({
             "jsonrpc": "2.0",
@@ -553,7 +684,8 @@ mod tests {
             }
         });
 
-        let response = handle_request(&request).expect("should return a response");
+        let response =
+            handle_request(&request, &TEST_PROVER, None).expect("should return a response");
         assert!(
             response.get("error").is_none(),
             "unexpected error: {:?}",
@@ -563,6 +695,9 @@ mod tests {
         let text = content[0]["text"].as_str().unwrap();
         let result: Value = serde_json::from_str(text).unwrap();
         assert!(result.get("classification").is_some());
+        // Verify ZK proof fields present
+        assert!(result.get("proof").is_some());
+        assert!(result["proof"]["proof_b64"].as_str().is_some());
     }
 
     #[test]

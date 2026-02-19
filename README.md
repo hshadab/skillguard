@@ -444,11 +444,30 @@ skillguard scan --input-dir crawled-skills --format csv --output scan-report.csv
 
 ## MCP Server
 
-SkillGuard includes an MCP (Model Context Protocol) server for zero-code integration with AI agents like Claude Code. The MCP server exposes a `skillguard_evaluate` tool over stdio transport.
+SkillGuard includes an MCP (Model Context Protocol) server for zero-code integration with AI agents like Claude Code. The MCP server exposes a `skillguard_evaluate` tool over stdio transport with full ZK proof parity — every response includes the same cryptographic proof, raw logits, entropy, and model hash as the HTTP API.
 
 ### Setup
 
-Add to your agent's MCP configuration:
+**Claude Code** (one command):
+
+```bash
+claude mcp add skillguard -- cargo run --release --bin skillguard-mcp
+```
+
+Or from a pre-built binary:
+
+```bash
+cargo build --release --bin skillguard-mcp
+claude mcp add skillguard -- ./target/release/skillguard-mcp
+```
+
+**Other MCP hosts** (Cursor, Windsurf, etc.) — use the config at [`mcp.json`](mcp.json):
+
+```bash
+claude mcp add-from-file mcp.json   # or copy into your host's MCP config
+```
+
+**Manual config** — add to your MCP host's settings:
 
 ```json
 {
@@ -464,13 +483,25 @@ Add to your agent's MCP configuration:
 
 The MCP server exposes one tool:
 
-- **`skillguard_evaluate`** — Classify a skill by name or by raw SKILL.md content. Returns classification, decision, confidence, scores, and reasoning.
+- **`skillguard_evaluate`** — Classify a skill by name or by raw SKILL.md content.
 
 Parameters (provide one):
-- `skill_name` (string) — Skill slug to look up on ClawHub
+- `skill_name` (string) — Skill name for minimal evaluation
 - `skill_md` (string) — Raw SKILL.md content to classify directly
 
-No ZK proof is generated over MCP (proofs are too large for stdio). Use the HTTP API when you need cryptographic verification.
+Response fields (identical to the HTTP API):
+
+| Field | Description |
+|-------|-------------|
+| `classification` | SAFE, CAUTION, or DANGEROUS |
+| `decision` | Human-readable allow/warn/block decision |
+| `confidence` | Model confidence (0–1) |
+| `scores` | Per-class softmax probabilities |
+| `reasoning` | Plain-language explanation |
+| `raw_logits` | Raw model output logits |
+| `entropy` | Shannon entropy of score distribution (0–1) |
+| `model_hash` | SHA-256 of the model weights |
+| `proof` | ZK proof bundle (`proof_b64`, `program_io`, `proof_size_bytes`, `proving_time_ms`) |
 
 ---
 
