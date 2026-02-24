@@ -1,0 +1,11 @@
+{
+  "name": "skillguard-moltbook",
+  "version": "1.0.0",
+  "description": "SkillGuard agent for Moltbook — verifiable AI skill safety scans with ZK proofs for the agent ecosystem",
+  "author": "hshadab",
+  "license": "MIT",
+  "skills": ["SKILL.md"],
+  "heartbeat": "HEARTBEAT.md",
+  "messaging": "MESSAGING.md",
+  "rules": "RULES.md"
+}
