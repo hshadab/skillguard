@@ -213,7 +213,10 @@ pub fn derive_decision(
                 let pct = (dangerous_score * 100.0).round() as u32;
                 (
                     SafetyDecision::Allow,
-                    format!("Classified safe, but {}% dangerous signal — review recommended", pct),
+                    format!(
+                        "Classified safe, but {}% dangerous signal — review recommended",
+                        pct
+                    ),
                 )
             } else {
                 (
@@ -233,7 +236,10 @@ pub fn derive_decision(
                 let pct = (dangerous_score * 100.0).round() as u32;
                 (
                     SafetyDecision::Allow,
-                    format!("Minor concerns noted; {}% dangerous signal — review recommended", pct),
+                    format!(
+                        "Minor concerns noted; {}% dangerous signal — review recommended",
+                        pct
+                    ),
                 )
             } else {
                 (
@@ -533,8 +539,8 @@ impl SkillFeatures {
                     in_block = !in_block;
                     continue;
                 }
-                let line_shell = count_matches(line, &CLI_COMMAND_RE)
-                    + count_matches(line, &SHELL_EXEC_RE);
+                let line_shell =
+                    count_matches(line, &CLI_COMMAND_RE) + count_matches(line, &SHELL_EXEC_RE);
                 total_count += line_shell;
                 if !in_block && line_shell > 0 {
                     prose_count += line_shell;
@@ -588,8 +594,8 @@ impl SkillFeatures {
         };
         let code_to_prose_ratio = code_lines as f32 / prose_lines.max(1) as f32;
 
-        let external_download = EXTERNAL_DOWNLOAD_RE.is_match(&all_text)
-            || CURL_DOWNLOAD_RE.is_match(&all_text);
+        let external_download =
+            EXTERNAL_DOWNLOAD_RE.is_match(&all_text) || CURL_DOWNLOAD_RE.is_match(&all_text);
         let obfuscation_score = obfuscation_raw as f32;
         let privilege_escalation = PRIV_ESC_RE.is_match(&all_text);
         let persistence_mechanisms = count_matches(&all_text, &PERSISTENCE_RE);
@@ -613,14 +619,30 @@ impl SkillFeatures {
         let undocumented_risk = shell_exec_count as f32 * (1.0 - documented_shell_ratio);
         let risk_signal_count = {
             let mut count = 0u32;
-            if external_download { count += 1; }
-            if privilege_escalation { count += 1; }
-            if llm_secret_exposure { count += 1; }
-            if password_in_md && has_archive { count += 1; }
-            if reverse_shell_patterns > 0 { count += 1; }
-            if persistence_mechanisms > 0 { count += 1; }
-            if data_exfiltration_patterns > 0 { count += 1; }
-            if vt_malicious_flags > 0 { count += 1; }
+            if external_download {
+                count += 1;
+            }
+            if privilege_escalation {
+                count += 1;
+            }
+            if llm_secret_exposure {
+                count += 1;
+            }
+            if password_in_md && has_archive {
+                count += 1;
+            }
+            if reverse_shell_patterns > 0 {
+                count += 1;
+            }
+            if persistence_mechanisms > 0 {
+                count += 1;
+            }
+            if data_exfiltration_patterns > 0 {
+                count += 1;
+            }
+            if vt_malicious_flags > 0 {
+                count += 1;
+            }
             count
         };
         let stealth_composite = obfuscation_score * (1.0 - comment_ratio);
@@ -764,7 +786,7 @@ impl SkillFeatures {
             clip_scale(self.fs_write_count, 30), // 2  — generator/template skills write many files
             clip_scale(self.env_access_count, 20), // 3  — config-heavy skills read ~15-20 vars
             clip_scale(self.credential_patterns, 15), // 4  — auth-heavy skills can mention 10-15 patterns
-            bool_scale(self.external_download),  // 5  — binary: present or not
+            bool_scale(self.external_download),       // 5  — binary: present or not
             clip_scale(self.obfuscation_score as u32, 15), // 6  — rare above 10 even in malicious samples
             bool_scale(self.privilege_escalation),         // 7  — binary: present or not
             clip_scale(self.persistence_mechanisms, 5),    // 8  — >5 is extremely suspicious
@@ -785,7 +807,7 @@ impl SkillFeatures {
             clip_scale_f32(self.non_ascii_ratio, 0.5), // 23 — >50% non-ASCII is highly suspicious
             clip_scale(self.max_line_length, 1000), // 24 — >1000 chars per line = minified/obfuscated
             clip_scale_f32(self.comment_ratio, 1.0), // 25 — ratio [0,1], 1.0 = all comments
-            clip_scale(self.domain_count, 30),      // 26 — API aggregator skills reference many domains
+            clip_scale(self.domain_count, 30), // 26 — API aggregator skills reference many domains
             clip_scale(self.string_obfuscation_score, 10), // 27 — hex+join+chr+confusable+split
             // Phase 3b: density / interaction features (28–34)
             clip_scale_f32(self.shell_exec_per_line, 1.0), // 28 — ratio, saturates at 1.0
@@ -802,11 +824,11 @@ impl SkillFeatures {
             clip_scale_f32(self.suspicious_url_ratio, 1.0),   // 38 — ratio [0,1], high = suspicious
             clip_scale_f32(self.code_to_prose_ratio, 5.0),    // 39 — ratio, cap at 5.0
             // Phase 5: discriminative cross-features (40–44)
-            clip_scale(self.credential_and_exfil, 10),        // 40 — credential + exfil co-occurrence
-            clip_scale(self.obfuscation_and_privilege, 15),   // 41 — obfuscation + privilege
-            clip_scale_f32(self.undocumented_risk, 30.0),     // 42 — undocumented shell commands
-            clip_scale(self.risk_signal_count, 8),            // 43 — count of active risk categories
-            clip_scale_f32(self.stealth_composite, 15.0),     // 44 — obfuscated + no comments
+            clip_scale(self.credential_and_exfil, 10), // 40 — credential + exfil co-occurrence
+            clip_scale(self.obfuscation_and_privilege, 15), // 41 — obfuscation + privilege
+            clip_scale_f32(self.undocumented_risk, 30.0), // 42 — undocumented shell commands
+            clip_scale(self.risk_signal_count, 8),     // 43 — count of active risk categories
+            clip_scale_f32(self.stealth_composite, 15.0), // 44 — obfuscated + no comments
         ]
     }
 }

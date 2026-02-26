@@ -336,8 +336,9 @@ pub static SUSPICIOUS_URL_RE: LazyLock<Regex> = LazyLock::new(|| {
             | webhook\.site                              # webhook.site
             | [a-zA-Z0-9.-]+\.loca\.lt                   # localtunnel
             | [a-zA-Z0-9.-]+\.trycloudflare\.com         # Cloudflare tunnels
-        )"
-    ).unwrap()
+        )",
+    )
+    .unwrap()
 });
 
 // ---------------------------------------------------------------------------

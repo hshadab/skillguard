@@ -75,9 +75,15 @@ impl McpMetrics {
         self.total_evaluations.fetch_add(1, Ordering::Relaxed);
         self.proofs_generated.fetch_add(1, Ordering::Relaxed);
         match classification {
-            "SAFE" => { self.safe.fetch_add(1, Ordering::Relaxed); }
-            "CAUTION" => { self.caution.fetch_add(1, Ordering::Relaxed); }
-            "DANGEROUS" => { self.dangerous.fetch_add(1, Ordering::Relaxed); }
+            "SAFE" => {
+                self.safe.fetch_add(1, Ordering::Relaxed);
+            }
+            "CAUTION" => {
+                self.caution.fetch_add(1, Ordering::Relaxed);
+            }
+            "DANGEROUS" => {
+                self.dangerous.fetch_add(1, Ordering::Relaxed);
+            }
             _ => {}
         }
         self.persist();
@@ -304,7 +310,11 @@ fn parse_frontmatter(content: &str) -> FrontmatterFields {
 }
 
 /// Run classification on a `Skill` and return a JSON result object.
-fn evaluate_skill(skill: &Skill, prover: &ProverState, metrics: Option<&McpMetrics>) -> Result<Value> {
+fn evaluate_skill(
+    skill: &Skill,
+    prover: &ProverState,
+    metrics: Option<&McpMetrics>,
+) -> Result<Value> {
     let features = SkillFeatures::extract(skill, None);
     let feature_vec = features.to_normalized_vec();
     let model_hash = crate::model_hash();
@@ -345,7 +355,11 @@ fn evaluate_skill(skill: &Skill, prover: &ProverState, metrics: Option<&McpMetri
 // ---------------------------------------------------------------------------
 
 /// Handle a single parsed JSON-RPC request and return a response (or None for notifications).
-fn handle_request(request: &Value, prover: &ProverState, metrics: Option<&McpMetrics>) -> Option<Value> {
+fn handle_request(
+    request: &Value,
+    prover: &ProverState,
+    metrics: Option<&McpMetrics>,
+) -> Option<Value> {
     let id = request.get("id");
     let method = request.get("method").and_then(Value::as_str).unwrap_or("");
 
@@ -532,8 +546,8 @@ mod tests {
             }
         });
 
-        let response =
-            handle_request(&request, &TEST_PROVER, None).expect("initialize should return a response");
+        let response = handle_request(&request, &TEST_PROVER, None)
+            .expect("initialize should return a response");
         assert_eq!(response["id"], 1);
         assert!(response.get("error").is_none());
         assert_eq!(response["result"]["protocolVersion"], PROTOCOL_VERSION);
@@ -563,8 +577,8 @@ mod tests {
             "method": "tools/list"
         });
 
-        let response =
-            handle_request(&request, &TEST_PROVER, None).expect("tools/list should return a response");
+        let response = handle_request(&request, &TEST_PROVER, None)
+            .expect("tools/list should return a response");
         assert_eq!(response["id"], 2);
         assert!(response.get("error").is_none());
 

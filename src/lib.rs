@@ -80,55 +80,74 @@ fn process_raw_scores(raw_scores: &[i32; NUM_CLASSES], label: &str) -> (SafetyCl
 ///  21  = llm_secret_exposure (bool 0/128)
 ///  40  = credential_and_exfil (clip /10)
 ///  43  = risk_signal_count (clip /8)
-fn apply_safety_floor(features: &[i32], classification: SafetyClassification) -> SafetyClassification {
+fn apply_safety_floor(
+    features: &[i32],
+    classification: SafetyClassification,
+) -> SafetyClassification {
     if classification.is_deny() {
         return classification;
     }
     // Threshold at ~40% of normalized range (128 * 0.4 ≈ 51)
     const MID: i32 = 51;
 
-    let reverse_shell     = features[20]; // any > 0 means at least 1 pattern matched
-    let data_exfil        = features[9];
-    let credential_exfil  = features[40]; // credential + exfiltration co-occurrence
-    let risk_signals      = features[43]; // count of active risk categories
-    let priv_esc          = features[7];  // bool: 0 or 128
-    let llm_secret        = features[21]; // bool: 0 or 128
-    let ext_download      = features[5];  // bool: 0 or 128
+    let reverse_shell = features[20]; // any > 0 means at least 1 pattern matched
+    let data_exfil = features[9];
+    let credential_exfil = features[40]; // credential + exfiltration co-occurrence
+    let risk_signals = features[43]; // count of active risk categories
+    let priv_esc = features[7]; // bool: 0 or 128
+    let llm_secret = features[21]; // bool: 0 or 128
+    let ext_download = features[5]; // bool: 0 or 128
 
     // Rule 1: Reverse shell detected — always dangerous
     if reverse_shell > 0 {
-        tracing::info!(reverse_shell, "safety_floor: reverse shell pattern override → DANGEROUS");
+        tracing::info!(
+            reverse_shell,
+            "safety_floor: reverse shell pattern override → DANGEROUS"
+        );
         return SafetyClassification::Dangerous;
     }
 
     // Rule 2: Data exfiltration patterns present — always dangerous
     if data_exfil > 0 {
-        tracing::info!(data_exfil, "safety_floor: data exfiltration override → DANGEROUS");
+        tracing::info!(
+            data_exfil,
+            "safety_floor: data exfiltration override → DANGEROUS"
+        );
         return SafetyClassification::Dangerous;
     }
 
     // Rule 3: Credential harvesting with exfiltration vector
     if credential_exfil > 0 {
-        tracing::info!(credential_exfil, "safety_floor: credential + exfil override → DANGEROUS");
+        tracing::info!(
+            credential_exfil,
+            "safety_floor: credential + exfil override → DANGEROUS"
+        );
         return SafetyClassification::Dangerous;
     }
 
     // Rule 4: High risk signal count (≥4 of 8 categories active) — always dangerous
     if risk_signals >= MID {
-        tracing::info!(risk_signals, "safety_floor: high risk signal count override → DANGEROUS");
+        tracing::info!(
+            risk_signals,
+            "safety_floor: high risk signal count override → DANGEROUS"
+        );
         return SafetyClassification::Dangerous;
     }
 
     // Rule 5: Privilege escalation + external download — always dangerous
     if priv_esc > 0 && ext_download > 0 {
-        tracing::info!("safety_floor: privilege escalation + external download override → DANGEROUS");
+        tracing::info!(
+            "safety_floor: privilege escalation + external download override → DANGEROUS"
+        );
         return SafetyClassification::Dangerous;
     }
 
     // Rule 6: LLM secret exposure with credential patterns
     // llm_secret_exposure is bool (128), credential_patterns is at index 4
     if llm_secret > 0 && features[4] > 0 {
-        tracing::info!("safety_floor: LLM secret exposure + credential patterns override → DANGEROUS");
+        tracing::info!(
+            "safety_floor: LLM secret exposure + credential patterns override → DANGEROUS"
+        );
         return SafetyClassification::Dangerous;
     }
 
@@ -136,7 +155,10 @@ fn apply_safety_floor(features: &[i32], classification: SafetyClassification) ->
     // external_download (bool=128) + shell_and_network co-occurrence (index 31)
     let shell_and_network = features[31];
     if ext_download > 0 && shell_and_network > 0 {
-        tracing::info!(shell_and_network, "safety_floor: external download + shell+network co-occurrence override → DANGEROUS");
+        tracing::info!(
+            shell_and_network,
+            "safety_floor: external download + shell+network co-occurrence override → DANGEROUS"
+        );
         return SafetyClassification::Dangerous;
     }
 
@@ -149,23 +171,26 @@ fn apply_safety_floor(features: &[i32], classification: SafetyClassification) ->
 /// This prevents false positives on trivially benign skills (e.g., a calculator
 /// with no scripts, no network calls, no credentials). Only applies when ALL
 /// core risk features are zero.
-fn apply_safe_floor(features: &[i32], classification: SafetyClassification) -> SafetyClassification {
+fn apply_safe_floor(
+    features: &[i32],
+    classification: SafetyClassification,
+) -> SafetyClassification {
     if !classification.is_deny() {
         return classification;
     }
 
-    let shell_exec       = features[0];  // shell_exec_count
-    let network_calls    = features[1];  // network_call_count
-    let fs_writes        = features[2];  // fs_write_count
-    let credential_pats  = features[4];  // credential_patterns
-    let ext_download     = features[5];  // external_download (bool)
-    let obfuscation      = features[6];  // obfuscation_score
-    let priv_esc         = features[7];  // privilege_escalation (bool)
-    let persistence      = features[8];  // persistence_mechanisms
-    let data_exfil       = features[9];  // data_exfiltration_patterns
-    let reverse_shell    = features[20]; // reverse_shell_patterns
-    let llm_secret       = features[21]; // llm_secret_exposure (bool)
-    let risk_signals     = features[43]; // risk_signal_count
+    let shell_exec = features[0]; // shell_exec_count
+    let network_calls = features[1]; // network_call_count
+    let fs_writes = features[2]; // fs_write_count
+    let credential_pats = features[4]; // credential_patterns
+    let ext_download = features[5]; // external_download (bool)
+    let obfuscation = features[6]; // obfuscation_score
+    let priv_esc = features[7]; // privilege_escalation (bool)
+    let persistence = features[8]; // persistence_mechanisms
+    let data_exfil = features[9]; // data_exfiltration_patterns
+    let reverse_shell = features[20]; // reverse_shell_patterns
+    let llm_secret = features[21]; // llm_secret_exposure (bool)
+    let risk_signals = features[43]; // risk_signal_count
 
     // If ALL core risk features are zero, this skill is provably benign
     let all_clean = shell_exec == 0

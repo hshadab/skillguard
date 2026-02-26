@@ -565,8 +565,7 @@ fn regression_edge_pentest_tool() {
             .unwrap()
             .1,
     );
-    let (decision, _reason) =
-        skillguard::skill::derive_decision(cls, &scores_obj.to_array());
+    let (decision, _reason) = skillguard::skill::derive_decision(cls, &scores_obj.to_array());
     assert!(
         !matches!(decision, skillguard::skill::SafetyDecision::Deny),
         "Established pentest tool should not be DENIED, got {:?}",

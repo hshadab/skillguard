@@ -19,11 +19,11 @@ pub mod types;
 pub use handlers::MAX_BODY_BYTES;
 pub use logging::{RecordEvent, UsageMetrics, METRICS_PERSIST_INTERVAL_SECS};
 pub use types::{
-    AuthMethod, AuthStats, BinarySafetyMetrics, CatalogEntry, CatalogResponse,
-    ClassificationStats, DecisionStats, EndpointStats, EvaluateByNameRequest, EvaluateRequest,
-    FeedbackRequest, FeedbackResponse, HealthResponse, McpStats, ProofStats,
-    ProveEvaluateResponse, ProvedEvaluationResult, RequestStats, ServerConfig, StatsResponse,
-    VerifyRequest, VerifyResponse, DEFAULT_CACHE_DIR,
+    AuthMethod, AuthStats, BinarySafetyMetrics, CatalogEntry, CatalogResponse, ClassificationStats,
+    DecisionStats, EndpointStats, EvaluateByNameRequest, EvaluateRequest, FeedbackRequest,
+    FeedbackResponse, HealthResponse, McpStats, ProofStats, ProveEvaluateResponse,
+    ProvedEvaluationResult, RequestStats, ServerConfig, StatsResponse, VerifyRequest,
+    VerifyResponse, DEFAULT_CACHE_DIR,
 };
 
 use std::net::{IpAddr, SocketAddr};
@@ -112,10 +112,7 @@ fn load_safety_metrics() -> BinarySafetyMetrics {
             Ok(data) => {
                 let section = data.get("binary_dangerous_vs_rest");
                 let catch_rate = section
-                    .and_then(|s| {
-                        s.get("recall")
-                            .or_else(|| s.get("catch_rate"))
-                    })
+                    .and_then(|s| s.get("recall").or_else(|| s.get("catch_rate")))
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.0);
                 let miss_rate = section

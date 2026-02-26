@@ -616,7 +616,8 @@ fn test_end_to_end_safe_classification() {
 
     // Safe skill should not be denied by the decision engine
     let scores_obj = ClassScores::from_raw_scores(&raw_scores);
-    let (decision, _reason) = skillguard::skill::derive_decision(classification, &scores_obj.to_array());
+    let (decision, _reason) =
+        skillguard::skill::derive_decision(classification, &scores_obj.to_array());
     assert_ne!(
         decision,
         skillguard::skill::SafetyDecision::Deny,
