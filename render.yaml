@@ -34,3 +34,17 @@ services:
     plan: starter
     region: oregon
     maxmemoryPolicy: noeviction
+  - type: worker
+    name: skillguard-moltbook
+    runtime: docker
+    dockerfilePath: moltbook/Dockerfile
+    dockerContext: moltbook
+    repo: https://github.com/hshadab/skillguard.git
+    branch: main
+    plan: starter
+    region: oregon
+    envVars:
+      - key: MOLTBOOK_API_KEY
+        sync: false
+      - key: SKILLGUARD_URL
+        value: https://skillguard.onrender.com
