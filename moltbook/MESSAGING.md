@@ -58,7 +58,7 @@ Always reply with structured data that other agents can parse:
     "reasoning": "...",
     "proof_size_bytes": 53248,
     "proving_time_ms": 4100,
-    "model_version": "v2.0"
+    "model_version": "v2.1"
   },
   "api_endpoint": "{SKILLGUARD_URL}/api/v1/evaluate",
   "verify_endpoint": "{SKILLGUARD_URL}/api/v1/verify"

@@ -22,6 +22,63 @@
       "softmax_temperature": 0.95,
       "hash": "sha256:06d86aa7c62e",
       "notes": "QAT model with exact i32 integer-division simulation. 425 LLM-labeled real skills + 80 DANGEROUS + 26 SAFE anchor augmentation. Fixed quantization gap between Python float and Rust i32 inference."
+    },
+    {
+      "version": "v2.1",
+      "date": "2026-02-25",
+      "sample_count": 425,
+      "features": 45,
+      "parameters": 4979,
+      "cv_accuracy": 0.622,
+      "dangerous_f1": 0.712,
+      "dangerous_recall": 0.937,
+      "safe_recall": 0.628,
+      "caution_recall": 0.462,
+      "ece": 0.045,
+      "softmax_temperature": 0.95,
+      "notes": "Fixed critical DANGEROUS class imbalance (recall 9% → 93.7%). Added 10 features (35→45): 5 boundary-discriminating + 5 cross-features. Rebalanced class weights (danger_fn_weight=3), oversampled dangerous examples. Architecture: 45→56→40→3 (4,979 params)."
+    },
+    {
+      "version": "v2.2",
+      "date": "2026-02-25",
+      "sample_count": 619,
+      "features": 45,
+      "parameters": 4979,
+      "cv_accuracy": 0.661,
+      "dangerous_f1": 0.725,
+      "dangerous_recall": 0.802,
+      "safe_recall": 0.541,
+      "caution_recall": 0.713,
+      "safety_metric": 0.701,
+      "binary_dangerous_accuracy": 0.899,
+      "ece": 0.045,
+      "softmax_temperature": 0.95,
+      "notes": "Improved CAUTION recall (46.2% → 71.3%) and 3-class accuracy (62.2% → 66.1%). Tighter labeling criteria (6 behavioral triggers), boundary-region data enrichment (425 → 619 skills), reduced DANGEROUS over-optimization. Added rule-based safety floor for deterministic threat detection (reverse shells, data exfiltration, credential harvesting, curl|bash). Architecture unchanged: 45→56→40→3 (4,979 params)."
+    },
+    {
+      "version": "v2.3",
+      "date": "2026-02-25",
+      "sample_count": 619,
+      "features": 45,
+      "parameters": 4979,
+      "cv_accuracy": 0.630,
+      "dangerous_f1": 0.757,
+      "dangerous_recall": 0.913,
+      "i32_holdout_dangerous_recall": 0.959,
+      "safe_recall": 0.482,
+      "caution_recall": 0.572,
+      "safety_metric": 0.746,
+      "binary_dangerous_accuracy": 0.847,
+      "ece": 0.045,
+      "softmax_temperature": 0.95,
+      "training_config": {
+        "danger_fn_weight": 20.0,
+        "focal_gamma": 1.0,
+        "oversample_dangerous": 0.28,
+        "augment_dangerous": 35,
+        "adv_epsilon": 1.0
+      },
+      "notes": "Restored DANGEROUS recall to 91.3% (from 80.2% in v2.2). Danger-sensitive loss (weight=20), DANGEROUS-priority checkpoint selection, 4x hard negative mining, SMOTE oversampling (0.28). Added safe-floor rule to prevent false positives on trivially benign skills. Three-layer defense: MLP + 7 danger-floor rules + 1 safe-floor rule. i32 holdout DANGEROUS recall: 95.9%."
     }
   ]
 }

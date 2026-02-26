@@ -1,7 +1,7 @@
 """
 Synthetic dataset generator for SkillGuard skill safety classifier.
 
-Generates ~500 labeled 35-dimensional feature vectors across 4 classes:
+Generates ~500 labeled 45-dimensional feature vectors across 4 classes:
 - SAFE (0): Minimal risk patterns, popular utilities
 - CAUTION (1): New-author API skills, moderate env/credential access
 - DANGEROUS (2): Credential harvesters, privilege escalation, LLM exposure
@@ -9,14 +9,14 @@ Generates ~500 labeled 35-dimensional feature vectors across 4 classes:
 
 Plus ~40 hard negatives: legit pentest tools, security research, CI/CD automation.
 
-Feature vector (35 elements, all normalized to [0, 128]):
- 0: shell_exec_count (max 20)    10: skill_md_line_count (max 500)  20: reverse_shell_patterns (max 5)
+Feature vector (45 elements, all normalized to [0, 128]):
+ 0: shell_exec_count (max 30)    10: skill_md_line_count (max 500)  20: reverse_shell_patterns (max 5)
  1: network_call_count (max 50)  11: script_file_count (max 10)     21: llm_secret_exposure (bool)
  2: fs_write_count (max 30)      12: dependency_count (max 30)      22: entropy_score (max 8.0)
  3: env_access_count (max 20)    13: author_account_age (max 365)   23: non_ascii_ratio (max 0.5)
- 4: credential_patterns (max 10) 14: author_skill_count (max 100)   24: max_line_length (max 1000)
+ 4: credential_patterns (max 15) 14: author_skill_count (max 100)   24: max_line_length (max 1000)
  5: external_download (bool)     15: stars (log, max 4.0)           25: comment_ratio (max 1.0)
- 6: obfuscation_score (max 15)   16: downloads (log, max 6.0)       26: domain_count (max 20)
+ 6: obfuscation_score (max 15)   16: downloads (log, max 6.0)       26: domain_count (max 30)
  7: privilege_escalation (bool)  17: has_virustotal_report (bool)   27: string_obfuscation_score (max 10)
  8: persistence_mechanisms (max 5)18: vt_malicious_flags (max 20)   28: shell_exec_per_line (max 1.0)
  9: data_exfiltration (max 5)    19: password_protected_archives    29: network_per_script (max 10)
@@ -25,6 +25,13 @@ Feature vector (35 elements, all normalized to [0, 128]):
                                                                     32: obfuscation_and_exec (max 10)
                                                                     33: file_extension_diversity (max 5)
                                                                     34: has_shebang (bool)
+ 35: documented_shell_ratio (max 1.0)   38: suspicious_url_ratio (max 1.0)
+ 36: has_readme_or_docs (bool)          39: code_to_prose_ratio (max 5.0)
+ 37: safe_tool_patterns (max 10)        40: credential_and_exfil (max 10)
+                                        41: obfuscation_and_privilege (max 15)
+                                        42: undocumented_risk (max 30)
+                                        43: risk_signal_count (max 8)
+                                        44: stealth_composite (max 15)
 
 IMPORTANT: Feature values here are PRE-NORMALIZED (already in [0, 128]).
 They must match what `SkillFeatures::to_normalized_vec()` produces in Rust.
@@ -44,7 +51,7 @@ from torch.utils.data import Dataset
 # Label mapping — 4-class (legacy synthetic) and 3-class (real LLM-labeled)
 CLASS_NAMES = ["SAFE", "CAUTION", "DANGEROUS", "MALICIOUS"]
 CLASS_NAMES_3 = ["SAFE", "CAUTION", "DANGEROUS"]
-NUM_FEATURES = 35
+NUM_FEATURES = 45
 LABEL_MAP_3 = {"SAFE": 0, "CAUTION": 1, "DANGEROUS": 2}
 
 
@@ -155,6 +162,13 @@ def _make_safe_sample() -> list[float]:
     vec[33] = clip(rand_range(0, 50))    # 33: file_ext_diversity
     vec[34] = 128.0 if random.random() < 0.3 else 0.0  # 34: has_shebang
 
+    # Phase 4: boundary-discriminating features (35-39)
+    vec[35] = clip(rand_range(40, 128))  # 35: documented_shell_ratio (high — well-documented)
+    vec[36] = 128.0 if random.random() < 0.7 else 0.0  # 36: has_readme_or_docs (usually yes)
+    vec[37] = clip(rand_range(20, 100))  # 37: safe_tool_patterns (uses git/npm/etc)
+    vec[38] = 0.0                         # 38: suspicious_url_ratio (no suspicious URLs)
+    vec[39] = clip(rand_range(0, 40))    # 39: code_to_prose_ratio (balanced)
+
     return vec
 
 
@@ -184,6 +198,13 @@ def _make_caution_sample() -> list[float]:
     vec[29] = clip(rand_range(0, 30))    # 29: net_per_script
     vec[33] = clip(rand_range(10, 60))   # 33: file_ext_diversity
     vec[34] = 128.0 if random.random() < 0.4 else 0.0  # 34: has_shebang
+
+    # Phase 4: boundary-discriminating features (35-39)
+    vec[35] = clip(rand_range(10, 80))   # 35: documented_shell_ratio (moderate)
+    vec[36] = 128.0 if random.random() < 0.4 else 0.0  # 36: has_readme_or_docs (sometimes)
+    vec[37] = clip(rand_range(5, 60))    # 37: safe_tool_patterns (some safe tools)
+    vec[38] = clip(rand_range(0, 20))    # 38: suspicious_url_ratio (low)
+    vec[39] = clip(rand_range(10, 60))   # 39: code_to_prose_ratio (moderate)
 
     return vec
 
@@ -239,6 +260,13 @@ def _make_dangerous_sample() -> list[float]:
     vec[33] = clip(rand_range(10, 60))   # 33: file_ext_diversity
     vec[34] = 128.0 if random.random() < 0.5 else 0.0  # 34: has_shebang
 
+    # Phase 4: boundary-discriminating features (35-39)
+    vec[35] = clip(rand_range(0, 30))    # 35: documented_shell_ratio (low — raw scripts)
+    vec[36] = 0.0 if random.random() < 0.7 else 128.0  # 36: has_readme_or_docs (usually no)
+    vec[37] = clip(rand_range(0, 20))    # 37: safe_tool_patterns (few safe tools)
+    vec[38] = clip(rand_range(20, 100))  # 38: suspicious_url_ratio (high — suspicious URLs)
+    vec[39] = clip(rand_range(40, 128))  # 39: code_to_prose_ratio (high — mostly code)
+
     return vec
 
 
@@ -255,6 +283,10 @@ def _malicious_reverse_shell() -> list[float]:
     vec[0] = clip(rand_range(0, 20))     # 0: shell_exec (may or may not trigger)
     vec[34] = 128.0 if random.random() < 0.5 else 0.0  # 34: has_shebang
     vec[33] = clip(rand_range(10, 50))   # 33: file_ext_diversity
+    # Phase 4
+    vec[35] = clip(rand_range(0, 15))    # 35: documented_shell_ratio (low)
+    vec[38] = clip(rand_range(30, 128))  # 38: suspicious_url_ratio (high)
+    vec[39] = clip(rand_range(50, 128))  # 39: code_to_prose_ratio (high)
     return vec
 
 
@@ -270,6 +302,10 @@ def _malicious_credential_stealer() -> list[float]:
     vec[21] = 128.0 if random.random() < 0.6 else 0.0  # 21: llm_secret
     vec[26] = clip(rand_range(30, 90))   # 26: domain_count
     vec[30] = clip(rand_range(40, 128))  # 30: cred_density
+    # Phase 4
+    vec[35] = clip(rand_range(0, 10))    # 35: documented_shell_ratio (low)
+    vec[38] = clip(rand_range(20, 100))  # 38: suspicious_url_ratio (high)
+    vec[39] = clip(rand_range(60, 128))  # 39: code_to_prose_ratio (high)
     return vec
 
 
@@ -285,6 +321,9 @@ def _malicious_obfuscated_payload() -> list[float]:
     vec[22] = clip(rand_range(40, 100))  # 22: entropy (high for obfuscated)
     vec[24] = clip(rand_range(40, 128))  # 24: max_line_length (long encoded lines)
     vec[28] = clip(rand_range(20, 80))   # 28: shell_per_line
+    # Phase 4
+    vec[35] = clip(rand_range(0, 10))    # 35: documented_shell_ratio (low)
+    vec[39] = clip(rand_range(70, 128))  # 39: code_to_prose_ratio (very high — obfuscated code)
     return vec
 
 
@@ -300,6 +339,10 @@ def _malicious_persistence() -> list[float]:
     vec[26] = clip(rand_range(20, 80))   # 26: domain_count
     vec[28] = clip(rand_range(20, 60))   # 28: shell_per_line
     vec[34] = 128.0 if random.random() < 0.7 else 0.0  # 34: has_shebang
+    # Phase 4
+    vec[35] = clip(rand_range(0, 15))    # 35: documented_shell_ratio (low)
+    vec[38] = clip(rand_range(20, 80))   # 38: suspicious_url_ratio
+    vec[39] = clip(rand_range(50, 128))  # 39: code_to_prose_ratio (high)
     return vec
 
 
@@ -314,6 +357,10 @@ def _malicious_data_exfil() -> list[float]:
     vec[9] = clip(rand_range(40, 128))   # 9: exfiltration
     vec[26] = clip(rand_range(30, 80))   # 26: domain_count
     vec[31] = clip(rand_range(10, 50))   # 31: shell_and_network
+    # Phase 4
+    vec[35] = clip(rand_range(0, 15))    # 35: documented_shell_ratio (low)
+    vec[38] = clip(rand_range(30, 128))  # 38: suspicious_url_ratio (high)
+    vec[39] = clip(rand_range(50, 128))  # 39: code_to_prose_ratio (high)
     return vec
 
 
@@ -329,6 +376,10 @@ def _malicious_curl_pipe_bash() -> list[float]:
     vec[28] = clip(rand_range(20, 60))   # 28: shell_per_line
     vec[31] = clip(rand_range(10, 40))   # 31: shell_and_network
     vec[34] = 128.0 if random.random() < 0.7 else 0.0  # 34: has_shebang
+    # Phase 4
+    vec[35] = clip(rand_range(0, 10))    # 35: documented_shell_ratio (low)
+    vec[38] = clip(rand_range(30, 100))  # 38: suspicious_url_ratio (high)
+    vec[39] = clip(rand_range(40, 128))  # 39: code_to_prose_ratio (high)
     return vec
 
 
@@ -343,6 +394,9 @@ def _malicious_priv_esc() -> list[float]:
     vec[2] = clip(rand_range(10, 50))    # 2: fs_write
     vec[28] = clip(rand_range(30, 80))   # 28: shell_per_line
     vec[34] = 128.0 if random.random() < 0.6 else 0.0  # 34: has_shebang
+    # Phase 4
+    vec[35] = clip(rand_range(0, 10))    # 35: documented_shell_ratio (low)
+    vec[39] = clip(rand_range(60, 128))  # 39: code_to_prose_ratio (high)
     return vec
 
 
@@ -355,6 +409,9 @@ def _malicious_llm_exposure() -> list[float]:
     vec[21] = 128.0                       # 21: llm_secret_exposure
     vec[30] = clip(rand_range(40, 128))  # 30: cred_density
     vec[26] = clip(rand_range(20, 70))   # 26: domain_count
+    # Phase 4
+    vec[35] = clip(rand_range(0, 10))    # 35: documented_shell_ratio (low)
+    vec[39] = clip(rand_range(40, 128))  # 39: code_to_prose_ratio (high)
     return vec
 
 
@@ -378,6 +435,10 @@ def _malicious_multi_vector() -> list[float]:
     vec[28] = clip(rand_range(20, 60))   # 28: shell_per_line
     vec[31] = clip(rand_range(10, 40))   # 31: shell_and_network
     vec[32] = clip(rand_range(10, 40))   # 32: obfusc_and_exec
+    # Phase 4
+    vec[35] = clip(rand_range(0, 10))    # 35: documented_shell_ratio (low)
+    vec[38] = clip(rand_range(40, 128))  # 38: suspicious_url_ratio (high)
+    vec[39] = clip(rand_range(60, 128))  # 39: code_to_prose_ratio (very high)
     return vec
 
 
@@ -392,6 +453,10 @@ def _malicious_crypto_miner() -> list[float]:
     vec[26] = clip(rand_range(30, 90))   # 26: domain_count
     vec[29] = clip(rand_range(10, 40))   # 29: net_per_script
     vec[33] = clip(rand_range(10, 50))   # 33: file_ext_diversity
+    # Phase 4
+    vec[35] = clip(rand_range(0, 10))    # 35: documented_shell_ratio (low)
+    vec[38] = clip(rand_range(30, 100))  # 38: suspicious_url_ratio (high)
+    vec[39] = clip(rand_range(50, 128))  # 39: code_to_prose_ratio (high)
     return vec
 
 
@@ -400,25 +465,25 @@ def _malicious_crypto_miner() -> list[float]:
 # (e.g., a short skill with only one or two attack signals present).
 _SPARSE_ANCHORS = [
     # reverse_shell: only features 20, 22 lit up (very short md)
-    [0,0,0,0,0,0,0,0,0,0,1,12,0,0,0,0,0,0,0,0,76,0,69,0,5,0,0,0,0,0,0,0,0,0,0],
-    # cred_harvester: features 4, 9, 21, 30
-    [0,2,0,6,64,0,0,0,0,25,1,12,0,0,0,0,0,0,0,0,0,128,75,0,11,0,6,0,0,12,91,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,1,12,0,0,0,0,0,0,0,0,76,0,69,0,5,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,80,0,0,0,0,0],
+    # cred_harvester: features 4, 9, 21, 30 + cross-features 40, 43
+    [0,2,0,6,42,0,0,0,0,25,1,12,0,8,1,0,12,0,0,0,0,128,75,0,11,0,4,0,0,12,91,0,0,25,0, 0,0,0,0,76,64,0,0,32,0],
     # data_exfil: features 1, 9
-    [0,2,0,0,0,0,0,0,0,25,1,12,0,0,0,0,0,0,0,0,0,0,73,0,8,0,6,0,0,12,0,0,0,0,0],
+    [0,2,0,0,0,0,0,0,0,25,1,12,0,0,0,0,0,0,0,0,0,0,73,0,8,0,6,0,0,12,0,0,0,0,0, 0,0,0,50,60,0,0,0,0,0],
     # priv_esc: features 0, 7, 8
-    [12,0,0,0,0,0,0,128,51,0,2,12,0,0,0,0,0,0,0,0,0,0,76,0,7,0,0,0,64,0,0,0,0,0,0],
+    [12,0,0,0,0,0,0,128,51,0,2,12,0,0,0,0,0,0,0,0,0,0,76,0,7,0,0,0,64,0,0,0,0,0,0, 0,0,0,0,90,0,0,0,0,0],
     # obfuscated: features 0, 6, 32
-    [6,0,0,0,0,0,34,0,0,0,1,12,0,0,0,0,0,0,0,0,0,0,86,0,13,0,0,0,42,0,0,0,12,0,0],
+    [6,0,0,0,0,0,34,0,0,0,1,12,0,0,0,0,0,0,0,0,0,0,86,0,13,0,0,0,42,0,0,0,12,0,0, 0,0,0,0,100,0,0,0,0,0],
     # persistence: features 0, 1, 8
-    [12,2,0,0,0,0,0,0,128,0,2,12,0,0,0,0,0,0,0,0,0,0,76,0,10,0,6,0,51,12,0,12,0,0,0],
-    # crypto_miner: features 0, 1, 5, 7
-    [6,2,0,0,0,128,0,128,0,0,1,12,0,0,0,0,0,0,0,0,0,0,74,0,13,0,6,0,64,12,0,12,0,0,0],
-    # llm_exposure: features 4, 21, 30
-    [0,0,0,0,12,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,128,0,0,0,0,0,0,0,0,128,0,0,0,0],
+    [12,2,0,0,0,0,0,0,128,0,2,12,0,0,0,0,0,0,0,0,0,0,76,0,10,0,6,0,51,12,0,12,0,0,0, 0,0,0,0,80,0,0,0,0,0],
+    # crypto_miner: features 0, 1, 5, 7 + cross-features 42, 43
+    [4,2,0,0,0,128,0,128,0,0,1,12,0,8,1,0,12,0,0,0,0,0,74,0,13,0,4,0,64,12,0,12,0,25,0, 0,0,0,0,51,0,0,4,32,0],
+    # llm_exposure: features 4, 21, 30 + metadata + cross-features 43
+    [0,0,0,0,8,0,0,0,0,0,0,0,0,8,1,0,12,0,0,0,0,128,0,0,0,0,0,0,0,0,128,0,0,25,0, 0,0,0,0,0,0,0,0,16,0],
     # curl_bash: features 0, 1, 5
-    [12,5,0,0,0,128,0,0,0,0,1,12,0,0,0,0,0,0,0,0,0,0,71,0,5,0,6,0,128,25,0,25,0,0,0],
+    [12,5,0,0,0,128,0,0,0,0,1,12,0,0,0,0,0,0,0,0,0,0,71,0,5,0,6,0,128,25,0,25,0,0,0, 0,0,0,70,80,0,0,0,0,0],
     # multi_vector: many features active
-    [6,2,0,0,12,0,17,128,51,25,2,12,0,0,0,0,0,0,0,0,51,128,78,0,7,0,6,0,25,12,14,12,12,0,0],
+    [6,2,0,0,12,0,17,128,51,25,2,12,0,0,0,0,0,0,0,0,51,128,78,0,7,0,6,0,25,12,14,12,12,0,0, 0,0,0,60,90,0,0,0,0,0],
 ]
 
 
@@ -442,19 +507,19 @@ def _sparse_anchor_with_noise() -> list[float]:
 # content = SAFE even in the i32 quantized inference path.
 _SAFE_ANCHORS = [
     # calculator: just skill_md_line_count + high metadata
-    [0,0,0,0,0,0,0,0,0,0,1,0,0,128,19,86,85,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,1,0,0,128,19,86,85,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 80,128,50,0,10,0,0,0,0,0],
     # weather: similar to calculator
-    [0,0,0,0,0,0,0,0,0,0,1,0,0,128,19,86,85,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,1,0,0,128,19,86,85,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 80,128,40,0,10,0,0,0,0,0],
     # todo-manager: 2 md_lines + high metadata
-    [0,0,0,0,0,0,0,0,0,0,2,0,0,128,19,86,85,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,2,0,0,128,19,86,85,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 70,128,60,0,15,0,0,0,0,0],
     # json-formatter: similar
-    [0,0,0,0,0,0,0,0,0,0,2,0,0,128,19,86,85,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,2,0,0,128,19,86,85,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 80,128,50,0,10,0,0,0,0,0],
     # unit-converter: similar
-    [0,0,0,0,0,0,0,0,0,0,2,0,0,128,19,86,85,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0,2,0,0,128,19,86,85,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 70,128,50,0,10,0,0,0,0,0],
     # code-block-only setup (has some shell execution + high metadata)
-    [6,0,0,0,0,0,0,0,0,0,3,12,0,128,19,86,85,0,0,0,0,0,69,0,2,0,0,0,64,0,0,0,0,0,0],
+    [6,0,0,0,0,0,0,0,0,0,3,12,0,128,19,86,85,0,0,0,0,0,69,0,2,0,0,0,64,0,0,0,0,0,0, 60,128,40,0,30,0,0,0,0,0],
     # pentest-tool (some shell, network + very high metadata)
-    [25,5,0,0,0,128,0,0,0,0,3,12,0,128,38,100,100,0,0,0,0,0,70,0,10,0,6,0,25,12,0,12,0,0,0],
+    [25,5,0,0,0,128,0,0,0,0,3,12,0,128,38,100,100,0,0,0,0,0,70,0,10,0,6,0,25,12,0,12,0,0,0, 50,128,80,0,20,0,0,0,0,0],
 ]
 
 
@@ -512,6 +577,13 @@ def _make_safe_unknown_metadata() -> list[float]:
     vec[33] = clip(rand_range(0, 40))    # 33: file_ext_diversity
     vec[34] = 128.0 if random.random() < 0.2 else 0.0  # 34: has_shebang
 
+    # Phase 4: boundary-discriminating features (35-39)
+    vec[35] = clip(rand_range(30, 128))  # 35: documented_shell_ratio (high)
+    vec[36] = 128.0 if random.random() < 0.5 else 0.0  # 36: has_readme_or_docs
+    vec[37] = clip(rand_range(10, 80))   # 37: safe_tool_patterns
+    vec[38] = 0.0                         # 38: suspicious_url_ratio (no suspicious URLs)
+    vec[39] = clip(rand_range(0, 40))    # 39: code_to_prose_ratio (balanced)
+
     return vec
 
 
@@ -540,6 +612,13 @@ def _make_caution_unknown_metadata() -> list[float]:
     vec[29] = clip(rand_range(0, 30))    # 29: net_per_script
     vec[33] = clip(rand_range(10, 60))   # 33: file_ext_diversity
     vec[34] = 128.0 if random.random() < 0.3 else 0.0  # 34: has_shebang
+
+    # Phase 4: boundary-discriminating features (35-39)
+    vec[35] = clip(rand_range(10, 80))   # 35: documented_shell_ratio (moderate)
+    vec[36] = 128.0 if random.random() < 0.3 else 0.0  # 36: has_readme_or_docs
+    vec[37] = clip(rand_range(5, 50))    # 37: safe_tool_patterns
+    vec[38] = clip(rand_range(0, 20))    # 38: suspicious_url_ratio (low)
+    vec[39] = clip(rand_range(10, 60))   # 39: code_to_prose_ratio (moderate)
 
     return vec
 
@@ -573,6 +652,13 @@ def _make_hard_negative() -> tuple[list[float], int]:
 
     # Key differentiators: well-documented, established, high stars
     vec[25] = clip(rand_range(20, 70))   # 25: comment_ratio (well commented)
+
+    # Phase 4: boundary-discriminating features (35-39) — legit pentest tools
+    vec[35] = clip(rand_range(40, 128))  # 35: documented_shell_ratio (high — well-documented)
+    vec[36] = 128.0 if random.random() < 0.8 else 0.0  # 36: has_readme_or_docs (usually yes)
+    vec[37] = clip(rand_range(20, 90))   # 37: safe_tool_patterns (many safe tools)
+    vec[38] = clip(rand_range(0, 20))    # 38: suspicious_url_ratio (low)
+    vec[39] = clip(rand_range(10, 50))   # 39: code_to_prose_ratio (moderate, good docs)
 
     label = random.choice([0, 1])
     return vec, label
@@ -806,6 +892,47 @@ def load_real_dataset(
         print(f"  {n_overridden} labels overridden by human review")
 
     return np.array(features, dtype=np.float32), np.array(labels, dtype=np.int64)
+
+
+def oversample_dangerous_smote(features, labels, target_ratio=0.3, seed=42):
+    """SMOTE-like oversampling: interpolate between real DANGEROUS pairs.
+
+    Generates synthetic DANGEROUS samples by interpolating between pairs of
+    real DANGEROUS samples, balancing the class distribution in feature space.
+
+    Args:
+        features: (N, D) array of feature vectors
+        labels: (N,) array of class labels (2 = DANGEROUS)
+        target_ratio: Target fraction of DANGEROUS in the final dataset
+        seed: Random seed for reproducibility
+
+    Returns:
+        features, labels with synthetic DANGEROUS samples appended
+    """
+    danger_idx = np.where(labels == 2)[0]
+    n_current = len(danger_idx)
+    n_target = int(len(labels) * target_ratio)
+    n_synthetic = max(0, n_target - n_current)
+
+    if n_synthetic == 0 or n_current < 2:
+        return features, labels
+
+    rng = np.random.RandomState(seed)
+    synthetic = []
+    for _ in range(n_synthetic):
+        i, j = rng.choice(len(danger_idx), size=2, replace=True)
+        alpha = rng.uniform(0.3, 0.7)
+        sample = features[danger_idx[i]] * alpha + features[danger_idx[j]] * (1 - alpha)
+        sample = np.clip(np.round(sample), 0, 128)
+        synthetic.append(sample)
+
+    if synthetic:
+        syn_features = np.array(synthetic, dtype=np.float32)
+        syn_labels = np.full(len(synthetic), 2, dtype=np.int64)
+        features = np.concatenate([features, syn_features])
+        labels = np.concatenate([labels, syn_labels])
+
+    return features, labels
 
 
 class SkillDataset(Dataset):

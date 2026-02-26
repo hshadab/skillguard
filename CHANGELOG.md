@@ -2,18 +2,58 @@
 
 All notable changes to SkillGuard are documented in this file.
 
-## [Unreleased]
+## [2.3.0] - 2026-02-25
+
+### Changed
+- **DANGEROUS recall restored to 91.3%** (was 80.2% in v2.2) — retrained with danger-sensitive loss (weight=20), focal-gamma=1.0, DANGEROUS-priority checkpoint selection (safety metric weights: SAFE=0.15, CAUTION=0.30, DANGEROUS=0.55), and 4x hard negative mining for DANGEROUS false negatives
+- **i32 holdout DANGEROUS recall: 95.9%** — the quantized fixed-point model outperforms the float model due to favorable rounding
+- **Safe floor added** — new `apply_safe_floor()` rule downgrads DANGEROUS to CAUTION when ALL 12 core risk features are zero (no shell, network, fs writes, credentials, downloads, obfuscation, privilege escalation, persistence, exfiltration, reverse shells, LLM secret exposure, or risk signals). Prevents false positives on trivially benign skills.
+- **Three-layer defense** — MLP classifier + 7 danger-floor rules + 1 safe-floor rule (was two-layer: MLP + danger-floor only)
+- **Training code improvements** — `compute_safety_metric()` now uses DANGEROUS-priority weights when `danger_fn_weight > 0`; hard negative mining suppresses CAUTION duplicates in danger-priority mode to avoid diluting DANGEROUS signal; DANGEROUS hard negatives replicated 4x (was 2x)
+- **Model weights updated** — all 4,979 parameters retrained with `danger-fn-weight=20.0`, `focal-gamma=1.0`, `oversample-dangerous=0.28`, `augment-dangerous=35`, `adv-epsilon=1.0`
+- **Updated retrain.sh** — default training parameters now use DANGEROUS-priority configuration
+- **All docs updated** — README, CHANGELOG, llms.txt, index.html, openapi.json, ai-plugin.json, moltbook/SKILL.md, moltbook/RULES.md, model_versions.json
+
+## [2.2.0] - 2026-02-25
 
 ### Added
+- **`is_dangerous` boolean** — top-level binary safety flag in evaluate response for agents that just need a safe/not-safe answer without parsing 3-class scores
+- **`BinarySafetyMetrics` in `/health` and `/stats`** — surfaces DANGEROUS catch rate, miss rate, and binary accuracy from training as the primary safety metric
+- **`--relabel-class` flag** in `fetch_and_label.py` — re-labels all existing skills of a given class with the current LLM prompt, useful after updating labeling criteria
+- **`--count` alias** in `fetch_and_label.py` — convenience alias for `--fetch-limit`
+- **CAUTION hard negative mining** — training now mines CAUTION false negatives (CAUTION predicted as SAFE) alongside DANGEROUS false negatives every 50 epochs
+
+### Changed
+- **Tighter SAFE/CAUTION labeling criteria** — `SYSTEM_PROMPT` in `llm_label.py` rewritten with 6 concrete behavioral triggers (shell commands, outbound network, file I/O outside scope, credential env vars, undisclosed permissions, binary-only code) replacing subjective rules
+- **Safety metric weights rebalanced** — `compute_safety_metric()` weights changed from [0.20, 0.30, 0.50] to [0.25, 0.40, 0.35] (SAFE, CAUTION, DANGEROUS) to shift training emphasis toward CAUTION recall
+- **Reduced DANGEROUS over-optimization** in `retrain.sh` — `--augment-dangerous` halved from 20 to 10, `--focal-gamma` softened from 2.0 to 1.5, `--danger-fn-weight` disabled (was positive), `--oversample-dangerous` reduced to 0.15
+- **Rule-based safety floor** — deterministic override in `classify()` catches reverse shells, data exfiltration, credential harvesting, curl|bash, privilege escalation + download, and LLM secret exposure regardless of model output (defense-in-depth)
+- **Model retrained on 619 skills** — dataset grew from 425 to 619 LLM-labeled real skills with boundary-region enrichment
+- **Updated metrics** — CV accuracy: 66.1% (was 62.2%), CAUTION recall: 71.3% (was 46.2%), DANGEROUS recall: 80.2% + safety floor, binary accuracy: 89.9%
+- **OpenAPI spec updated** — added `is_dangerous`, `BinarySafetyMetrics` schema, updated Health/Stats response schemas
+- **llms.txt updated** — documents new binary metrics, `is_dangerous` field, and training improvements
+
+## [2.1.0] - 2026-02-25
+
+### Added
+- **10 new features (35→45)** — 5 boundary-discriminating features (`documented_shell_ratio`, `has_readme_or_docs`, `safe_tool_patterns`, `suspicious_url_ratio`, `code_to_prose_ratio`) and 5 cross-features (`credential_and_exfil`, `obfuscation_and_privilege`, `undocumented_risk`, `risk_signal_count`, `stealth_composite`)
 - **SAFE/CAUTION boundary labeling** — `--prioritize-boundary` flag in `fetch_and_label.py` sorts skills by `|SAFE - CAUTION|` score proximity, fetching the most model-confused examples first to improve the SAFE/CAUTION decision boundary
 - **Stratified sampling** — `training/stratified_sample.py` samples unlabeled skills proportionally across categories and confidence bands (low/medium/high) for diverse training data
 - **Human review queue** — `training/generate_review_queue.py` generates a prioritized review queue sorted by: DANGEROUS labels (verify first), MLP/LLM disagreements, short reasoning (low confidence)
 - **Held-out test set** — `--holdout-fraction` flag in `train.py` performs a stratified split before cross-validation, providing unbiased final evaluation on unseen data (default 15% in retrain pipeline)
 
 ### Changed
+- **Model architecture expanded** — 45→56→40→3 MLP (was 35→56→40→3). 4,979 parameters (was 4,419).
+- **Fixed DANGEROUS class imbalance** — DANGEROUS recall improved from 9% to 93.7% by rebalancing class weights (`danger_fn_weight=3`), oversampling dangerous examples (`oversample-dangerous=0.15`), and correcting sparse anchor vectors for cross-features
+- **Model weights updated** — All 6 weight constants (W1, B1, W2, B2, W3, B3) replaced with retrained values
+- **Updated metrics** — CV accuracy: 62.2%, DANGEROUS F1: 0.71 (recall: 93.7%), SAFE F1: 0.61, CAUTION F1: 0.56 (superseded by v2.2)
 - **Improved LLM labeling prompt** — `SYSTEM_PROMPT` in `llm_label.py` expanded with explicit SAFE/CAUTION boundary rules (env var thresholds, shell wrapper patterns, download-and-execute patterns) and two few-shot examples to reduce mislabeling at class boundaries
 - **Reduced synthetic augmentation** — `--augment-dangerous` reduced from 80 to 20 in `retrain.sh` as real labeled data replaces synthetic samples
 - **Training pipeline** — `retrain.sh` now uses `--holdout-fraction 0.15` for held-out evaluation alongside 5-fold CV
+- **Regression test updates** — Pentest tool test now checks established security tools are not denied; concurrent classification test uses realistic skill data
+- **All docs updated** — README, OpenAPI, llms.txt, ai-plugin.json, dashboard, SKILL.md, SECURITY.md, and Moltbook agent updated for 45-feature/4,979-param architecture
+
+## [Unreleased]
 
 ## [2.0.0] - 2026-02-18
 

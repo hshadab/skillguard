@@ -19,10 +19,11 @@ pub mod types;
 pub use handlers::MAX_BODY_BYTES;
 pub use logging::{RecordEvent, UsageMetrics, METRICS_PERSIST_INTERVAL_SECS};
 pub use types::{
-    AuthMethod, AuthStats, CatalogEntry, CatalogResponse, ClassificationStats, DecisionStats,
-    EndpointStats, EvaluateByNameRequest, EvaluateRequest, FeedbackRequest, FeedbackResponse,
-    HealthResponse, McpStats, ProofStats, ProveEvaluateResponse, ProvedEvaluationResult,
-    RequestStats, ServerConfig, StatsResponse, VerifyRequest, VerifyResponse, DEFAULT_CACHE_DIR,
+    AuthMethod, AuthStats, BinarySafetyMetrics, CatalogEntry, CatalogResponse,
+    ClassificationStats, DecisionStats, EndpointStats, EvaluateByNameRequest, EvaluateRequest,
+    FeedbackRequest, FeedbackResponse, HealthResponse, McpStats, ProofStats,
+    ProveEvaluateResponse, ProvedEvaluationResult, RequestStats, ServerConfig, StatsResponse,
+    VerifyRequest, VerifyResponse, DEFAULT_CACHE_DIR,
 };
 
 use std::net::{IpAddr, SocketAddr};
@@ -96,6 +97,55 @@ fn load_catalog(path: &str) -> std::collections::HashMap<String, CatalogEntry> {
     catalog
 }
 
+/// Load binary DANGEROUS-vs-rest safety metrics from data/training_summary.json.
+fn load_safety_metrics() -> BinarySafetyMetrics {
+    let path = std::path::Path::new("data/training_summary.json");
+    if !path.exists() {
+        return BinarySafetyMetrics {
+            dangerous_catch_rate: 0.0,
+            dangerous_miss_rate: 1.0,
+            binary_accuracy: 0.0,
+        };
+    }
+    match std::fs::read_to_string(path) {
+        Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
+            Ok(data) => {
+                let section = data.get("binary_dangerous_vs_rest");
+                let catch_rate = section
+                    .and_then(|s| {
+                        s.get("recall")
+                            .or_else(|| s.get("catch_rate"))
+                    })
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let miss_rate = section
+                    .and_then(|s| s.get("miss_rate"))
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(1.0 - catch_rate);
+                let binary_accuracy = section
+                    .and_then(|s| s.get("accuracy"))
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                BinarySafetyMetrics {
+                    dangerous_catch_rate: catch_rate,
+                    dangerous_miss_rate: miss_rate,
+                    binary_accuracy,
+                }
+            }
+            Err(_) => BinarySafetyMetrics {
+                dangerous_catch_rate: 0.0,
+                dangerous_miss_rate: 1.0,
+                binary_accuracy: 0.0,
+            },
+        },
+        Err(_) => BinarySafetyMetrics {
+            dangerous_catch_rate: 0.0,
+            dangerous_miss_rate: 1.0,
+            binary_accuracy: 0.0,
+        },
+    }
+}
+
 /// Load model version from data/model_versions.json (latest entry).
 fn load_model_version() -> Option<String> {
     let path = std::path::Path::new("data/model_versions.json");
@@ -142,6 +192,8 @@ pub struct ServerState {
     pub catalog: std::collections::HashMap<String, CatalogEntry>,
     /// Model version identifier (e.g., "v1.0").
     pub model_version: Option<String>,
+    /// Binary DANGEROUS-vs-rest safety metrics loaded from training_summary.json.
+    pub safety_metrics: BinarySafetyMetrics,
 }
 
 impl ServerState {
@@ -162,6 +214,7 @@ impl ServerState {
             std::env::var("SKILLGUARD_CATALOG").unwrap_or_else(|_| "scan-report.json".to_string());
         let catalog = load_catalog(&catalog_path);
         let model_version = load_model_version();
+        let safety_metrics = load_safety_metrics();
 
         Self {
             config,
@@ -175,6 +228,7 @@ impl ServerState {
             proof_cache,
             catalog,
             model_version,
+            safety_metrics,
         }
     }
 
@@ -458,11 +512,17 @@ mod tests {
             proving_scheme: "Jolt/Dory".to_string(),
             cache_writable: true,
             pay_to: None,
+            safety_metrics: BinarySafetyMetrics {
+                dangerous_catch_rate: 0.937,
+                dangerous_miss_rate: 0.063,
+                binary_accuracy: 0.85,
+            },
         };
 
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("\"status\":\"ok\""));
         assert!(json.contains("\"zkml_enabled\":true"));
+        assert!(json.contains("\"dangerous_catch_rate\""));
     }
 
     #[test]
@@ -470,6 +530,11 @@ mod tests {
         let response = StatsResponse {
             uptime_seconds: 3600,
             model_hash: "sha256:abc".to_string(),
+            safety_metrics: BinarySafetyMetrics {
+                dangerous_catch_rate: 0.937,
+                dangerous_miss_rate: 0.063,
+                binary_accuracy: 0.85,
+            },
             requests: RequestStats {
                 total: 100,
                 errors: 2,

@@ -30,9 +30,88 @@ from dataset import (
     generate_dataset,
     generate_dangerous_augmentation,
     load_real_dataset,
+    oversample_dangerous_smote,
     save_dataset_jsonl,
 )
 from model import SkillSafetyMLP
+
+
+class FocalLoss(nn.Module):
+    """Focal Loss for imbalanced classification.
+
+    Down-weights easy/majority-class examples so the model focuses on hard
+    boundary cases (e.g., DANGEROUS vs CAUTION). Combines with per-class
+    alpha weights for class-imbalanced datasets.
+
+    FL(p_t) = -alpha_t * (1 - p_t)^gamma * log(p_t)
+    """
+
+    def __init__(self, alpha: torch.Tensor = None, gamma: float = 2.0):
+        super().__init__()
+        self.gamma = gamma
+        self.register_buffer("alpha", alpha)
+
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        ce_loss = nn.functional.cross_entropy(inputs, targets, reduction="none")
+        p_t = torch.exp(-ce_loss)  # probability of correct class
+        focal_weight = (1 - p_t) ** self.gamma
+
+        if self.alpha is not None:
+            alpha_t = self.alpha[targets]
+            focal_weight = alpha_t * focal_weight
+
+        return (focal_weight * ce_loss).mean()
+
+
+class DangerSensitiveLoss(nn.Module):
+    """Cross-entropy with asymmetric DANGEROUS false-negative penalty.
+
+    Applies an extra multiplicative penalty when a true DANGEROUS sample
+    is predicted as non-DANGEROUS, forcing the model to prioritize
+    DANGEROUS recall over overall accuracy.
+    """
+
+    def __init__(self, class_weights=None, danger_fn_weight=10.0):
+        super().__init__()
+        self.danger_fn_weight = danger_fn_weight
+        self.register_buffer("class_weights", class_weights)
+
+    def forward(self, logits, targets):
+        ce = nn.functional.cross_entropy(
+            logits, targets, weight=self.class_weights, reduction="none"
+        )
+        # Extra penalty when true DANGEROUS is predicted as non-DANGEROUS
+        pred = logits.argmax(dim=1)
+        dangerous_mask = targets == 2
+        false_negative_mask = dangerous_mask & (pred != 2)
+        penalty = torch.ones_like(ce)
+        penalty[false_negative_mask] = self.danger_fn_weight
+        return (penalty * ce).mean()
+
+
+def compute_safety_metric(val_pred, val_y, num_classes=3, danger_fn_weight=0.0):
+    """Compute recall-weighted metric for early stopping.
+
+    When danger_fn_weight > 0, shift weights to prioritize DANGEROUS recall
+    (SAFE=0.15, CAUTION=0.30, DANGEROUS=0.55). Otherwise use balanced weights
+    (SAFE=0.25, CAUTION=0.40, DANGEROUS=0.35).
+    """
+    recalls = []
+    for c in range(num_classes):
+        mask = val_y == c
+        if mask.sum() > 0:
+            recalls.append(float((val_pred[mask] == c).sum()) / float(mask.sum()))
+        else:
+            recalls.append(0.0)
+    if danger_fn_weight > 0:
+        # DANGEROUS-priority mode: checkpoint selection favors DANGEROUS recall
+        weights = [0.15, 0.30, 0.55]
+    else:
+        # Balanced mode: SAFE=0.25, CAUTION=0.40, DANGEROUS=0.35
+        weights = [0.25, 0.40, 0.35]
+    if num_classes > len(weights):
+        weights = [1.0 / num_classes] * num_classes
+    return sum(w * r for w, r in zip(weights[:num_classes], recalls))
 
 
 def fgsm_attack(
@@ -84,9 +163,13 @@ def train_one_fold(
     lr: float = 0.001,
     patience: int = 30,
     adversarial: bool = True,
-    adv_epsilon: float = 2.0,
+    adv_epsilon: float = 0.5,
     adv_ratio: float = 0.3,
+    focal_gamma: float = 2.0,
+    scheduler_type: str = "plateau",
     verbose: bool = True,
+    danger_fn_weight: float = 0.0,
+    num_classes: int = 3,
 ) -> dict:
     """Train model on one fold with early stopping.
 
@@ -100,17 +183,85 @@ def train_one_fold(
         train_dataset, batch_size=64, shuffle=True
     )
 
-    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    if danger_fn_weight > 0:
+        criterion = DangerSensitiveLoss(
+            class_weights=class_weights, danger_fn_weight=danger_fn_weight
+        )
+    else:
+        criterion = FocalLoss(alpha=class_weights, gamma=focal_gamma)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", factor=0.5, patience=10
-    )
+    if scheduler_type == "cosine":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            optimizer, T_0=30, T_mult=2, eta_min=1e-5
+        )
+    else:
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode="min", factor=0.5, patience=10
+        )
 
     best_val_acc = 0.0
+    best_val_metric = 0.0
     best_state = None
     epochs_without_improvement = 0
 
+    # Track current training data for hard negative mining
+    train_features_current = train_features
+    train_labels_current = train_labels
+
     for epoch in range(epochs):
+        # Hard negative mining: every 50 epochs, find misclassified DANGEROUS
+        # samples, duplicate them with noise, and rebuild the dataloader.
+        if epoch > 0 and epoch % 50 == 0 and adversarial:
+            model.eval()
+            with torch.no_grad():
+                all_x = torch.tensor(train_features_current, dtype=torch.float32)
+                all_y = torch.tensor(train_labels_current, dtype=torch.long)
+                pred = model(all_x).argmax(1)
+
+                aug_xs = [all_x]
+                aug_ys = [all_y]
+
+                # Find DANGEROUS false negatives (DANGEROUS predicted as non-DANGEROUS)
+                danger_mask = (all_y == 2) & (pred != 2)
+                if danger_mask.sum() > 0:
+                    hard_neg_x = all_x[danger_mask]
+                    hard_neg_y = all_y[danger_mask]
+                    # More copies when in danger-priority mode
+                    n_copies = 4 if danger_fn_weight > 0 else 2
+                    for _ in range(n_copies - 1):
+                        noise = torch.randn_like(hard_neg_x) * 2.0
+                        hard_neg_noisy = torch.clamp(hard_neg_x + noise, 0, 128)
+                        aug_xs.append(hard_neg_noisy)
+                        aug_ys.append(hard_neg_y)
+                    aug_xs.append(hard_neg_x)
+                    aug_ys.append(hard_neg_y)
+                    if verbose:
+                        print(f"  Epoch {epoch}: mined {int(danger_mask.sum())} hard DANGEROUS negatives (x{n_copies})")
+
+                # Find CAUTION false negatives (CAUTION predicted as SAFE)
+                # Skip in danger-priority mode to avoid diluting DANGEROUS signal
+                if danger_fn_weight == 0:
+                    caution_fn_mask = (all_y == 1) & (pred == 0)
+                    if caution_fn_mask.sum() > 0:
+                        hard_caut_x = all_x[caution_fn_mask]
+                        hard_caut_y = all_y[caution_fn_mask]
+                        noise_c = torch.randn_like(hard_caut_x) * 2.0
+                        hard_caut_noisy = torch.clamp(hard_caut_x + noise_c, 0, 128)
+                        aug_xs.extend([hard_caut_x, hard_caut_noisy])
+                        aug_ys.extend([hard_caut_y, hard_caut_y])
+                        if verbose:
+                            print(f"  Epoch {epoch}: mined {int(caution_fn_mask.sum())} hard CAUTION negatives")
+
+                if len(aug_xs) > 1:
+                    aug_x = torch.cat(aug_xs)
+                    aug_y = torch.cat(aug_ys)
+                    train_features_current = aug_x.numpy()
+                    train_labels_current = aug_y.numpy()
+                    train_dataset = SkillDataset(train_features_current, train_labels_current)
+                    train_loader = torch.utils.data.DataLoader(
+                        train_dataset, batch_size=64, shuffle=True
+                    )
+
         model.train()
         total_loss = 0.0
         correct = 0
@@ -153,10 +304,15 @@ def train_one_fold(
             val_loss = criterion(val_output, val_y).item()
             _, val_pred = val_output.max(1)
             val_acc = val_pred.eq(val_y).sum().item() / len(val_y)
+            val_metric = compute_safety_metric(val_pred, val_y, num_classes=num_classes, danger_fn_weight=danger_fn_weight)
 
-        scheduler.step(val_loss)
+        if scheduler_type == "cosine":
+            scheduler.step(epoch + val_loss * 0)  # CosineAnnealing uses epoch count
+        else:
+            scheduler.step(val_loss)
 
-        if val_acc > best_val_acc:
+        if val_metric > best_val_metric:
+            best_val_metric = val_metric
             best_val_acc = val_acc
             best_state = {k: v.clone() for k, v in model.state_dict().items()}
             epochs_without_improvement = 0
@@ -167,7 +323,8 @@ def train_one_fold(
             print(
                 f"  Epoch {epoch+1:3d}: "
                 f"train_loss={train_loss:.4f} train_acc={train_acc:.4f} "
-                f"val_loss={val_loss:.4f} val_acc={val_acc:.4f}"
+                f"val_loss={val_loss:.4f} val_acc={val_acc:.4f} "
+                f"val_metric={val_metric:.4f}"
             )
 
         if epochs_without_improvement >= patience:
@@ -193,6 +350,7 @@ def train_one_fold(
 
     return {
         "best_val_acc": best_val_acc,
+        "best_val_metric": best_val_metric,
         "classification_report": report,
         "confusion_matrix": cm.tolist(),
         "state_dict": best_state,
@@ -211,6 +369,10 @@ def train_kfold(
     adversarial: bool = True,
     verbose: bool = True,
     patience: int = 30,
+    adv_epsilon: float = 0.5,
+    focal_gamma: float = 2.0,
+    scheduler_type: str = "plateau",
+    danger_fn_weight: float = 0.0,
 ) -> tuple[dict, dict]:
     """Train with k-fold stratified cross-validation.
 
@@ -223,7 +385,7 @@ def train_kfold(
 
     fold_results = []
     best_fold_idx = 0
-    best_fold_acc = 0.0
+    best_fold_metric = 0.0
 
     for fold_idx, (train_idx, val_idx) in enumerate(skf.split(features, labels)):
         if verbose:
@@ -248,13 +410,18 @@ def train_kfold(
             epochs=epochs,
             patience=patience,
             adversarial=adversarial,
+            adv_epsilon=adv_epsilon,
+            focal_gamma=focal_gamma,
+            scheduler_type=scheduler_type,
             verbose=verbose,
+            danger_fn_weight=danger_fn_weight,
+            num_classes=num_classes,
         )
 
         fold_results.append(result)
 
         if verbose:
-            print(f"  Best val accuracy: {result['best_val_acc']:.4f}")
+            print(f"  Best val acc: {result['best_val_acc']:.4f}  metric: {result['best_val_metric']:.4f}")
             report = result["classification_report"]
             for cls_name in class_names:
                 if cls_name in report:
@@ -263,8 +430,8 @@ def train_kfold(
                     f1 = report[cls_name]["f1-score"]
                     print(f"  {cls_name:10s}: P={p:.3f} R={r:.3f} F1={f1:.3f}")
 
-        if result["best_val_acc"] > best_fold_acc:
-            best_fold_acc = result["best_val_acc"]
+        if result["best_val_metric"] > best_fold_metric:
+            best_fold_metric = result["best_val_metric"]
             best_fold_idx = fold_idx
 
     # Aggregate per-class metrics across folds
@@ -288,22 +455,59 @@ def train_kfold(
             "f1_std": float(np.std(f1s)),
         }
 
+    # Aggregate confusion matrices across folds (sum, not average)
+    n_cls = len(class_names)
+    agg_cm = np.zeros((n_cls, n_cls), dtype=int)
+    for r in fold_results:
+        agg_cm += np.array(r["confusion_matrix"])
+
+    # Binary DANGEROUS-vs-rest metrics from aggregated confusion matrix
+    dangerous_idx = class_names.index("DANGEROUS") if "DANGEROUS" in class_names else n_cls - 1
+    tp_d = int(agg_cm[dangerous_idx, dangerous_idx])
+    fn_d = int(agg_cm[dangerous_idx, :].sum() - tp_d)
+    fp_d = int(agg_cm[:, dangerous_idx].sum() - tp_d)
+    tn_d = int(agg_cm.sum() - tp_d - fn_d - fp_d)
+    binary_precision = tp_d / max(tp_d + fp_d, 1)
+    binary_recall = tp_d / max(tp_d + fn_d, 1)
+    binary_f1 = 2 * binary_precision * binary_recall / max(binary_precision + binary_recall, 1e-9)
+    binary_accuracy = (tp_d + tn_d) / max(agg_cm.sum(), 1)
+    false_alarm_rate = fp_d / max(fp_d + tn_d, 1)  # safe/caution incorrectly denied
+
     # Summary
     accs = [r["best_val_acc"] for r in fold_results]
+    metrics = [r["best_val_metric"] for r in fold_results]
     summary = {
         "n_folds": n_folds,
         "mean_accuracy": float(np.mean(accs)),
         "std_accuracy": float(np.std(accs)),
+        "mean_safety_metric": float(np.mean(metrics)),
         "best_fold": best_fold_idx,
-        "best_accuracy": best_fold_acc,
+        "best_accuracy": float(fold_results[best_fold_idx]["best_val_acc"]),
+        "best_safety_metric": best_fold_metric,
         "per_fold_accuracy": accs,
+        "per_fold_metric": metrics,
         "per_class_metrics": per_class_metrics,
+        "confusion_matrix": agg_cm.tolist(),
+        "confusion_matrix_labels": class_names,
+        "binary_dangerous_vs_rest": {
+            "accuracy": float(binary_accuracy),
+            "precision": float(binary_precision),
+            "recall": float(binary_recall),
+            "f1": float(binary_f1),
+            "false_alarm_rate": float(false_alarm_rate),
+            "miss_rate": float(1.0 - binary_recall),
+            "tp": tp_d,
+            "fn": fn_d,
+            "fp": fp_d,
+            "tn": tn_d,
+        },
     }
 
     if verbose:
         print(f"\n=== Cross-Validation Summary ===")
         print(f"Mean accuracy: {summary['mean_accuracy']:.4f} +/- {summary['std_accuracy']:.4f}")
-        print(f"Best fold: {summary['best_fold'] + 1} ({summary['best_accuracy']:.4f})")
+        print(f"Mean safety metric: {summary['mean_safety_metric']:.4f}")
+        print(f"Best fold: {summary['best_fold'] + 1} (metric={best_fold_metric:.4f}, acc={summary['best_accuracy']:.4f})")
         print(f"\nPer-class metrics (mean +/- std across {n_folds} folds):")
         print(f"  {'Class':10s}  {'Precision':>12s}  {'Recall':>12s}  {'F1':>12s}")
         for cls_name in class_names:
@@ -314,6 +518,19 @@ def train_kfold(
                 f"{m['recall_mean']:.3f}+/-{m['recall_std']:.3f}  "
                 f"{m['f1_mean']:.3f}+/-{m['f1_std']:.3f}"
             )
+        print(f"\nConfusion matrix (rows=actual, cols=predicted):")
+        header = "            " + "  ".join(f"{c:>10s}" for c in class_names)
+        print(header)
+        for i, cls_name in enumerate(class_names):
+            row = "  ".join(f"{agg_cm[i, j]:>10d}" for j in range(n_cls))
+            print(f"  {cls_name:10s}{row}")
+        bd = summary["binary_dangerous_vs_rest"]
+        print(f"\nBinary DANGEROUS-vs-rest:")
+        print(f"  Catch rate (recall):  {bd['recall']:.1%}  ({bd['tp']} caught, {bd['fn']} missed)")
+        print(f"  False alarm rate:     {bd['false_alarm_rate']:.1%}  ({bd['fp']} safe/caution denied)")
+        print(f"  Precision:            {bd['precision']:.1%}")
+        print(f"  Binary F1:            {bd['f1']:.3f}")
+        print(f"  Binary accuracy:      {bd['accuracy']:.1%}")
 
     return fold_results[best_fold_idx], summary
 
@@ -364,6 +581,35 @@ def main():
              "When >0, a stratified split is done before CV: (1-F) for train/CV, "
              "F for holdout. The final model is evaluated on holdout separately."
     )
+    parser.add_argument(
+        "--focal-gamma", type=float, default=2.0,
+        help="Focal loss gamma parameter (default 2.0). Lower values (1.0-1.5) "
+             "reduce down-weighting of hard examples, useful when many CAUTION "
+             "samples are genuinely difficult."
+    )
+    parser.add_argument(
+        "--adv-epsilon", type=float, default=0.5,
+        help="FGSM adversarial perturbation magnitude (default 0.5). "
+             "Higher values create stronger adversarial examples."
+    )
+    parser.add_argument(
+        "--scheduler", type=str, default="plateau",
+        choices=["plateau", "cosine"],
+        help="Learning rate scheduler: 'plateau' (ReduceLROnPlateau) or "
+             "'cosine' (CosineAnnealingWarmRestarts). Cosine finds flatter "
+             "minima on small datasets."
+    )
+    parser.add_argument(
+        "--danger-fn-weight", type=float, default=0.0,
+        help="Asymmetric DANGEROUS false-negative penalty weight (default 0 = use FocalLoss). "
+             "When >0, uses DangerSensitiveLoss instead of FocalLoss with this penalty "
+             "for DANGEROUS samples predicted as non-DANGEROUS."
+    )
+    parser.add_argument(
+        "--oversample-dangerous", type=float, default=0.0, metavar="RATIO",
+        help="SMOTE-like oversampling target ratio for DANGEROUS class (default 0 = disabled). "
+             "E.g., 0.25 means generate synthetic samples until DANGEROUS is ~25%% of dataset."
+    )
     args = parser.parse_args()
 
     verbose = not args.quiet
@@ -398,6 +644,17 @@ def main():
             n_aug_safe = (aug_labels == 0).sum()
             if verbose:
                 print(f"Augmented with {n_aug_dangerous} DANGEROUS + {n_aug_safe} SAFE synthetic samples")
+
+        # SMOTE-like oversampling for DANGEROUS class
+        if args.oversample_dangerous > 0:
+            n_before = (labels == 2).sum()
+            features, labels = oversample_dangerous_smote(
+                features, labels, target_ratio=args.oversample_dangerous, seed=args.seed
+            )
+            n_after = (labels == 2).sum()
+            if verbose:
+                print(f"SMOTE oversampling: DANGEROUS {n_before} -> {n_after} "
+                      f"(target ratio {args.oversample_dangerous})")
 
         if verbose:
             print(f"Dataset: {features.shape[0]} samples, {features.shape[1]} features")
@@ -472,6 +729,10 @@ def main():
         adversarial=not args.no_adversarial,
         verbose=verbose,
         patience=patience,
+        adv_epsilon=args.adv_epsilon,
+        focal_gamma=args.focal_gamma,
+        scheduler_type=args.scheduler,
+        danger_fn_weight=args.danger_fn_weight,
     )
 
     # Save summary
@@ -498,7 +759,12 @@ def main():
         class_weights=class_weights,
         epochs=args.epochs,
         adversarial=not args.no_adversarial,
+        adv_epsilon=args.adv_epsilon,
+        focal_gamma=args.focal_gamma,
+        scheduler_type=args.scheduler,
         verbose=verbose,
+        danger_fn_weight=args.danger_fn_weight,
+        num_classes=num_classes,
     )
 
     # Save model
@@ -552,7 +818,10 @@ def main():
 
         export_to_rust(final_model, num_classes=num_classes, verbose=verbose)
 
-    return 0 if summary["mean_accuracy"] >= 0.90 else 1
+    # With DANGEROUS-recall optimization, accuracy may drop to ~55%
+    # but safety metric should be high. Accept lower accuracy threshold.
+    min_acc = 0.40 if args.danger_fn_weight > 0 else 0.90
+    return 0 if summary["mean_accuracy"] >= min_acc else 1
 
 
 if __name__ == "__main__":

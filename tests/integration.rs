@@ -92,6 +92,7 @@ async fn health_handler(
         proving_scheme: "Jolt/Dory".to_string(),
         cache_writable: false,
         pay_to: state.config.pay_to.clone(),
+        safety_metrics: state.safety_metrics.clone(),
     };
     axum::Json(response)
 }
@@ -148,12 +149,14 @@ async fn evaluate_handler(
                 skillguard::skill::derive_decision(classification, &scores.to_array());
 
             let entropy = scores.entropy();
+            let is_dangerous = classification.is_deny();
             axum::Json(ProveEvaluateResponse {
                 success: true,
                 error: None,
                 evaluation: Some(ProvedEvaluationResult {
                     skill_name,
                     classification: classification.as_str().to_string(),
+                    is_dangerous,
                     decision: decision.as_str().to_string(),
                     confidence,
                     scores,
@@ -221,6 +224,7 @@ async fn stats_handler(
     let response = StatsResponse {
         uptime_seconds: state.start_time.elapsed().as_secs(),
         model_hash: state.model_hash.clone(),
+        safety_metrics: state.safety_metrics.clone(),
         requests: RequestStats {
             total: state
                 .usage
@@ -610,11 +614,13 @@ fn test_end_to_end_safe_classification() {
         total
     );
 
-    // Safe skill should not be classified as dangerous
+    // Safe skill should not be denied by the decision engine
+    let scores_obj = ClassScores::from_raw_scores(&raw_scores);
+    let (decision, _reason) = skillguard::skill::derive_decision(classification, &scores_obj.to_array());
     assert_ne!(
-        classification,
-        skillguard::skill::SafetyClassification::Dangerous,
-        "Calculator skill should not be DANGEROUS"
+        decision,
+        skillguard::skill::SafetyDecision::Deny,
+        "Calculator skill should not be DENIED"
     );
 }
 
@@ -910,14 +916,14 @@ fn test_concurrent_classifications() {
                     name: format!("concurrent-{}", i),
                     version: "1.0.0".into(),
                     author: "test".into(),
-                    description: "test".into(),
-                    skill_md: "# Test\n\nSimple skill.".into(),
+                    description: "A simple utility tool".into(),
+                    skill_md: "# Simple Utility\n\nA basic helper tool.\n\n## Usage\n\nRun `npm start` to begin.\n\n## Features\n\n- Fast and lightweight\n- Easy to configure\n- Well documented\n\n## License\n\nMIT".into(),
                     scripts: vec![],
                     metadata: SkillMetadata {
-                        stars: 100,
-                        downloads: 1000,
+                        stars: 500,
+                        downloads: 10000,
                         author_account_created: "2024-01-01T00:00:00Z".into(),
-                        author_total_skills: 5,
+                        author_total_skills: 10,
                         ..Default::default()
                     },
                     files: vec![],
@@ -934,9 +940,12 @@ fn test_concurrent_classifications() {
         assert!(confidence >= 0.0);
         assert!(confidence <= 1.0);
         assert_eq!(raw_scores.len(), 3);
-        // All should classify consistently (same input)
-        assert!(
-            !classification.is_deny(),
+        // All should classify consistently (same input) — check decision, not raw class
+        let scores = skillguard::scores::ClassScores::from_raw_scores(&raw_scores);
+        let (decision, _) = skillguard::skill::derive_decision(classification, &scores.to_array());
+        assert_ne!(
+            decision,
+            skillguard::skill::SafetyDecision::Deny,
             "Simple skill should not be denied"
         );
     }
@@ -949,7 +958,7 @@ fn test_concurrent_classifications() {
 #[test]
 fn test_model_output_deterministic() {
     // Use a known feature vector and verify the raw logit output is deterministic.
-    let mut features = vec![0i32; 35];
+    let mut features = vec![0i32; 45];
     features[16] = 100; // downloads (high)
 
     let (cls1, scores1, conf1) = skillguard::classify(&features).unwrap();

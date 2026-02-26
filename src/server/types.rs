@@ -118,6 +118,10 @@ pub struct EvaluateByNameRequest {
 pub struct ProvedEvaluationResult {
     pub skill_name: String,
     pub classification: String,
+    /// Binary safety flag: true if the skill is classified as DANGEROUS.
+    /// Agents that just need a safe/not-safe answer can use this instead
+    /// of parsing the 3-class scores.
+    pub is_dangerous: bool,
     pub decision: String,
     pub confidence: f64,
     pub scores: ClassScores,
@@ -160,6 +164,19 @@ pub struct ProveEvaluateResponse {
     pub model_version: Option<String>,
 }
 
+/// Binary DANGEROUS-vs-rest safety metrics from training.
+///
+/// This is the primary safety metric: how well the model catches DANGEROUS skills.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BinarySafetyMetrics {
+    /// Fraction of truly DANGEROUS skills that the model catches (= DANGEROUS recall).
+    pub dangerous_catch_rate: f64,
+    /// Fraction of truly DANGEROUS skills that the model misses (= 1 - catch_rate).
+    pub dangerous_miss_rate: f64,
+    /// Binary accuracy treating SAFE+CAUTION as one class vs DANGEROUS.
+    pub binary_accuracy: f64,
+}
+
 /// Health check response
 #[derive(Debug, Serialize)]
 pub struct HealthResponse {
@@ -173,6 +190,8 @@ pub struct HealthResponse {
     /// Server's pay-to wallet address (if x402 is enabled).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pay_to: Option<String>,
+    /// Binary DANGEROUS-vs-rest safety metrics from training.
+    pub safety_metrics: BinarySafetyMetrics,
 }
 
 /// Stats response
@@ -180,6 +199,8 @@ pub struct HealthResponse {
 pub struct StatsResponse {
     pub uptime_seconds: u64,
     pub model_hash: String,
+    /// Binary DANGEROUS-vs-rest safety metrics from training.
+    pub safety_metrics: BinarySafetyMetrics,
     pub requests: RequestStats,
     pub classifications: ClassificationStats,
     pub decisions: DecisionStats,

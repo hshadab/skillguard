@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "SkillGuard: SSL for Agent Skills",
-    "version": "2.0.0",
-    "description": "SSL for Agent Skills — every classification is a verifiable certificate. SkillGuard evaluates AI agent skill metadata and scripts using a 3-layer MLP (35 features, 4,419 parameters), producing a safety classification (SAFE, CAUTION, DANGEROUS) backed by a zero-knowledge machine learning proof via Jolt/Dory SNARK. The model extracts 35 security signals from each skill (shell exec, obfuscation, reverse shells, credential access, entropy, etc.) and classifies using fixed-point integer arithmetic inside a ZK circuit. Like SSL proves server identity, SkillGuard proofs prove classification integrity.\n\nModel v2.0: trained on 425 LLM-labeled real OpenClaw skills (68% CV accuracy, 0.80 DANGEROUS F1). v3.0 training pipeline in progress: scaling to 1,400+ labeled skills with phased data collection (DANGEROUS-priority, SAFE/CAUTION boundary enrichment, stratified diversity fill), improved labeling prompt with boundary rules, and 15% held-out test set.\n\nQuick start: `curl -X POST https://skillguard.onrender.com/api/v1/evaluate -H 'Content-Type: application/json' -d '{\"skill\": \"4claw\"}'`\n\nAgent discovery: GET /.well-known/ai-plugin.json | LLM info: GET /.well-known/llms.txt",
+    "version": "2.3.0",
+    "description": "SSL for Agent Skills — every classification is a verifiable certificate. SkillGuard is a first line of defense for AI agent skill safety: it evaluates skill metadata and scripts using a 3-layer MLP (45 features, 4,979 parameters) plus a deterministic rule-based safety floor, producing a safety classification (SAFE, CAUTION, DANGEROUS) backed by a zero-knowledge machine learning proof via Jolt/Dory SNARK. The model extracts 45 security signals from each skill and classifies using fixed-point integer arithmetic inside a ZK circuit. Like SSL proves server identity, SkillGuard proofs prove classification integrity.\n\nModel v2.3: three-layer defense — MLP (91.3% DANGEROUS catch rate, 95.9% i32 holdout recall, 63.0% 3-class accuracy) + deterministic danger floor (7 rules) + safe floor (1 rule). Trained on 619 LLM-labeled real OpenClaw skills with danger-sensitive loss. Binary DANGEROUS-vs-rest accuracy: 84.7%.\n\nQuick start: `curl -X POST https://skillguard.onrender.com/api/v1/evaluate -H 'Content-Type: application/json' -d '{\"skill\": \"4claw\"}'`\n\nAgent discovery: GET /.well-known/ai-plugin.json | LLM info: GET /.well-known/llms.txt",
     "license": {
       "name": "MIT",
       "url": "https://github.com/hshadab/skillguard/blob/main/LICENSE"
@@ -380,10 +380,11 @@
       "EvaluationResult": {
         "type": "object",
         "description": "Classification result with mandatory zkML proof.",
-        "required": ["skill_name", "classification", "decision", "confidence", "scores", "reasoning", "proof"],
+        "required": ["skill_name", "classification", "is_dangerous", "decision", "confidence", "scores", "reasoning", "proof"],
         "properties": {
           "skill_name": { "type": "string" },
           "classification": { "type": "string", "enum": ["SAFE", "CAUTION", "DANGEROUS"] },
+          "is_dangerous": { "type": "boolean", "description": "Binary safety flag: true if the skill is classified as DANGEROUS. Agents that just need a safe/not-safe answer can use this instead of parsing the 3-class scores." },
           "decision": { "type": "string", "enum": ["ALLOW", "DENY", "FLAG"] },
           "confidence": { "type": "number" },
           "scores": { "$ref": "#/components/schemas/ClassScores" },
@@ -455,9 +456,19 @@
           "entry": { "$ref": "#/components/schemas/CatalogEntry" }
         }
       },
+      "BinarySafetyMetrics": {
+        "type": "object",
+        "description": "Binary DANGEROUS-vs-rest safety metrics from training. This is the primary safety metric: how well the model catches DANGEROUS skills.",
+        "required": ["dangerous_catch_rate", "dangerous_miss_rate", "binary_accuracy"],
+        "properties": {
+          "dangerous_catch_rate": { "type": "number", "description": "Fraction of truly DANGEROUS skills that the model catches (= DANGEROUS recall)" },
+          "dangerous_miss_rate": { "type": "number", "description": "Fraction of truly DANGEROUS skills that the model misses (= 1 - catch_rate)" },
+          "binary_accuracy": { "type": "number", "description": "Binary accuracy treating SAFE+CAUTION as one class vs DANGEROUS" }
+        }
+      },
       "HealthResponse": {
         "type": "object",
-        "required": ["status", "version", "model_hash", "uptime_seconds", "zkml_enabled", "proving_scheme", "cache_writable"],
+        "required": ["status", "version", "model_hash", "uptime_seconds", "zkml_enabled", "proving_scheme", "cache_writable", "safety_metrics"],
         "properties": {
           "status": { "type": "string" },
           "version": { "type": "string" },
@@ -469,15 +480,17 @@
           "pay_to": {
             "type": "string",
             "description": "Ethereum address receiving x402 payments (null if x402 is disabled)"
-          }
+          },
+          "safety_metrics": { "$ref": "#/components/schemas/BinarySafetyMetrics" }
         }
       },
       "StatsResponse": {
         "type": "object",
-        "required": ["uptime_seconds", "model_hash", "requests", "classifications", "decisions", "endpoints", "proofs"],
+        "required": ["uptime_seconds", "model_hash", "safety_metrics", "requests", "classifications", "decisions", "endpoints", "proofs"],
         "properties": {
           "uptime_seconds": { "type": "integer" },
           "model_hash": { "type": "string" },
+          "safety_metrics": { "$ref": "#/components/schemas/BinarySafetyMetrics" },
           "requests": { "$ref": "#/components/schemas/RequestStats" },
           "classifications": { "$ref": "#/components/schemas/ClassificationStats" },
           "decisions": { "$ref": "#/components/schemas/DecisionStats" },

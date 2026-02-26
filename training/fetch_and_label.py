@@ -192,8 +192,18 @@ def main():
         help="Delay between API calls"
     )
     parser.add_argument(
+        "--count", type=int, default=0,
+        help="Alias for --fetch-limit: max skills to fetch (0 = all)"
+    )
+    parser.add_argument(
         "--skip-labeling", action="store_true",
         help="Only fetch, don't label (useful for building content dataset first)"
+    )
+    parser.add_argument(
+        "--relabel-class", type=str, default=None,
+        choices=["SAFE", "CAUTION", "DANGEROUS"],
+        help="Re-label all existing skills of this class with the current LLM prompt. "
+             "Useful after updating labeling criteria to propagate the new rules."
     )
     parser.add_argument(
         "--prioritize-dangerous", action="store_true",
@@ -212,6 +222,10 @@ def main():
     verbose = not args.quiet
     import os
     github_token = os.environ.get("GITHUB_TOKEN")
+
+    # --count is an alias for --fetch-limit
+    if args.count > 0 and args.fetch_limit == 0:
+        args.fetch_limit = args.count
 
     # Step 1: Load existing skills with content
     if verbose:
@@ -259,6 +273,71 @@ def main():
 
     if verbose:
         print(f"\nTotal skills with content: {len(all_skills)}")
+
+    # Step 2b: Relabel a specific class (re-run LLM with updated prompt)
+    if args.relabel_class:
+        output_path = Path(args.output)
+        if output_path.exists():
+            existing_labels = json.loads(output_path.read_text())
+            if isinstance(existing_labels, list):
+                target_class = args.relabel_class
+                # Separate entries: those to relabel vs. those to keep
+                to_relabel = [e for e in existing_labels if e.get("llm_label") == target_class]
+                to_keep = [e for e in existing_labels if e.get("llm_label") != target_class]
+                if verbose:
+                    print(f"\nRelabeling {len(to_relabel)} {target_class} skills with current prompt...")
+
+                # Save old labels for diffing
+                old_labels = {e["skill_name"]: e.get("llm_label", "") for e in to_relabel}
+
+                # Clear the llm_label so label_batch re-processes them
+                relabel_skills = []
+                for e in to_relabel:
+                    relabel_skills.append({
+                        "skill_name": e["skill_name"],
+                        "skill_md": e.get("skill_md", ""),
+                    })
+
+                # Back up original file before modifying, in case labeling fails
+                backup_path = Path(str(output_path) + ".bak")
+                backup_path.write_text(output_path.read_text())
+                if verbose:
+                    print(f"  Backed up original to {backup_path}")
+
+                # Write the kept entries as the base, then label_batch appends relabeled ones
+                output_path.write_text(json.dumps(to_keep, indent=2))
+
+                relabeled = label_batch(
+                    relabel_skills,
+                    output_path=args.output,
+                    model=args.label_model,
+                    delay=args.delay,
+                    verbose=verbose,
+                )
+
+                # If no skills were successfully relabeled, restore backup
+                if len(relabeled) == 0 and len(relabel_skills) > 0:
+                    if verbose:
+                        print(f"  WARNING: No skills were relabeled. Restoring backup.")
+                    output_path.write_text(backup_path.read_text())
+                    backup_path.unlink(missing_ok=True)
+                    return 1
+
+                # Report label changes
+                changed = 0
+                for r in relabeled:
+                    name = r.get("skill_name", "")
+                    new_label = r.get("llm_label", "")
+                    old_label = old_labels.get(name, "")
+                    if old_label and new_label != old_label:
+                        changed += 1
+                        if verbose:
+                            print(f"  CHANGED: {name}: {old_label} -> {new_label}")
+
+                if verbose:
+                    print(f"\nRelabeling complete: {len(relabeled)} processed, {changed} changed")
+
+                return 0
 
     # Step 3: Label via LLM
     if not args.skip_labeling:

@@ -47,17 +47,32 @@ Without SkillGuard, the agent has no signal at all — it either trusts everythi
 
 ### Current model performance
 
-| Metric | v2.0 (current) | v3.0 (target) |
+SkillGuard is a **first line of defense**, not a complete security solution. The model is tuned to catch dangerous skills reliably — the metric that matters most is whether dangerous skills get through, not whether safe skills get the perfect label.
+
+**Safety metrics (what matters):**
+
+| Metric | v2.3 (current) | v3.0 (target) |
 |--------|---------------:|:--------------|
-| Training data | 425 real + 106 augmented | 1,400+ real + 20 augmented |
-| Cross-validation accuracy | 68% | ≥ 80% |
-| SAFE F1 | 0.585 | ≥ 0.75 |
-| CAUTION F1 | 0.697 | ≥ 0.78 |
-| DANGEROUS F1 | 0.80 | ≥ 0.82 |
-| Holdout accuracy | N/A | ≥ 78% |
+| DANGEROUS catch rate (MLP) | **91.3%** | ≥ 95% |
+| DANGEROUS recall (i32 holdout) | **95.9%** | ≥ 95% |
+| Rule-based safety floor | 7 danger + 1 safe rule | — |
+| Binary DANGEROUS-vs-rest accuracy | 84.7% | ≥ 95% |
+
+**Detailed per-class metrics:**
+
+| Metric | v2.3 (current) | v3.0 (target) |
+|--------|---------------:|:--------------|
+| DANGEROUS recall / F1 | 91.3% / 0.76 | ≥ 95% / ≥ 0.82 |
+| SAFE recall / F1 | 48.2% / 0.52 | ≥ 75% / ≥ 0.75 |
+| CAUTION recall / F1 | 57.2% / 0.61 | ≥ 65% / ≥ 0.78 |
+| 3-class accuracy | 63.0% | ≥ 80% |
 | Regression tests | 111 passing | 111 passing |
 
-The 68% overall accuracy in v2.0 reflects SAFE/CAUTION boundary confusion (benign skills with shell commands get cautioned), not DANGEROUS misses. The v3.0 training pipeline addresses this with targeted boundary labeling, improved LLM prompts, and 3x more training data. The model is deliberately conservative — it's better to flag a safe skill for review than to let a dangerous one through.
+v2.3 uses a **three-layer defense**: (1) the MLP classifier tuned for high DANGEROUS recall with danger-sensitive loss (weight=20), (2) a deterministic **danger floor** (7 rules) that overrides to DANGEROUS when pattern matching detects unambiguous threats — reverse shells, data exfiltration, credential harvesting, curl|bash, privilege escalation with downloads, and LLM secret exposure, and (3) a **safe floor** that prevents false positives by downgrading DANGEROUS classifications when all risk features are zero.
+
+The 63.0% 3-class accuracy reflects the deliberate trade-off: the model is tuned to maximize DANGEROUS recall (91.3%, up from 80.2%) at the cost of SAFE/CAUTION confusion. The i32 fixed-point model achieves 95.9% DANGEROUS recall on the holdout set.
+
+The v3.0 training pipeline will scale to 1,400+ labeled skills for further accuracy improvements.
 
 ---
 
@@ -75,9 +90,9 @@ Just as an SSL certificate proves a server is who it claims to be, every SkillGu
 
 1. **Skill submitted** — A developer publishes a skill to [ClawHub](https://clawhub.ai), or submits data directly via API.
 
-2. **Features extracted** — SkillGuard reads the skill's documentation, scripts, and metadata, then extracts 35 numeric features that capture security-relevant signals (shell execution calls, reverse shell patterns, credential access, obfuscation techniques, entropy analysis, author reputation, download counts, interaction terms, density ratios, etc.). When a skill only has a SKILL.md file (no separate scripts), SkillGuard extracts code blocks from the markdown and analyzes them as if they were script files.
+2. **Features extracted** — SkillGuard reads the skill's documentation, scripts, and metadata, then extracts 45 numeric features that capture security-relevant signals (shell execution calls, reverse shell patterns, credential access, obfuscation techniques, entropy analysis, author reputation, download counts, interaction terms, density ratios, cross-features like credential+exfiltration co-occurrence, etc.). When a skill only has a SKILL.md file (no separate scripts), SkillGuard extracts code blocks from the markdown and analyzes them as if they were script files.
 
-3. **Classified with proof** — The 35 features feed into a small neural network (3-layer MLP, 4,419 parameters). The entire forward pass runs inside a SNARK virtual machine ([Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas)), producing a ~53 KB cryptographic proof that the classification was computed correctly.
+3. **Classified with proof** — The 45 features feed into a small neural network (3-layer MLP, 4,979 parameters). The entire forward pass runs inside a SNARK virtual machine ([Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas)), producing a ~53 KB cryptographic proof that the classification was computed correctly.
 
 4. **Anyone verifies** — Anyone can verify a proof by posting it to `/api/v1/verify`. Verification is free, takes milliseconds, and requires no API key.
 
@@ -194,7 +209,7 @@ SkillGuard's brain is a small neural network — a program that learned to spot 
 
 ### What it looks at
 
-When a skill is submitted, SkillGuard doesn't try to "understand" the code the way a human would. Instead, it counts things. It reads through the skill's documentation, scripts, and metadata and produces 35 numbers — a kind of fingerprint. These numbers capture questions like:
+When a skill is submitted, SkillGuard doesn't try to "understand" the code the way a human would. Instead, it counts things. It reads through the skill's documentation, scripts, and metadata and produces 45 numbers — a kind of fingerprint. These numbers capture questions like:
 
 - **How many times does this skill try to run shell commands?** Legitimate tools might run one or two; malware often runs many.
 - **Does it download and execute anything from the internet?** A `curl | bash` pattern is a classic attack vector.
@@ -204,13 +219,13 @@ When a skill is submitted, SkillGuard doesn't try to "understand" the code the w
 - **What's the entropy of the script bytes?** Encrypted or heavily encoded payloads have unusually high randomness.
 - **How dense are the suspicious patterns?** One shell exec in a 500-line script is normal; ten in a 20-line script is suspicious.
 
-Each of these 35 measurements is scaled to a number between 0 and 128, creating a fixed-size numeric fingerprint regardless of how big or complex the original skill is.
+Each of these 45 measurements is scaled to a number between 0 and 128, creating a fixed-size numeric fingerprint regardless of how big or complex the original skill is.
 
 ### How it decides
 
-The fingerprint feeds into a **3-layer neural network** — three stacked layers of simple math operations (multiply, add, apply a threshold). The network has 4,419 tunable parameters (weights) that were learned during training.
+The fingerprint feeds into a **3-layer neural network** — three stacked layers of simple math operations (multiply, add, apply a threshold). The network has 4,979 tunable parameters (weights) that were learned during training.
 
-- **Layer 1** (35 → 56 neurons): Takes the 35 features and mixes them through 56 neurons. Each neuron learns a different combination — one might activate when it sees "high obfuscation + shell exec + new account," while another fires on "network calls + credential access."
+- **Layer 1** (45 → 56 neurons): Takes the 45 features and mixes them through 56 neurons. Each neuron learns a different combination — one might activate when it sees "high obfuscation + shell exec + new account," while another fires on "network calls + credential access."
 - **Layer 2** (56 → 40 neurons): Combines the first layer's patterns into higher-level concepts. This is where the network builds compound indicators like "this looks like a credential stealer" vs "this looks like a legitimate API client."
 - **Layer 3** (40 → 3 outputs): Produces three scores — one for each safety class: SAFE, CAUTION, DANGEROUS. The highest score wins.
 
@@ -232,7 +247,7 @@ The training process uses **quantization-aware training (QAT)** — during train
 
 ### What it was trained on
 
-The current model (v2.0) is trained on 425 LLM-labeled real OpenClaw skills plus 106 augmented samples, across three safety classes. The v3.0 pipeline scales this to 1,400+ labeled skills through a multi-phase data collection process:
+The current model (v2.3) is trained on 619 LLM-labeled real OpenClaw skills plus augmented samples, across three safety classes. v2.3 restored DANGEROUS recall to 91.3% (from 80.2% in v2.2) through danger-sensitive loss (weight=20), DANGEROUS-priority checkpoint selection, improved hard negative mining, and aggressive SMOTE oversampling. A three-layer defense ensures safety: MLP classifier, 7 deterministic danger-floor rules for pattern-matched threats, and a safe-floor rule that prevents false positives on trivially benign skills. The v3.0 pipeline scales this to 1,400+ labeled skills through a multi-phase data collection process:
 
 - **Safe skills:** Documentation tools, calculators, formatters, shell wrappers for standard tools (git, npm, docker) — typical utility skills with no concerning patterns.
 - **Caution skills:** Legitimate tools that use shell commands, network calls, or file writes in normal ways, access multiple API keys, or have minimal metadata.
@@ -246,7 +261,7 @@ The training pipeline uses Claude API to label skills at scale with an improved 
 
 | Component | Details |
 |-----------|---------|
-| Model | 3-layer MLP: 35→56→40→3 (ReLU). 4,419 parameters. Fixed-point i32 arithmetic (scale=7, rounding division). QAT with exact i32 simulation + FGSM adversarial training. v2.0: 425 LLM-labeled real skills + 106 augmented. v3.0 target: 1,400+ real skills with held-out evaluation. |
+| Model | 3-layer MLP: 45→56→40→3 (ReLU). 4,979 parameters. Fixed-point i32 arithmetic (scale=7, rounding division). QAT with exact i32 simulation + FGSM adversarial training. v2.3: 619 LLM-labeled real skills + augmented, danger-sensitive loss. Three-layer defense: MLP + 7 danger-floor rules + safe-floor rule. v3.0 target: 1,400+ real skills. |
 | Proving | [Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas) SNARK with Dory commitment (BN254 curve). ~53 KB proofs, ~4s proving time. |
 | Payment | [x402](https://www.x402.org/) HTTP 402 protocol. $0.001 USDC on Base. [OpenFacilitator](https://openfacilitator.io). |
 | Server | Axum async HTTP. LRU per-IP rate limiting (IPv6 /64 aggregation), constant-time API key auth, CORS, graceful shutdown, JSONL access logging. |
@@ -255,7 +270,7 @@ The training pipeline uses Claude API to label skills at scale with an improved 
 
 ### Feature List
 
-The classifier extracts 35 features from each skill:
+The classifier extracts 45 features from each skill:
 
 | # | Feature | What It Measures |
 |---|---------|-----------------|
@@ -294,6 +309,16 @@ The classifier extracts 35 features from each skill:
 | 33 | `obfuscation_and_exec` | Obfuscation + execution co-occurrence (interaction term) |
 | 34 | `file_extension_diversity` | Count of unique file extensions in the skill package |
 | 35 | `has_shebang` | Whether any script starts with `#!` |
+| 36 | `documented_shell_ratio` | Shell commands in markdown prose vs. raw scripts (high = legitimate tutorial/tool) |
+| 37 | `has_readme_or_docs` | Skill has README, docs, or substantial markdown (>50 lines) |
+| 38 | `safe_tool_patterns` | Matches for known-safe tool patterns (git, npm, pip, cargo, docker, make, etc.) |
+| 39 | `suspicious_url_ratio` | Ratio of non-HTTPS/non-standard domains to total domains (IP addresses, raw ports, ngrok) |
+| 40 | `code_to_prose_ratio` | Code block lines / prose lines (high = mostly code, no explanation) |
+| 41 | `credential_and_exfil` | Credential access + outbound data co-occurrence (credential harvesting signal) |
+| 42 | `obfuscation_and_privilege` | Obfuscation + privilege escalation co-occurrence (hiding root actions) |
+| 43 | `undocumented_risk` | Shell exec weighted by lack of documentation (undocumented commands = suspicious) |
+| 44 | `risk_signal_count` | Count of active risk categories (download, priv_esc, llm_secret, etc.) |
+| 45 | `stealth_composite` | Obfuscation weighted by lack of comments (obfuscated + uncommented = hiding) |
 
 ---
 
@@ -305,18 +330,19 @@ SkillGuard includes a full training pipeline in `training/` for reproducing or i
 
 | Property | Value |
 |----------|-------|
-| Architecture | 35→56→40→3 MLP (ReLU activations, no output activation) |
-| Parameters | 4,419 |
+| Architecture | 45→56→40→3 MLP (ReLU activations, no output activation) |
+| Parameters | 4,979 |
 | Classes | 3 (SAFE, CAUTION, DANGEROUS) |
 | Arithmetic | Fixed-point i32, scale=7 (×128), rounding division `(x+64)/128` |
 | Training | QAT with exact i32 integer-division simulation + STE gradient flow |
-| Adversarial | FGSM perturbations during training (ε=2.0, 30% of batches) |
-| Augmentation | 20 DANGEROUS + SAFE sparse anchor samples (reduced from 80 as real data replaces synthetic) |
+| Adversarial | FGSM perturbations during training (ε=1.0, 30% of batches) |
+| Augmentation | 35 DANGEROUS + SAFE sparse anchor samples + SMOTE oversampling (0.28 target ratio) |
+| Loss | Danger-sensitive loss (weight=20) with focal-gamma=1.0 |
 | Validation | 5-fold stratified cross-validation + 15% held-out test set |
-| Dataset | 1,400+ LLM-labeled real OpenClaw skills (target), currently 425 + augmented |
+| Dataset | 619 LLM-labeled real OpenClaw skills + augmented (v2.3), 1,400+ target (v3.0) |
 | Calibration | Softmax temperature T=0.95 on integer logits, ECE=0.045 |
 | Entropy threshold | 0.67 normalized (5% flag rate) |
-| Model version | v2.0 (2026-02-18), v3.0 pipeline in progress |
+| Model version | v2.3 (2026-02-25), v3.0 pipeline in progress |
 
 ### Training Pipeline
 
@@ -324,7 +350,7 @@ The training pipeline (`training/`) supports both synthetic and real data modes:
 
 ```bash
 # Real data mode (3-class, LLM-labeled) — recommended
-python train.py --dataset real --num-classes 3 --augment-dangerous 20 --holdout-fraction 0.15 --export
+python train.py --dataset real --num-classes 3 --danger-fn-weight 20.0 --focal-gamma 1.0 --augment-dangerous 35 --oversample-dangerous 0.28 --adv-epsilon 1.0 --holdout-fraction 0.15 --export
 
 # Synthetic data mode (4-class, legacy)
 python train.py --dataset synthetic --export
@@ -372,7 +398,7 @@ python fetch_and_label.py --scan-report training/stratified-candidates.json --fe
 python generate_review_queue.py
 
 # Phase 5: Train with holdout evaluation
-python train.py --dataset real --num-classes 3 --augment-dangerous 20 --holdout-fraction 0.15 --export
+python train.py --dataset real --num-classes 3 --danger-fn-weight 20.0 --focal-gamma 1.0 --augment-dangerous 35 --oversample-dangerous 0.28 --adv-epsilon 1.0 --holdout-fraction 0.15 --export
 
 # Calibrate temperature on QAT integer-scale logits
 cd .. && python training/calibrate.py --dataset real --num-classes 3

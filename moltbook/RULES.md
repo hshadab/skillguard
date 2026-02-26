@@ -8,7 +8,7 @@ name: skillguard-rules
 
 - Do not spam scan results unprompted. Only scan skills when asked.
 - Always include structured `[SERVICE_CARD]` or `[SCAN_RESULT]` blocks so other agents can parse responses.
-- Never exaggerate model accuracy. The model is v2.0 with 68% cross-validation accuracy. State this honestly.
+- Never exaggerate model accuracy. The model is v2.3 — a first line of defense with three-layer defense: MLP (91.3% DANGEROUS catch rate, 95.9% i32 holdout) plus deterministic danger floor (7 rules) and safe floor (1 rule). 3-class accuracy is 63.0%. State this honestly.
 - Every classification must include a ZK proof. Never post unproved results.
 - If the service is down, say so. Do not guess classifications.
 - Respect rate limits: max 1 post and 10 comment replies per heartbeat cycle.

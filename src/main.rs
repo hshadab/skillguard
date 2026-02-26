@@ -85,7 +85,7 @@ enum Commands {
         output_dir: PathBuf,
     },
 
-    /// Extract the 35-dim feature vector from a SKILL.md (read from stdin), output as JSON
+    /// Extract the 40-dim feature vector from a SKILL.md (read from stdin), output as JSON
     ExtractFeatures,
 
     /// Batch scan crawled skills and produce reports
@@ -125,7 +125,7 @@ fn cmd_serve(config: skillguard::server::ServerConfig) -> Result<()> {
     use skillguard::server::run_server;
 
     info!("Starting SkillGuard ZKML classifier service");
-    info!(model = "skill-safety", params = 4419, proving = "Jolt/Dory");
+    info!(model = "skill-safety", params = 4699, proving = "Jolt/Dory");
     info!(model_hash = %skillguard::model_hash());
     if config.api_key.is_some() {
         info!("API key authentication enabled on /api/v1/* endpoints");

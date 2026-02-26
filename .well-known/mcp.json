@@ -4,7 +4,7 @@
   "description": "Verifiable AI skill safety classifier with zero-knowledge ML proofs. Classifies agent skills as SAFE/CAUTION/DANGEROUS with a cryptographic ZK proof that the neural network produced the result.",
   "repository": "https://github.com/hshadab/skillguard",
   "homepage": "https://skillguard.onrender.com",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "authors": ["hshadab"],
   "license": "MIT",
   "categories": ["security", "ai-safety", "verification"],

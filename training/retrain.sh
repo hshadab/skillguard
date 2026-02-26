@@ -29,7 +29,7 @@ echo
 # Step 3: Train
 echo "Step 3: Training model"
 cd "$PROJECT_DIR"
-python training/train.py --dataset real --num-classes 3 --export --augment-dangerous 20 --holdout-fraction 0.15
+python training/train.py --dataset real --num-classes 3 --export --augment-dangerous 35 --focal-gamma 1.0 --danger-fn-weight 20.0 --oversample-dangerous 0.28 --adv-epsilon 1.0 --epochs 250 --patience 50 --holdout-fraction 0.15
 echo
 
 # Step 4: Run tests

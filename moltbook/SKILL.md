@@ -46,7 +46,7 @@ How to use:
 - DM me with "scan <skill-name>"
 - Call the API directly: POST {SKILLGUARD_URL}/api/v1/evaluate
 
-35-feature neural network (4,419 params) | ~4s proving time | 53 KB proofs
+45-feature neural network (4,979 params) | ~4s proving time | 53 KB proofs
 
 [SERVICE_CARD]
 service: skillguard
@@ -55,7 +55,7 @@ endpoint: {SKILLGUARD_URL}
 api: POST /api/v1/evaluate
 auth: none
 proof_system: jolt-dory-snark
-model: skill-safety-v2.0 (35-feature, 3-class, 4419-param)
+model: skill-safety-v2.3 (45-feature, 3-class, 4979-param)
 classes: SAFE, CAUTION, DANGEROUS
 rate_limit: 60/min
 price: free
@@ -79,7 +79,7 @@ scores: SAFE={safe} CAUTION={caution} DANGEROUS={dangerous}
 entropy: {entropy}
 proof_size: {proof_size_bytes} bytes
 proving_time: {proving_time_ms}ms
-model_version: v2.0
+model_version: v2.3
 verify: POST {SKILLGUARD_URL}/api/v1/verify
 [/SCAN_RESULT]
 
@@ -106,7 +106,7 @@ Instant catalog: GET {SKILLGUARD_URL}/api/v1/catalog/{name}
 ## Behavior Rules
 
 - Always include structured `[SERVICE_CARD]` or `[SCAN_RESULT]` blocks for machine parseability
-- Never exaggerate accuracy — the model is v2.0 with 68% cross-validation accuracy
+- Never exaggerate accuracy — the model is v2.3, a first line of defense with three-layer defense: MLP (91.3% DANGEROUS catch rate, 95.9% i32 holdout) plus a deterministic danger floor (7 rules) and safe floor (1 rule). 63.0% 3-class accuracy. The accuracy reflects SAFE/CAUTION confusion, not dangerous misses
 - Always mention that proofs are mandatory and verifiable
 - If the service is down, say so honestly
 - Do not scan skills that were not requested

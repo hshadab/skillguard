@@ -1,11 +1,15 @@
 # SkillGuard: SSL for Agent Skills
-> Verifiable AI skill safety classification with zero-knowledge ML proofs
+> First line of defense for AI agent skill safety — with verifiable zero-knowledge ML proofs
 
 ## What this API does
-SkillGuard classifies AI agent skills as SAFE, CAUTION, or DANGEROUS.
+SkillGuard is a fast, cheap safety check for AI agent skills. It classifies skills as
+SAFE, CAUTION, or DANGEROUS with a two-layer defense: MLP classifier (91.3% DANGEROUS recall, 95.9% i32 holdout) plus a deterministic rule-based danger floor (7 rules) and safe floor (1 rule) that catch pattern-matched threats and prevent false positives.
 Every classification includes a mandatory cryptographic zkML proof (SNARK via Jolt/Dory)
 that anyone can verify independently. Think of it as an SSL certificate for agent skills:
 the proof guarantees the classification was computed correctly by the neural network.
+
+SkillGuard is a first line of defense, not a complete security solution. Pair it with
+sandboxing, human review for flagged skills, and runtime monitoring.
 
 ## Base URL
 https://skillguard.onrender.com
@@ -26,7 +30,7 @@ By name (looks up skill on ClawHub):
 With full data:
 {"skill": {"name": "my-skill", "version": "1.0.0", "author": "alice", "description": "A skill", "skill_md": "# My Skill\nDoes something useful.", "scripts": [], "files": []}}
 
-Response includes: classification, decision, confidence, class scores, reasoning, and a zkML proof bundle.
+Response includes: classification, is_dangerous (boolean), decision, confidence, class scores, reasoning, and a zkML proof bundle. Agents that just need a binary safe/not-safe answer can check the is_dangerous field directly.
 
 ### Verify a proof (free, no auth)
 POST /api/v1/verify
@@ -68,32 +72,49 @@ curl -X POST https://skillguard.onrender.com/api/v1/evaluate \
   -H "Content-Type: application/json" \
   -d '{"skill": "4claw"}'
 
-## Model (v2.0, v3.0 training pipeline in progress)
-3-layer MLP: 35 inputs → 56 hidden (ReLU) → 40 hidden (ReLU) → 3 outputs.
-4,419 parameters. Fixed-point i32 arithmetic (scale=7, rounding division).
+## Model (v2.3, v3.0 training pipeline in progress)
+3-layer MLP: 45 inputs → 56 hidden (ReLU) → 40 hidden (ReLU) → 3 outputs.
+4,979 parameters. Fixed-point i32 arithmetic (scale=7, rounding division).
 QAT-trained with exact i32 integer-division simulation + FGSM adversarial examples.
 Softmax temperature T=0.95 on integer-scale logits (ECE=0.045).
 ~53 KB proofs, ~4s proving time.
 
-v2.0 (current): 425 LLM-labeled real OpenClaw skills + 106 augmented samples.
-  CV accuracy: 68%. DANGEROUS F1: 0.80. SAFE F1: 0.585. CAUTION F1: 0.697.
+Safety metrics (what matters for a first line of defense):
+  DANGEROUS catch rate (MLP): 91.3% + deterministic danger floor for pattern-matched threats
+  DANGEROUS recall (i32 holdout): 95.9%
+  Binary DANGEROUS-vs-rest accuracy: 84.7%
+  Binary DANGEROUS-vs-rest metrics available in /health and /stats responses.
+
+v2.3 (current): 619 LLM-labeled real OpenClaw skills + augmented samples.
+  Three-layer defense: MLP classifier + 7 danger-floor rules + 1 safe-floor rule.
+  MLP metrics: DANGEROUS recall: 91.3%, F1: 0.76. CAUTION recall: 57.2%, F1: 0.61. SAFE F1: 0.52.
+  3-class accuracy: 63.0%. Danger floor catches reverse shells, data exfiltration,
+  credential harvesting, curl|bash, privilege escalation, and LLM secret exposure deterministically.
+  Safe floor prevents false positives on trivially benign skills (all risk features zero).
+  is_dangerous boolean in evaluate response for binary safe/not-safe answers.
+  BinarySafetyMetrics (catch rate, miss rate, accuracy) in /health and /stats.
 v3.0 (target): 1,400+ real skills with improved labeling, 15% held-out test set.
-  Target: ≥80% CV accuracy, ≥0.82 DANGEROUS F1, ≥0.75 SAFE F1, ≥78% holdout accuracy.
+  Target: ≥95% DANGEROUS catch rate, ≥80% 3-class accuracy.
 
-The v3.0 training pipeline scales data through phased collection:
-1. DANGEROUS-priority labeling (--prioritize-dangerous) to fix class imbalance
-2. Improved LLM prompt with explicit SAFE/CAUTION boundary rules and few-shot examples
-3. SAFE/CAUTION boundary enrichment (--prioritize-boundary) targeting model-confused skills
-4. Stratified diversity sampling across categories and confidence bands
-5. Human review queue prioritizing DANGEROUS labels and MLP/LLM disagreements
+Training improvements applied in v2.3:
+1. Danger-sensitive loss (weight=20) — penalizes DANGEROUS false negatives 20x
+2. DANGEROUS-priority checkpoint selection — safety metric weights: SAFE=0.15, CAUTION=0.30, DANGEROUS=0.55
+3. Improved hard negative mining — 4x DANGEROUS replication, suppressed CAUTION mining in danger-priority mode
+4. Aggressive SMOTE oversampling (0.28 target ratio) + 35 synthetic DANGEROUS augmentations
+5. Stronger adversarial training (epsilon=1.0) with lower focal-gamma (1.0)
+6. Safe floor rule — downgrade DANGEROUS to CAUTION when all 12 risk features are zero
+7. Three-layer defense: MLP + danger floor (7 rules) + safe floor (1 rule)
 
-The model extracts 35 numeric features from each skill (shell exec counts, network calls,
+The model extracts 45 numeric features from each skill (shell exec counts, network calls,
 obfuscation score, reverse shell patterns, credential access, author reputation, download
-counts, byte entropy, density ratios, interaction terms). When a skill has no separate
-scripts, code blocks inside SKILL.md are extracted and analyzed. Features are scaled to
-0-128 and fed through the network. The highest of the 3 output scores (SAFE, CAUTION,
-DANGEROUS) determines the classification. Confidence is the softmax probability
-of the top class. High-entropy (uncertain, >0.67 normalized) predictions are flagged for review.
+counts, byte entropy, density ratios, interaction terms, cross-features like credential+exfil
+co-occurrence, stealth composite, undocumented risk). When a skill has no separate scripts,
+code blocks inside SKILL.md are extracted and analyzed. Features are scaled to 0-128 and fed
+through the network. The highest of the 3 output scores (SAFE, CAUTION, DANGEROUS) determines
+the classification, then a deterministic safety floor checks for unambiguous threat patterns
+(reverse shells, data exfiltration, credential harvesting, curl|bash) and overrides to
+DANGEROUS if any are detected. Confidence is the softmax probability of the top class.
+High-entropy (uncertain, >0.67 normalized) predictions are flagged for review.
 
 ## Model versioning
 Every evaluation response includes a model_version field containing the SHA-256 hash

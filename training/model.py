@@ -1,7 +1,7 @@
 """
 PyTorch MLP matching the Rust SkillGuard architecture.
 
-Architecture: 35 -> 56 -> 40 -> 4 (4,460 params)
+Architecture: 45 -> 56 -> 40 -> 4 (4,979 params)
 Fixed-point scale=7 (multiply by 2^7 = 128).
 
 QAT simulates the exact Rust i32 inference path:
@@ -89,7 +89,7 @@ class SkillSafetyMLP(nn.Module):
     Activation: ReLU between hidden layers, no activation on output.
     """
 
-    def __init__(self, input_dim: int = 35, num_classes: int = 4, qat: bool = True):
+    def __init__(self, input_dim: int = 40, num_classes: int = 4, qat: bool = True):
         super().__init__()
         self.qat = qat
         self.num_classes = num_classes
@@ -123,16 +123,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     nc = args.num_classes
-    model = SkillSafetyMLP(input_dim=35, num_classes=nc, qat=True)
-    print(f"Architecture: 35 -> 56 -> 40 -> {nc}")
+    model = SkillSafetyMLP(input_dim=45, num_classes=nc, qat=True)
+    print(f"Architecture: 45 -> 56 -> 40 -> {nc}")
     print(f"Total parameters: {model.param_count()}")
-    print(f"  Layer 1: {35 * 56 + 56} = {35 * 56 + 56}")
+    print(f"  Layer 1: {45 * 56 + 56} = {45 * 56 + 56}")
     print(f"  Layer 2: {56 * 40 + 40} = {56 * 40 + 40}")
     print(f"  Layer 3: {40 * nc + nc} = {40 * nc + nc}")
-    print(f"  Total: {35 * 56 + 56 + 56 * 40 + 40 + 40 * nc + nc}")
+    print(f"  Total: {45 * 56 + 56 + 56 * 40 + 40 + 40 * nc + nc}")
 
     # Test forward pass
-    x = torch.randn(1, 35)
+    x = torch.randn(1, 45)
     y = model(x)
     print(f"\nInput shape: {x.shape}")
     print(f"Output shape: {y.shape}")

@@ -36,14 +36,14 @@ def rust_i32_forward(features_i32: np.ndarray, state: dict) -> np.ndarray:
     All arithmetic uses i32 integer operations.
 
     Args:
-        features_i32: (N, 35) array of i32 feature values
+        features_i32: (N, 45) array of i32 feature values
         state: model state_dict with float weights
 
     Returns:
         (N, num_classes) array of i32 logits
     """
     # Quantize all weights and biases to i32
-    w1 = float_to_fixed(state["fc1.weight"].numpy())  # [56, 35]
+    w1 = float_to_fixed(state["fc1.weight"].numpy())  # [56, 45]
     b1 = float_to_fixed(state["fc1.bias"].numpy())     # [56]
     w2 = float_to_fixed(state["fc2.weight"].numpy())  # [40, 56]
     b2 = float_to_fixed(state["fc2.bias"].numpy())     # [40]
@@ -52,7 +52,7 @@ def rust_i32_forward(features_i32: np.ndarray, state: dict) -> np.ndarray:
 
     x = features_i32.astype(np.int64)  # use i64 to avoid overflow
 
-    # Layer 1: [N, 35] @ [35, 56] -> [N, 56]
+    # Layer 1: [N, 45] @ [45, 56] -> [N, 56]
     mm1 = x @ w1.astype(np.int64).T           # [N, 56]
     mm1 = (mm1 + 64) // 128                    # integer floor division
     mm1 = mm1 + b1.astype(np.int64)            # add bias
@@ -171,7 +171,7 @@ def export_to_rust(
     ]
 
     layer_descriptions = [
-        ("Layer 1 weights", "[56 hidden neurons, 35 input features]"),
+        ("Layer 1 weights", "[56 hidden neurons, 45 input features]"),
         ("Layer 2 weights", "[40 hidden neurons, 56 neurons from layer 1]"),
         ("Layer 3 (output) weights", f"[{num_classes} output neurons, 40 hidden neurons]"),
     ]

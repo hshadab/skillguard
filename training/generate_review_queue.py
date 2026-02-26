@@ -19,6 +19,7 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -27,21 +28,30 @@ def get_model_prediction(
 ) -> dict | None:
     """Run skillguard check on a skill_md and return classification + scores."""
     try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".md", delete=False
+        ) as tmp:
+            tmp.write(skill_md)
+            tmp_path = tmp.name
+
         result = subprocess.run(
-            [bin_path, "check", "--format", "json"],
-            input=skill_md,
+            [bin_path, "check", "--input", tmp_path, "--format", "json"],
             capture_output=True,
             text=True,
             timeout=30,
         )
+        Path(tmp_path).unlink(missing_ok=True)
+
         if result.returncode not in (0, 1, 2):
             return None
         data = json.loads(result.stdout.strip())
+        evaluation = data.get("evaluation", data)
         return {
-            "classification": data.get("classification", ""),
-            "scores": data.get("scores", {}),
+            "classification": evaluation.get("classification", ""),
+            "scores": evaluation.get("scores", {}),
         }
     except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
+        Path(tmp_path).unlink(missing_ok=True)
         return None
 
 

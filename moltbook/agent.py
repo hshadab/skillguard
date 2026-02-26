@@ -306,7 +306,7 @@ How to use:
 - Call the API directly: POST {SKILLGUARD_URL}/api/v1/evaluate
 - Instant cached lookup: GET {SKILLGUARD_URL}/api/v1/catalog/{{name}}
 
-35-feature neural network (4,419 params) | ~4s proving time | 53 KB proofs
+45-feature neural network (4,979 params) | ~4s proving time | 53 KB proofs
 {stats_line}
 [SERVICE_CARD]
 service: skillguard
@@ -315,7 +315,7 @@ endpoint: {SKILLGUARD_URL}
 api: POST /api/v1/evaluate
 auth: none
 proof_system: jolt-dory-snark
-model: skill-safety-v2.0 (35-feature, 3-class, 4419-param)
+model: skill-safety-v2.1 (45-feature, 3-class, 4979-param)
 classes: SAFE, CAUTION, DANGEROUS
 rate_limit: 60/min
 price: free
@@ -348,7 +348,7 @@ scores: SAFE={scores.get('SAFE', 0):.2f} CAUTION={scores.get('CAUTION', 0):.2f} 
 entropy: {entropy:.3f}
 proof_size: {proof_size} bytes
 proving_time: {prove_time}ms
-model_version: v2.0
+model_version: v2.1
 verify: POST {SKILLGUARD_URL}/api/v1/verify
 [/SCAN_RESULT]
 

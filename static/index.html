@@ -521,7 +521,7 @@ footer a:hover { text-decoration: underline; }
         <div class="how-step">
           <div class="how-step-num">2</div>
           <div class="how-step-title">Features extracted</div>
-          <div class="how-step-desc">35 security signals analyzed: shell exec, reverse shells, credential access, obfuscation, entropy, exfiltration, density ratios, interaction terms. Code blocks in SKILL.md are extracted and scanned</div>
+          <div class="how-step-desc">45 security signals analyzed: shell exec, reverse shells, credential access, obfuscation, entropy, exfiltration, density ratios, interaction terms, cross-features. Code blocks in SKILL.md are extracted and scanned</div>
           <span class="how-step-arrow">&rarr;</span>
         </div>
         <div class="how-step">
@@ -562,19 +562,19 @@ footer a:hover { text-decoration: underline; }
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px">
         <div style="padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius)">
-          <div style="font-weight:600;font-size:0.82rem;margin-bottom:6px;color:var(--text-primary)">Feature Extraction (35 signals)</div>
+          <div style="font-weight:600;font-size:0.82rem;margin-bottom:6px;color:var(--text-primary)">Feature Extraction (45 signals)</div>
           <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.55">
-            Each skill is reduced to 35 numbers: shell exec count, network calls, obfuscation
+            Each skill is reduced to 45 numbers: shell exec count, network calls, obfuscation
             score, reverse shell patterns, credential access, author reputation, download counts,
-            byte entropy, code density ratios, and more. Code blocks inside SKILL.md files are
-            extracted and scanned even when no separate scripts exist. Each value is scaled
+            byte entropy, code density ratios, cross-features, and more. Code blocks inside SKILL.md
+            files are extracted and scanned even when no separate scripts exist. Each value is scaled
             to 0&ndash;128.
           </div>
         </div>
         <div style="padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius)">
-          <div style="font-weight:600;font-size:0.82rem;margin-bottom:6px;color:var(--text-primary)">Neural Network (4,419 params)</div>
+          <div style="font-weight:600;font-size:0.82rem;margin-bottom:6px;color:var(--text-primary)">Neural Network (4,979 params)</div>
           <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.55">
-            Three layers of neurons (35&rarr;56&rarr;40&rarr;3) mix the features into progressively
+            Three layers of neurons (45&rarr;56&rarr;40&rarr;3) mix the features into progressively
             higher-level patterns. Layer 1 detects basic combinations ("obfuscation + shell exec").
             Layer 2 builds compound indicators ("credential stealer" vs "API client").
             Layer 3 outputs three scores: SAFE, CAUTION, DANGEROUS. Highest wins.
@@ -600,14 +600,30 @@ footer a:hover { text-decoration: underline; }
         </div>
       </div>
       <div class="how-cert" style="margin-top:14px">
-        Trained on <strong>LLM-labeled real OpenClaw skills</strong> (3 classes: SAFE, CAUTION, DANGEROUS).
-        Adversarially hardened with FGSM perturbations. v3.0 pipeline adds boundary-aware labeling, stratified sampling, held-out evaluation, and human review.
+        First line of defense &mdash; tuned to <strong>catch dangerous skills</strong>, not perfectly sort safe ones.
+        Trained on <strong>LLM-labeled real OpenClaw skills</strong>. Adversarially hardened with FGSM perturbations.
       </div>
-      <div style="margin-top:14px;display:flex;gap:16px;flex-wrap:wrap;font-size:0.78rem;color:var(--text-secondary)">
-        <span>Dataset: <strong style="color:var(--text-primary)">425</strong> real skills (v2.0), <strong style="color:var(--text-primary)">1,400+</strong> target (v3.0)</span>
-        <span>v2.0: <strong style="color:var(--safe)">144 SAFE</strong> &middot; <strong style="color:var(--caution)">267 CAUTION</strong> &middot; <strong style="color:var(--dangerous)">14 DANGEROUS</strong> + 106 augmented</span>
-        <span>Calibration: <strong style="color:var(--text-primary)">ECE 0.045</strong></span>
-        <span>Entropy threshold: <strong style="color:var(--text-primary)">0.67</strong> (5% flag rate)</span>
+      <div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;font-size:0.78rem">
+        <div style="background:var(--bg-input);border-radius:var(--radius);padding:10px 12px;text-align:center">
+          <div style="font-size:1.3rem;font-weight:700;color:var(--dangerous)">91.3%</div>
+          <div style="color:var(--text-muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em">MLP catch rate</div>
+        </div>
+        <div style="background:var(--bg-input);border-radius:var(--radius);padding:10px 12px;text-align:center">
+          <div style="font-size:1.3rem;font-weight:700;color:var(--safe)">95.9%</div>
+          <div style="color:var(--text-muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em">i32 holdout recall</div>
+        </div>
+        <div style="background:var(--bg-input);border-radius:var(--radius);padding:10px 12px;text-align:center">
+          <div style="font-size:1.3rem;font-weight:700;color:var(--text-primary)">63.0%</div>
+          <div style="color:var(--text-muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em">3-class accuracy</div>
+        </div>
+        <div style="background:var(--bg-input);border-radius:var(--radius);padding:10px 12px;text-align:center">
+          <div style="font-size:1.3rem;font-weight:700;color:var(--text-secondary)">111</div>
+          <div style="color:var(--text-muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em">Tests passing</div>
+        </div>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:16px;flex-wrap:wrap;font-size:0.72rem;color:var(--text-muted)">
+        <span>619 real skills + augmented (v2.3) &middot; 1,400+ target (v3.0)</span>
+        <span>ECE 0.045 &middot; Entropy threshold 0.67</span>
       </div>
     </div>
   </details>
@@ -736,7 +752,7 @@ This skill fetches current weather data from a public API and returns a friendly
       </div>
       <div class="x402-item">
         <div class="x402-label">Model Size</div>
-        <div class="x402-value">4,419 params (35-56-40-3)</div>
+        <div class="x402-value">4,979 params (45-56-40-3)</div>
       </div>
       <div class="x402-item">
         <div class="x402-label">Proofs Generated</div>

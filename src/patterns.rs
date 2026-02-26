@@ -306,6 +306,40 @@ pub static SPLIT_STRING_RE: LazyLock<Regex> = LazyLock::new(|| {
         .unwrap()
 });
 
+/// Safe tool patterns — common legitimate CLI tools that indicate normal development workflows.
+/// Used for the `safe_tool_patterns` feature to help distinguish legitimate skills.
+pub static SAFE_TOOL_RE: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
+        Regex::new(r"\b(git)\b").unwrap(),
+        Regex::new(r"\b(npm|yarn|pnpm)\b").unwrap(),
+        Regex::new(r"\b(pip|pipx|poetry)\b").unwrap(),
+        Regex::new(r"\b(cargo)\b").unwrap(),
+        Regex::new(r"\b(docker|docker-compose)\b").unwrap(),
+        Regex::new(r"\b(make|cmake)\b").unwrap(),
+        Regex::new(r"\b(gradle|maven|mvn)\b").unwrap(),
+        Regex::new(r"\b(kubectl)\b").unwrap(),
+        Regex::new(r"\b(terraform)\b").unwrap(),
+        Regex::new(r"\b(pytest|jest|mocha)\b").unwrap(),
+    ]
+});
+
+/// Suspicious URL patterns — raw IP addresses, non-standard ports, tunneling services.
+/// Used for the `suspicious_url_ratio` feature.
+pub static SUSPICIOUS_URL_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?x)
+        https?://(?:
+            \d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}         # Raw IP addresses
+            | [a-zA-Z0-9.-]+:\d{2,5}(?:/|$)             # Non-standard ports
+            | [a-zA-Z0-9.-]+\.ngrok\.io                  # ngrok tunnels
+            | [a-zA-Z0-9.-]+\.serveo\.net                # serveo tunnels
+            | webhook\.site                              # webhook.site
+            | [a-zA-Z0-9.-]+\.loca\.lt                   # localtunnel
+            | [a-zA-Z0-9.-]+\.trycloudflare\.com         # Cloudflare tunnels
+        )"
+    ).unwrap()
+});
+
 // ---------------------------------------------------------------------------
 // Helper functions
 // ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@
 //! This module defines the types for representing skills from ClawHub
 //! and extracting safety-relevant features for the skill safety classifier.
 //!
-//! Feature extraction produces a 35-element vector. Each feature is normalized
+//! Feature extraction produces a 45-element vector. Each feature is normalized
 //! to [0, 128] using empirically chosen thresholds (documented inline in
 //! [`SkillFeatures::to_normalized_vec`]). VirusTotal integration combines both
 //! `malicious_count` and `suspicious_count` (weighted at 0.5) into a single
@@ -20,7 +20,7 @@ use crate::patterns::{
     CURL_DOWNLOAD_RE, DOMAIN_RE, ENV_ACCESS_RE, EXFILTRATION_RE, EXTERNAL_DOWNLOAD_RE, FS_WRITE_RE,
     HEX_ESCAPE_RE, JOIN_CALL_RE, LLM_SECRET_EXPOSURE_RE, NETWORK_CALL_RE, NPM_INSTALL_RE,
     OBFUSCATION_RE, PERSISTENCE_RE, PIP_INSTALL_RE, PRIV_ESC_RE, REQUIRE_RE, REVERSE_SHELL_RE,
-    SHELL_EXEC_RE, SPLIT_STRING_RE, UNICODE_CONFUSABLE_RE,
+    SAFE_TOOL_RE, SHELL_EXEC_RE, SPLIT_STRING_RE, SUSPICIOUS_URL_RE, UNICODE_CONFUSABLE_RE,
 };
 
 // ---------------------------------------------------------------------------
@@ -223,7 +223,13 @@ pub fn derive_decision(
             }
         }
         SafetyClassification::Caution => {
-            if dangerous_score >= DANGEROUS_MENTION_THRESHOLD {
+            if dangerous_score >= 0.25 {
+                let pct = (dangerous_score * 100.0).round() as u32;
+                (
+                    SafetyDecision::Flag,
+                    format!("Elevated risk: {}% dangerous signal in cautious skill — review recommended", pct),
+                )
+            } else if dangerous_score >= DANGEROUS_MENTION_THRESHOLD {
                 let pct = (dangerous_score * 100.0).round() as u32;
                 (
                     SafetyDecision::Allow,
@@ -237,7 +243,7 @@ pub fn derive_decision(
             }
         }
         SafetyClassification::Dangerous => {
-            if scores[2] >= 0.5 {
+            if scores[2] >= 0.35 {
                 (
                     SafetyDecision::Deny,
                     "Significant risk patterns detected".into(),
@@ -256,7 +262,7 @@ pub fn derive_decision(
 // Feature extraction
 // ---------------------------------------------------------------------------
 
-/// The 35-dimensional feature vector for skill safety classification
+/// The 45-dimensional feature vector for skill safety classification
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillFeatures {
     pub shell_exec_count: u32,
@@ -308,6 +314,28 @@ pub struct SkillFeatures {
     pub file_extension_diversity: u32,
     /// Any script starts with `#!`
     pub has_shebang: bool,
+    // --- Phase 4: 5 new boundary-discriminating features (35→40) ---
+    /// Shell commands in markdown prose (documented) vs. raw scripts. High = legitimate tutorial/tool
+    pub documented_shell_ratio: f32,
+    /// Skill has README, docs, or substantial markdown (>50 lines)
+    pub has_readme_or_docs: bool,
+    /// Matches for known-safe tool patterns (git, npm, pip, cargo, docker, make, etc.)
+    pub safe_tool_patterns: u32,
+    /// Ratio of non-HTTPS/non-standard domains to total domains. IP addresses, raw ports, ngrok, etc.
+    pub suspicious_url_ratio: f32,
+    /// Ratio of code block lines to prose lines. High = mostly code, no explanation — suspicious
+    pub code_to_prose_ratio: f32,
+    // --- Phase 5: 5 discriminative cross-features (40→45) ---
+    /// min(credential_patterns, network_call + data_exfil*5) — credential access + outbound data
+    pub credential_and_exfil: u32,
+    /// if privilege_esc { obfuscation_score } else { 0 } — hiding actions + root access
+    pub obfuscation_and_privilege: u32,
+    /// shell_exec * (1.0 - documented_shell_ratio) — running commands without explaining them
+    pub undocumented_risk: f32,
+    /// Count of active risk categories (external_download, priv_esc, llm_secret, etc.)
+    pub risk_signal_count: u32,
+    /// obfuscation_score * (1.0 - comment_ratio) — obfuscated + no comments = hiding
+    pub stealth_composite: f32,
 }
 
 impl SkillFeatures {
@@ -491,18 +519,123 @@ impl SkillFeatures {
         let has_shebang = skill.scripts.iter().any(|s| s.content.starts_with("#!"))
             || script_text.lines().any(|l| l.starts_with("#!"));
 
+        // Phase 4: boundary-discriminating features (35→40)
+
+        // documented_shell_ratio: shell commands in markdown prose paragraphs vs. code blocks
+        // Count shell commands in prose lines (outside code blocks) vs. total shell commands
+        let (prose_shell, total_shell_in_md) = {
+            let mut in_block = false;
+            let mut prose_count = 0u32;
+            let mut total_count = 0u32;
+            for line in skill.skill_md.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("```") {
+                    in_block = !in_block;
+                    continue;
+                }
+                let line_shell = count_matches(line, &CLI_COMMAND_RE)
+                    + count_matches(line, &SHELL_EXEC_RE);
+                total_count += line_shell;
+                if !in_block && line_shell > 0 {
+                    prose_count += line_shell;
+                }
+            }
+            (prose_count, total_count)
+        };
+        let documented_shell_ratio = if total_shell_in_md == 0 {
+            0.0
+        } else {
+            prose_shell as f32 / total_shell_in_md as f32
+        };
+
+        // has_readme_or_docs: skill has README, docs directory, or substantial markdown
+        let has_readme_or_docs = skill_md_line_count > 50
+            || skill.files.iter().any(|f| {
+                let lower = f.to_lowercase();
+                lower.contains("readme") || lower.contains("docs/") || lower.contains("doc/")
+            });
+
+        // safe_tool_patterns: count matches for known-safe CLI tools
+        let safe_tool_patterns = count_matches(&all_text, &SAFE_TOOL_RE);
+
+        // suspicious_url_ratio: ratio of suspicious URLs to total URLs
+        let total_urls = DOMAIN_RE.find_iter(&all_text).count() as u32;
+        let suspicious_urls = SUSPICIOUS_URL_RE.find_iter(&all_text).count() as u32;
+        let suspicious_url_ratio = if total_urls == 0 {
+            0.0
+        } else {
+            suspicious_urls as f32 / total_urls as f32
+        };
+
+        // code_to_prose_ratio: ratio of code block lines to prose lines
+        let (code_lines, prose_lines) = {
+            let mut in_block = false;
+            let mut code = 0u32;
+            let mut prose = 0u32;
+            for line in skill.skill_md.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("```") {
+                    in_block = !in_block;
+                    continue;
+                }
+                if in_block {
+                    code += 1;
+                } else if !trimmed.is_empty() {
+                    prose += 1;
+                }
+            }
+            (code, prose)
+        };
+        let code_to_prose_ratio = code_lines as f32 / prose_lines.max(1) as f32;
+
+        let external_download = EXTERNAL_DOWNLOAD_RE.is_match(&all_text)
+            || CURL_DOWNLOAD_RE.is_match(&all_text);
+        let obfuscation_score = obfuscation_raw as f32;
+        let privilege_escalation = PRIV_ESC_RE.is_match(&all_text);
+        let persistence_mechanisms = count_matches(&all_text, &PERSISTENCE_RE);
+        let data_exfiltration_patterns = count_matches(&script_text, &EXFILTRATION_RE);
+        let reverse_shell_patterns = count_matches(&all_text, &REVERSE_SHELL_RE);
+        let llm_secret_exposure = LLM_SECRET_EXPOSURE_RE
+            .iter()
+            .any(|re| re.is_match(&skill.skill_md));
+        let vt_malicious_flags = vt_report
+            .map(|r| r.malicious_count + r.suspicious_count.div_ceil(2))
+            .unwrap_or(0);
+
+        // Phase 5: cross-features (40→45)
+        let credential_and_exfil = credential_patterns
+            .min(network_call_count + data_exfiltration_patterns.saturating_mul(5));
+        let obfuscation_and_privilege = if privilege_escalation {
+            obfuscation_raw
+        } else {
+            0
+        };
+        let undocumented_risk = shell_exec_count as f32 * (1.0 - documented_shell_ratio);
+        let risk_signal_count = {
+            let mut count = 0u32;
+            if external_download { count += 1; }
+            if privilege_escalation { count += 1; }
+            if llm_secret_exposure { count += 1; }
+            if password_in_md && has_archive { count += 1; }
+            if reverse_shell_patterns > 0 { count += 1; }
+            if persistence_mechanisms > 0 { count += 1; }
+            if data_exfiltration_patterns > 0 { count += 1; }
+            if vt_malicious_flags > 0 { count += 1; }
+            count
+        };
+        let stealth_composite = obfuscation_score * (1.0 - comment_ratio);
+
         Self {
             shell_exec_count,
             network_call_count,
             fs_write_count: count_matches(&script_text, &FS_WRITE_RE),
             env_access_count: count_matches(&all_text, &ENV_ACCESS_RE),
             credential_patterns,
-            external_download: EXTERNAL_DOWNLOAD_RE.is_match(&all_text)
-                || CURL_DOWNLOAD_RE.is_match(&all_text),
-            obfuscation_score: obfuscation_raw as f32,
-            privilege_escalation: PRIV_ESC_RE.is_match(&all_text),
-            persistence_mechanisms: count_matches(&all_text, &PERSISTENCE_RE),
-            data_exfiltration_patterns: count_matches(&script_text, &EXFILTRATION_RE),
+            external_download,
+            obfuscation_score,
+            privilege_escalation,
+            persistence_mechanisms,
+            data_exfiltration_patterns,
             skill_md_line_count,
             script_file_count,
             dependency_count: Self::count_dependencies(&all_text),
@@ -511,16 +644,10 @@ impl SkillFeatures {
             stars: skill.metadata.stars,
             downloads: skill.metadata.downloads,
             has_virustotal_report: vt_report.is_some(),
-            // Combine malicious and suspicious counts (suspicious weighted at 0.5)
-            // to capture a broader signal from VirusTotal scanners.
-            vt_malicious_flags: vt_report
-                .map(|r| r.malicious_count + r.suspicious_count.div_ceil(2))
-                .unwrap_or(0),
+            vt_malicious_flags,
             password_protected_archives: has_archive && password_in_md,
-            reverse_shell_patterns: count_matches(&all_text, &REVERSE_SHELL_RE),
-            llm_secret_exposure: LLM_SECRET_EXPOSURE_RE
-                .iter()
-                .any(|re| re.is_match(&skill.skill_md)),
+            reverse_shell_patterns,
+            llm_secret_exposure,
             entropy_score,
             non_ascii_ratio,
             max_line_length,
@@ -535,6 +662,18 @@ impl SkillFeatures {
             obfuscation_and_exec,
             file_extension_diversity,
             has_shebang,
+            // Phase 4: boundary-discriminating features
+            documented_shell_ratio,
+            has_readme_or_docs,
+            safe_tool_patterns,
+            suspicious_url_ratio,
+            code_to_prose_ratio,
+            // Phase 5: discriminative cross-features
+            credential_and_exfil,
+            obfuscation_and_privilege,
+            undocumented_risk,
+            risk_signal_count,
+            stealth_composite,
         }
     }
 
@@ -620,11 +759,11 @@ impl SkillFeatures {
         };
 
         vec![
-            clip_scale(self.shell_exec_count, 20), // 0  — 95th pctile in training set
+            clip_scale(self.shell_exec_count, 30), // 0  — legitimate CI/CD skills can have 25+ shell commands
             clip_scale(self.network_call_count, 50), // 1  — legitimate API skills can have many calls
             clip_scale(self.fs_write_count, 30), // 2  — generator/template skills write many files
             clip_scale(self.env_access_count, 20), // 3  — config-heavy skills read ~15-20 vars
-            clip_scale(self.credential_patterns, 10), // 4  — auth skills legitimately mention ~5-10
+            clip_scale(self.credential_patterns, 15), // 4  — auth-heavy skills can mention 10-15 patterns
             bool_scale(self.external_download),  // 5  — binary: present or not
             clip_scale(self.obfuscation_score as u32, 15), // 6  — rare above 10 even in malicious samples
             bool_scale(self.privilege_escalation),         // 7  — binary: present or not
@@ -646,7 +785,7 @@ impl SkillFeatures {
             clip_scale_f32(self.non_ascii_ratio, 0.5), // 23 — >50% non-ASCII is highly suspicious
             clip_scale(self.max_line_length, 1000), // 24 — >1000 chars per line = minified/obfuscated
             clip_scale_f32(self.comment_ratio, 1.0), // 25 — ratio [0,1], 1.0 = all comments
-            clip_scale(self.domain_count, 20),      // 26 — >20 unique domains is unusual
+            clip_scale(self.domain_count, 30),      // 26 — API aggregator skills reference many domains
             clip_scale(self.string_obfuscation_score, 10), // 27 — hex+join+chr+confusable+split
             // Phase 3b: density / interaction features (28–34)
             clip_scale_f32(self.shell_exec_per_line, 1.0), // 28 — ratio, saturates at 1.0
@@ -656,6 +795,18 @@ impl SkillFeatures {
             clip_scale(self.obfuscation_and_exec, 10),     // 32 — obfuscated exec cap at 10
             clip_scale(self.file_extension_diversity, 5),  // 33 — >5 unique extensions is unusual
             bool_scale(self.has_shebang),                  // 34 — binary: shebang present or not
+            // Phase 4: boundary-discriminating features (35–39)
+            clip_scale_f32(self.documented_shell_ratio, 1.0), // 35 — ratio [0,1], high = documented
+            bool_scale(self.has_readme_or_docs),              // 36 — binary: has docs
+            clip_scale(self.safe_tool_patterns, 10),          // 37 — safe tool mentions, cap at 10
+            clip_scale_f32(self.suspicious_url_ratio, 1.0),   // 38 — ratio [0,1], high = suspicious
+            clip_scale_f32(self.code_to_prose_ratio, 5.0),    // 39 — ratio, cap at 5.0
+            // Phase 5: discriminative cross-features (40–44)
+            clip_scale(self.credential_and_exfil, 10),        // 40 — credential + exfil co-occurrence
+            clip_scale(self.obfuscation_and_privilege, 15),   // 41 — obfuscation + privilege
+            clip_scale_f32(self.undocumented_risk, 30.0),     // 42 — undocumented shell commands
+            clip_scale(self.risk_signal_count, 8),            // 43 — count of active risk categories
+            clip_scale_f32(self.stealth_composite, 15.0),     // 44 — obfuscated + no comments
         ]
     }
 }
@@ -899,7 +1050,7 @@ Instructions here.
         let features = SkillFeatures::extract(&skill, None);
         let normalized = features.to_normalized_vec();
 
-        assert_eq!(normalized.len(), 35);
+        assert_eq!(normalized.len(), 45);
         for &val in &normalized {
             assert!((0..=128).contains(&val), "Value {} out of range", val);
         }

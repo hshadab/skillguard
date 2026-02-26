@@ -171,12 +171,14 @@ async fn classify_and_respond(
             state.usage.persist_to_disk();
 
             let entropy = scores.entropy();
+            let is_dangerous = classification.is_deny();
             let response = ProveEvaluateResponse {
                 success: true,
                 error: None,
                 evaluation: Some(ProvedEvaluationResult {
                     skill_name,
                     classification: classification.as_str().to_string(),
+                    is_dangerous,
                     decision: decision.as_str().to_string(),
                     confidence,
                     scores,
@@ -245,6 +247,7 @@ pub async fn health_handler(
         proving_scheme: "Jolt/Dory".to_string(),
         cache_writable,
         pay_to: state.config.pay_to.clone(),
+        safety_metrics: state.safety_metrics.clone(),
     };
     axum::Json(response)
 }
@@ -528,6 +531,7 @@ pub async fn stats_handler(
     let response = StatsResponse {
         uptime_seconds: state.start_time.elapsed().as_secs(),
         model_hash: state.model_hash.clone(),
+        safety_metrics: state.safety_metrics.clone(),
         requests: RequestStats {
             total: state.usage.total_requests.load(Ordering::Relaxed),
             errors: state.usage.total_errors.load(Ordering::Relaxed),

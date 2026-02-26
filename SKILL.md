@@ -2,7 +2,7 @@
 name: skillguard
 author: hshadab
 description: Verifiable AI skill safety classifier — evaluate any agent skill for safety with a cryptographic ZK proof
-version: 2.0.0
+version: 2.1.0
 ---
 
 # SkillGuard
@@ -50,8 +50,8 @@ Returns classification, decision, confidence, per-class scores, reasoning, raw m
 
 ## How it works
 
-1. Extracts 35 security-relevant features from the skill (commands, file types, obfuscation patterns, metadata signals)
-2. Runs a 3-layer MLP (4,419 parameters) using fixed-point integer arithmetic inside a ZK circuit
+1. Extracts 45 security-relevant features from the skill (commands, file types, obfuscation patterns, metadata signals, cross-features)
+2. Runs a 3-layer MLP (4,979 parameters) using fixed-point integer arithmetic inside a ZK circuit
 3. Generates a Jolt/Dory SNARK proof that the inference was computed correctly
 4. Returns the classification along with the proof for independent verification
 

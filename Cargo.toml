@@ -1,6 +1,6 @@
 [package]
 name = "skillguard"
-version = "2.0.0"
+version = "2.3.0"
 edition = "2021"
 description = "Verifiable AI safety classifier powered by Jolt Atlas ZKML with x402 agentic commerce"
 license = "MIT"
