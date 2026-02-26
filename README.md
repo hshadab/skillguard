@@ -96,8 +96,7 @@ Just as an SSL certificate proves a server is who it claims to be, every SkillGu
 
 4. **Anyone verifies** — Anyone can verify a proof by posting it to `/api/v1/verify`. Verification is free, takes milliseconds, and requires no API key.
 
-5. **Classification made** — The result (ALLOW, FLAG, or DENY) plus the proof become a tamperproof safety certificate for the skill. Payment is handled via the [x402 protocol](https://www.x402.org/) at $0.001 USDC on Base per classification.
-
+5. **Classification made** — The result (ALLOW, FLAG, or DENY) plus the proof become a tamperproof safety certificate for the skill.
 ---
 
 ## Quick Start
@@ -131,8 +130,6 @@ make setup-hooks
 # With API key authentication
 SKILLGUARD_API_KEY=your-secret-key ./target/release/skillguard serve --bind 0.0.0.0:8080
 
-# With x402 payments enabled (USDC on Base)
-SKILLGUARD_PAY_TO=0xYourBaseWallet ./target/release/skillguard serve --bind 0.0.0.0:8080
 ```
 
 ### Classify a Skill
@@ -184,10 +181,10 @@ skillguard check --input SKILL.md --prove --format json
 
 | Method | Path | Auth | Price | Description |
 |--------|------|------|-------|-------------|
-| POST | `/api/v1/evaluate` | API key or x402 | $0.001 USDC | Classify a skill with mandatory zkML proof (auto-detects name lookup vs full data) |
+| POST | `/api/v1/evaluate` | None | Free | Classify a skill with mandatory zkML proof (auto-detects name lookup vs full data) |
 | GET | `/api/v1/catalog/{name}` | None | Free | Instant cached classification lookup |
 | POST | `/api/v1/verify` | None | Free | Verify a zkML proof |
-| GET | `/health` | None | Free | Health check (includes `zkml_enabled`, `model_version`, `pay_to`) |
+| GET | `/health` | None | Free | Health check (includes `zkml_enabled`, `model_version`) |
 | GET | `/stats` | None | Free | Usage statistics and proof counts |
 | POST | `/api/v1/feedback` | None | Free | Submit classification feedback/disputes |
 | GET | `/openapi.json` | None | Free | OpenAPI 3.1 specification |
@@ -263,7 +260,7 @@ The training pipeline uses Claude API to label skills at scale with an improved 
 |-----------|---------|
 | Model | 3-layer MLP: 45→56→40→3 (ReLU). 4,979 parameters. Fixed-point i32 arithmetic (scale=7, rounding division). QAT with exact i32 simulation + FGSM adversarial training. v2.3: 619 LLM-labeled real skills + augmented, danger-sensitive loss. Three-layer defense: MLP + 7 danger-floor rules + safe-floor rule. v3.0 target: 1,400+ real skills. |
 | Proving | [Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas) SNARK with Dory commitment (BN254 curve). ~53 KB proofs, ~4s proving time. |
-| Payment | [x402](https://www.x402.org/) HTTP 402 protocol. $0.001 USDC on Base. [OpenFacilitator](https://openfacilitator.io). |
+| Payment | Free (no payment required) |
 | Server | Axum async HTTP. LRU per-IP rate limiting (IPv6 /64 aggregation), constant-time API key auth, CORS, graceful shutdown, JSONL access logging. |
 | MCP | stdio-based MCP server (`skillguard-mcp`) for zero-code agent integration via `skillguard_evaluate` tool. |
 | Runtime | Docker on Render. Rust nightly. Pre-generated Dory SRS bundled in image. |
@@ -536,11 +533,7 @@ Response fields (identical to the HTTP API):
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `SKILLGUARD_API_KEY` | Bearer token for API authentication. If unset, all endpoints are open. | (none) |
-| `SKILLGUARD_PAY_TO` | Ethereum address to receive x402 USDC payments on Base. | (none) |
-| `SKILLGUARD_FACILITATOR_URL` | x402 facilitator URL. | `https://pay.openfacilitator.io` |
-| `SKILLGUARD_EXTERNAL_URL` | Public base URL (for x402 resource URLs behind TLS proxies). | (none) |
 | `SKILLGUARD_SKIP_PROVER` | Set to `1` to disable the ZKML prover. | `0` |
-| `SKILLGUARD_PRICE_USDC_MICRO` | Price per classification in USDC micro-units (6 decimals). `1000` = $0.001. | `1000` |
 | `REDIS_URL` | Redis connection URL for durable metrics persistence. If set, counters are persisted to Redis in addition to disk and survive container redeployments. | (none) |
 | `RUST_LOG` | Log level filter. | `info` |
 
@@ -552,7 +545,6 @@ See `.env.example` for a documented template of all variables.
 
 - [Jolt Atlas](https://github.com/ICME-Lab/jolt-atlas) — ZKML proving stack
 - [Jolt](https://github.com/a16z/jolt) — SNARK VM by a16z
-- [x402 Protocol](https://www.x402.org/) — HTTP 402 payment protocol
 - [OpenClaw](https://openclaw.ai) — Open framework for AI agent skills
 - [ClawHub](https://clawhub.ai) — Registry for OpenClaw skills
 - [Novanet](https://novanet.xyz) — Verifiable inference network

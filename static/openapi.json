@@ -15,12 +15,6 @@
       "description": "Production"
     }
   ],
-  "x-x402": {
-    "description": "Paid endpoints accept x402 payment as an alternative to an API key. Send a 402 payment header with USDC on Base to access evaluation results.",
-    "facilitator": "https://pay.openfacilitator.io",
-    "token": "USDC",
-    "network": "Base (EIP-155 chain 8453)"
-  },
   "paths": {
     "/": {
       "get": {
@@ -136,14 +130,8 @@
         "summary": "Classify a skill",
         "description": "Single endpoint for all skill classifications. Every response includes a mandatory zkML proof.\n\nAccepts two request formats:\n\n1. **Name lookup:** `{\"skill\": \"skill-slug\"}` — fetches skill data from ClawHub, then classifies.\n2. **Full skill data:** `{\"skill\": {\"name\": \"...\", ...}}` — classifies the provided skill directly.\n\nBoth formats return the same response with classification, scores, reasoning, and a zkML proof bundle. If the prover is still initializing, the endpoint returns an error until it is ready.",
         "parameters": [],
-        "x-x402-pricing": {
-          "amount": "0.001",
-          "currency": "USDC",
-          "network": "Base"
-        },
         "security": [
-          { "BearerAuth": [] },
-          { "x402Payment": [] }
+          { "BearerAuth": [] }
         ],
         "requestBody": {
           "required": true,
@@ -190,12 +178,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Missing or invalid API key (when x402 is not available)"
-          },
-          "402": {
-            "description": "Payment required (x402) or payment settlement failed"
           },
           "429": {
             "description": "Rate limit exceeded"
@@ -270,12 +252,6 @@
         "type": "http",
         "scheme": "bearer",
         "description": "API key passed as a Bearer token."
-      },
-      "x402Payment": {
-        "type": "apiKey",
-        "in": "header",
-        "name": "X-PAYMENT",
-        "description": "x402 USDC payment header on Base. $0.001 per request."
       }
     },
     "schemas": {
@@ -477,10 +453,6 @@
           "zkml_enabled": { "type": "boolean", "description": "Whether the ZKML prover is initialized and available" },
           "proving_scheme": { "type": "string", "description": "Polynomial commitment scheme (e.g. Jolt/Dory)" },
           "cache_writable": { "type": "boolean", "description": "Whether the proof cache directory is writable" },
-          "pay_to": {
-            "type": "string",
-            "description": "Ethereum address receiving x402 payments (null if x402 is disabled)"
-          },
           "safety_metrics": { "$ref": "#/components/schemas/BinarySafetyMetrics" }
         }
       },

@@ -138,7 +138,7 @@ header .tagline a:hover { text-decoration: underline; }
 .status-meta span { margin-right: 16px; }
 .status-meta code { color: var(--text-primary); font-size: 0.8rem; }
 
-/* x402 info */
+/* Info grid */
 .x402-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
 }
@@ -272,23 +272,6 @@ footer a:hover { text-decoration: underline; }
   .spinner { animation: none; }
 }
 
-/* Wallet connection */
-.wallet-bar {
-  display: flex; align-items: center; justify-content: space-between;
-  flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
-  padding: 8px 12px; background: var(--bg-input); border-radius: var(--radius);
-  border: 1px solid var(--border);
-}
-.wallet-section {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-}
-.wallet-row {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-}
-.wallet-label {
-  font-size: 0.72rem; color: var(--text-muted); font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.04em;
-}
 .btn-copy {
   padding: 3px 10px; border: 1px solid var(--border); border-radius: var(--radius);
   background: var(--bg-card); color: var(--text-secondary); font-size: 0.72rem;
@@ -296,43 +279,6 @@ footer a:hover { text-decoration: underline; }
 }
 .btn-copy:hover { border-color: var(--accent); color: var(--accent); }
 .btn-copy.copied { border-color: var(--safe); color: var(--safe); }
-.btn-wallet {
-  padding: 7px 16px; border: none; border-radius: var(--radius);
-  font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s;
-}
-.btn-wallet:hover { opacity: 0.85; }
-.btn-connect { background: #f6851b; color: #fff; }
-.btn-disconnect { background: var(--border); color: var(--text-secondary); font-size: 0.78rem; padding: 5px 12px; }
-.wallet-addr {
-  font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.82rem;
-  color: var(--text-primary);
-}
-.wallet-balance {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;
-  background: var(--safe-bg); color: var(--safe);
-  font-family: 'SF Mono', 'Fira Code', monospace;
-}
-.wallet-network {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 10px; border-radius: 12px; font-size: 0.72rem; font-weight: 600;
-}
-.wallet-network.base { background: rgba(59,130,246,0.15); color: var(--accent); }
-.wallet-network.wrong { background: var(--deny-bg); color: var(--deny); }
-.payment-badge {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;
-  background: rgba(59,130,246,0.15); color: var(--accent); margin-left: 4px;
-}
-.payment-badge.payment-link {
-  text-decoration: none; cursor: pointer;
-  background: rgba(34,197,94,0.15); color: #22c55e;
-}
-.payment-badge.payment-link:hover { background: rgba(34,197,94,0.25); }
-.payment-badge.payment-failed {
-  background: rgba(239,68,68,0.15); color: #ef4444;
-}
-
 /* Mode tabs */
 .mode-tabs {
   display: flex; gap: 0; margin-bottom: 14px;
@@ -468,13 +414,11 @@ footer a:hover { text-decoration: underline; }
   .skill-result-meta { width: 100%; justify-content: space-between; }
   .result-header { gap: 8px; }
   .result-badge { font-size: 0.78rem; padding: 3px 10px; }
-  .payment-badge { font-size: 0.68rem; padding: 2px 8px; }
   .proof-meta { flex-direction: column; gap: 4px; }
   .endpoint-table { font-size: 0.78rem; }
   .endpoint-table th, .endpoint-table td { padding: 6px 8px; }
   .card { padding: 14px; }
   .mode-tabs button { font-size: 0.82rem; padding: 6px 14px; }
-  .wallet-section { flex-wrap: wrap; }
 }
 </style>
 </head>
@@ -490,7 +434,7 @@ footer a:hover { text-decoration: underline; }
       Unforgeable cryptographic safety guardrails for OpenClaw agent skills.
     </div>
     <div class="tagline">
-      Powered by <a href="https://github.com/ICME-Lab/jolt-atlas" target="_blank" rel="noopener">Jolt Atlas</a> zero-knowledge machine learning proofs &middot; Paid via <a href="https://www.x402.org/" target="_blank" rel="noopener">x402</a> on Base
+      Powered by <a href="https://github.com/ICME-Lab/jolt-atlas" target="_blank" rel="noopener">Jolt Atlas</a> zero-knowledge machine learning proofs &middot; Free
     </div>
     <div class="proof-counter-badge" id="proof-counter-badge">
       <div class="proof-counter-label">zkML Proofs Generated:</div>
@@ -637,46 +581,9 @@ footer a:hover { text-decoration: underline; }
     <div class="status-meta" id="status-meta" style="margin-top:10px"></div>
   </div>
 
-  <!-- x402 Payment Info -->
-  <div class="card">
-    <div class="card-title">x402 Payment</div>
-    <div class="x402-grid">
-      <div class="x402-item">
-        <div class="x402-label">Price per provable classification</div>
-        <div class="x402-value highlight">$0.001 USDC</div>
-      </div>
-      <div class="x402-item">
-        <div class="x402-label">Includes</div>
-        <div class="x402-value highlight">zkML proof</div>
-      </div>
-      <div class="x402-item">
-        <div class="x402-label">Network</div>
-        <div class="x402-value">Base (eip155:8453)</div>
-      </div>
-      <div class="x402-item">
-        <div class="x402-label">Protocol</div>
-        <div class="x402-value">HTTP 402 / x402</div>
-      </div>
-    </div>
-  </div>
-
   <!-- Try It -->
   <div class="card">
     <div class="card-title">Try It</div>
-    <div class="wallet-bar">
-      <div class="wallet-section" id="wallet-section">
-        <div class="wallet-row">
-          <button class="btn-wallet btn-connect" id="btn-connect-wallet" type="button" aria-label="Connect wallet">Connect Wallet</button>
-          <span class="wallet-label" id="wallet-label" style="display:none">Your Wallet</span>
-          <span class="wallet-addr" id="wallet-addr" style="display:none"></span>
-          <button class="btn-copy btn-copy-addr" id="btn-copy-addr" type="button" style="display:none" aria-label="Copy wallet address to clipboard">Copy</button>
-          <span class="wallet-balance" id="wallet-balance" style="display:none"></span>
-          <span class="wallet-network" id="wallet-network" style="display:none"></span>
-          <button class="btn-wallet btn-disconnect" id="btn-disconnect-wallet" type="button" style="display:none" aria-label="Disconnect wallet">Disconnect</button>
-        </div>
-      </div>
-    </div>
-
     <div class="mode-tabs">
       <button class="mode-tab active" id="tab-search" type="button">Search Skills</button>
       <button class="mode-tab" id="tab-custom" type="button">Custom Skill</button>
@@ -773,7 +680,7 @@ This skill fetches current weather data from a public API and returns a friendly
         <tr><th>Method</th><th>Path</th><th>Auth</th><th>Price</th></tr>
       </thead>
       <tbody>
-        <tr><td>POST</td><td><code>/api/v1/evaluate</code></td><td>API key or x402</td><td class="price">$0.001</td></tr>
+        <tr><td>POST</td><td><code>/api/v1/evaluate</code></td><td>None</td><td class="free">Free</td></tr>
         <tr><td>POST</td><td><code>/api/v1/verify</code></td><td>None</td><td class="free">Free</td></tr>
         <tr><td>GET</td><td><code>/health</code></td><td>None</td><td class="free">Free</td></tr>
         <tr><td>GET</td><td><code>/stats</code></td><td>None</td><td class="free">Free</td></tr>
@@ -832,7 +739,6 @@ This skill fetches current weather data from a public API and returns a friendly
   <div class="card">
     <div class="card-title">Auth Methods</div>
     <div class="stats-grid">
-      <div class="stat-card"><div class="stat-value" id="st-auth-x402" style="color:var(--safe)">0</div><div class="stat-label">x402 Paid</div></div>
       <div class="stat-card"><div class="stat-value" id="st-auth-apikey">0</div><div class="stat-label">API Key</div></div>
       <div class="stat-card"><div class="stat-value" id="st-auth-open">0</div><div class="stat-label">Open</div></div>
     </div>
@@ -853,8 +759,7 @@ This skill fetches current weather data from a public API and returns a friendly
   <footer>
     <span id="footer-version">SkillGuard</span> &middot;
     <a href="https://github.com/hshadab/skillguard" target="_blank" rel="noopener">GitHub</a> &middot;
-    <a href="https://github.com/ICME-Lab/jolt-atlas" target="_blank" rel="noopener">Jolt Atlas</a> &middot;
-    <a href="https://www.x402.org/" target="_blank" rel="noopener">x402 Protocol</a>
+    <a href="https://github.com/ICME-Lab/jolt-atlas" target="_blank" rel="noopener">Jolt Atlas</a>
   </footer>
 
 </div>
@@ -867,10 +772,6 @@ var CONFIG = {
   evaluateEndpoint: '/api/v1/evaluate',
   verifyEndpoint: '/api/v1/verify',
   skillIndexUrl: 'https://raw.githubusercontent.com/VoltAgent/awesome-openclaw-skills/main/README.md',
-  baseRpcUrl: 'https://mainnet.base.org',
-  usdcContract: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-  baseChainId: '0x2105',
-  baseExplorerUrl: 'https://basescan.org',
   healthIntervalMs: 30000,
   statsIntervalMs: 10000,
   skillCacheTtlMs: 3600000
@@ -947,7 +848,6 @@ function loadStats() {
       $('bar-dangerous').style.width = (cls.dangerous / max * 100) + '%';
 
       var auth = d.auth || {};
-      $('st-auth-x402').textContent = auth.x402 || 0;
       $('st-auth-apikey').textContent = auth.api_key || 0;
       $('st-auth-open').textContent = auth.open || 0;
 
@@ -959,87 +859,6 @@ function loadStats() {
       $('st-mcp-dangerous').textContent = mcp.dangerous || 0;
     })
     .catch(function() {});
-}
-
-/* ── Wallet connection (EIP-1193 / window.ethereum) ── */
-var walletState = { connected: false, address: null, chainId: null };
-var BASE_CHAIN_ID = CONFIG.baseChainId;
-var USDC_BASE = CONFIG.usdcContract;
-
-function truncateAddr(addr) {
-  return addr.slice(0, 6) + '...' + addr.slice(-4);
-}
-
-async function fetchUsdcBalance(address) {
-  // ERC-20 balanceOf(address) — selector 0x70a08231 + address padded to 32 bytes
-  var padded = address.toLowerCase().replace('0x', '').padStart(64, '0');
-  var callData = '0x70a08231' + padded;
-
-  try {
-    // Use public Base RPC directly — more reliable than routing through wallet provider
-    var r = await fetch(CONFIG.baseRpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0', id: 1, method: 'eth_call',
-        params: [{ to: USDC_BASE, data: callData }, 'latest']
-      })
-    });
-    var resp = await r.json();
-    if (!resp.result) return '0.00';
-    var raw = parseInt(resp.result, 16);
-    if (isNaN(raw)) raw = 0;
-    // USDC has 6 decimals
-    var balance = (raw / 1e6).toFixed(3);
-    var balEl = $('wallet-balance');
-    balEl.textContent = balance + ' USDC';
-    balEl.style.display = '';
-    return balance;
-  } catch (e) {
-    // Non-critical — balance just won't show
-    return '0.00';
-  }
-}
-
-function updateWalletUI() {
-  var btnConnect = $('btn-connect-wallet');
-  var labelEl = $('wallet-label');
-  var addrEl = $('wallet-addr');
-  var btnCopy = $('btn-copy-addr');
-  var balEl = $('wallet-balance');
-  var netEl = $('wallet-network');
-  var btnDisconnect = $('btn-disconnect-wallet');
-
-  if (walletState.connected) {
-    btnConnect.style.display = 'none';
-    labelEl.style.display = '';
-    addrEl.textContent = truncateAddr(walletState.address);
-    addrEl.style.display = '';
-    btnCopy.style.display = '';
-    btnDisconnect.style.display = '';
-
-    var isBase = walletState.chainId === BASE_CHAIN_ID ||
-                 walletState.chainId === '0x2105' ||
-                 parseInt(walletState.chainId, 16) === 8453;
-    netEl.style.display = '';
-    if (isBase) {
-      netEl.className = 'wallet-network base';
-      netEl.textContent = 'Base';
-      fetchUsdcBalance(walletState.address);
-    } else {
-      netEl.className = 'wallet-network wrong';
-      netEl.textContent = 'Wrong Network';
-      balEl.style.display = 'none';
-    }
-  } else {
-    btnConnect.style.display = '';
-    labelEl.style.display = 'none';
-    addrEl.style.display = 'none';
-    btnCopy.style.display = 'none';
-    balEl.style.display = 'none';
-    netEl.style.display = 'none';
-    btnDisconnect.style.display = 'none';
-  }
 }
 
 function withTimeout(promise, ms, msg) {
@@ -1055,209 +874,6 @@ function withTimeout(promise, ms, msg) {
       reject(err);
     });
   });
-}
-
-function getProvider() {
-  // Return a promise that resolves to window.ethereum, waiting up to 3s for injection
-  if (window.ethereum) return Promise.resolve(window.ethereum);
-  return new Promise(function(resolve, reject) {
-    var resolved = false;
-    window.addEventListener('ethereum#initialized', function() {
-      if (!resolved) { resolved = true; resolve(window.ethereum); }
-    }, { once: true });
-    // Also check via EIP-6963 (multi-wallet standard)
-    window.addEventListener('eip6963:announceProvider', function(e) {
-      if (!resolved && e.detail && e.detail.provider) {
-        resolved = true;
-        resolve(e.detail.provider);
-      }
-    }, { once: true });
-    window.dispatchEvent(new Event('eip6963:requestProvider'));
-    setTimeout(function() {
-      if (!resolved) {
-        resolved = true;
-        if (window.ethereum) resolve(window.ethereum);
-        else reject(new Error('No wallet detected. Install a browser wallet (Phantom, MetaMask, Rabby, etc.) to pay with USDC on Base.'));
-      }
-    }, 3000);
-  });
-}
-
-async function connectWallet() {
-  // Update button text while connecting
-  var btns = document.querySelectorAll('.btn-connect');
-  for (var i = 0; i < btns.length; i++) btns[i].textContent = 'Connecting...';
-
-  try {
-    var provider = await getProvider();
-    // Ensure event listeners are attached
-    if (!window.ethereum) window.ethereum = provider;
-    attachWalletListeners();
-
-    var accounts = await withTimeout(
-      provider.request({ method: 'eth_requestAccounts' }),
-      30000,
-      'Wallet did not respond. Open your wallet extension and approve the connection request.'
-    );
-    if (!accounts || !accounts.length) throw new Error('No accounts returned by wallet.');
-    walletState.address = accounts[0];
-    walletState.connected = true;
-
-    var chainId = await window.ethereum.request({ method: 'eth_chainId' });
-    walletState.chainId = chainId;
-    if (chainId !== BASE_CHAIN_ID) {
-      try {
-        await switchToBase();
-        walletState.chainId = BASE_CHAIN_ID;
-      } catch (e) {
-        // User rejected chain switch — stay connected but show wrong network
-      }
-    }
-
-    updateWalletUI();
-  } catch (err) {
-    // Reset button text on failure
-    var btns2 = document.querySelectorAll('.btn-connect');
-    for (var j = 0; j < btns2.length; j++) btns2[j].textContent = 'Connect Wallet';
-    throw err; // Re-throw so callers can handle
-  }
-}
-
-function switchToBase() {
-  return window.ethereum.request({
-    method: 'wallet_switchEthereumChain',
-    params: [{ chainId: BASE_CHAIN_ID }]
-  }).catch(function(err) {
-    if (err.code === 4902) {
-      return window.ethereum.request({
-        method: 'wallet_addEthereumChain',
-        params: [{
-          chainId: BASE_CHAIN_ID,
-          chainName: 'Base',
-          nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-          rpcUrls: [CONFIG.baseRpcUrl],
-          blockExplorerUrls: [CONFIG.baseExplorerUrl]
-        }]
-      });
-    }
-    throw err;
-  });
-}
-
-function disconnectWallet() {
-  walletState = { connected: false, address: null, chainId: null };
-  updateWalletUI();
-}
-
-// Auto-detect wallet events — defer to avoid racing provider initialization
-function attachWalletListeners() {
-  if (!window.ethereum) return;
-  window.ethereum.on('accountsChanged', function(accounts) {
-    if (accounts.length === 0) {
-      disconnectWallet();
-    } else {
-      walletState.address = accounts[0];
-      walletState.connected = true;
-      updateWalletUI();
-    }
-  });
-  window.ethereum.on('chainChanged', function(chainId) {
-    walletState.chainId = chainId;
-    updateWalletUI();
-  });
-}
-if (window.ethereum) {
-  attachWalletListeners();
-} else {
-  window.addEventListener('ethereum#initialized', attachWalletListeners, { once: true });
-}
-
-/* ── x402 payment helpers ── */
-function randomBytes32() {
-  var arr = new Uint8Array(32);
-  crypto.getRandomValues(arr);
-  return '0x' + Array.from(arr).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
-}
-
-async function parse402Response(response) {
-  // V2 protocol: base64 JSON in Payment-Required header
-  var raw = response.headers.get('Payment-Required');
-  if (raw) {
-    try { return JSON.parse(atob(raw)); } catch (e) { /* fall through to body */ }
-  }
-  // V1 protocol: payment requirements in JSON response body
-  try { return await response.json(); } catch (e) { return null; }
-}
-
-async function signX402Payment(requirements) {
-  var accept = requirements.accepts[0];
-  var USDC_ADDRESS = accept.asset || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-  var extraName = (accept.extra && accept.extra.name) || 'USD Coin';
-  var extraVersion = (accept.extra && accept.extra.version) || '2';
-  var maxTimeout = accept.maxTimeoutSeconds || 30;
-  var validBeforeNum = Math.floor(Date.now() / 1000) + maxTimeout;
-  var nonce = randomBytes32();
-  // V1 uses maxAmountRequired, V2 uses amount
-  var paymentAmount = accept.maxAmountRequired || accept.amount;
-
-  // EIP-712 typed data for ERC-3009 TransferWithAuthorization
-  var typedData = {
-    types: {
-      EIP712Domain: [
-        { name: 'name', type: 'string' },
-        { name: 'version', type: 'string' },
-        { name: 'chainId', type: 'uint256' },
-        { name: 'verifyingContract', type: 'address' }
-      ],
-      TransferWithAuthorization: [
-        { name: 'from', type: 'address' },
-        { name: 'to', type: 'address' },
-        { name: 'value', type: 'uint256' },
-        { name: 'validAfter', type: 'uint256' },
-        { name: 'validBefore', type: 'uint256' },
-        { name: 'nonce', type: 'bytes32' }
-      ]
-    },
-    primaryType: 'TransferWithAuthorization',
-    domain: {
-      name: extraName,
-      version: extraVersion,
-      chainId: 8453,
-      verifyingContract: USDC_ADDRESS
-    },
-    message: {
-      from: walletState.address,
-      to: accept.payTo,
-      value: String(paymentAmount),
-      validAfter: '0',
-      validBefore: String(validBeforeNum),
-      nonce: nonce
-    }
-  };
-
-  var signature = await window.ethereum.request({
-    method: 'eth_signTypedData_v4',
-    params: [walletState.address, JSON.stringify(typedData)]
-  });
-  // Build v1 PaymentPayload per x402-types v1 spec:
-  // { x402Version: 1, scheme, network, payload: { signature, authorization } }
-  var paymentPayload = {
-    x402Version: 1,
-    scheme: accept.scheme || 'exact',
-    network: accept.network || 'base',
-    payload: {
-      signature: signature,
-      authorization: {
-        from: walletState.address,
-        to: accept.payTo,
-        value: String(paymentAmount),
-        validAfter: '0',
-        validBefore: String(validBeforeNum),
-        nonce: nonce
-      }
-    }
-  };
-  return btoa(JSON.stringify(paymentPayload));
 }
 
 // Try It form logic
@@ -1291,30 +907,6 @@ async function signX402Payment(requirements) {
     var open = advSection.style.display !== 'none';
     advSection.style.display = open ? 'none' : 'flex';
     advToggle.innerHTML = (open ? '&#9654;' : '&#9660;') + ' Advanced';
-  });
-
-  /* ── Wallet buttons ── */
-  function onConnectClick() {
-    connectWallet().catch(function(err) {
-      if (err && err.code === 4001) {
-        setOutput('<div class="try-error">Wallet connection rejected by user.</div>');
-      } else {
-        setOutput('<div class="try-error">Wallet connection failed: ' + escHtml(err.message || String(err)) + '</div>');
-      }
-    });
-  }
-  $('btn-connect-wallet').addEventListener('click', onConnectClick);
-  $('btn-disconnect-wallet').addEventListener('click', function() { disconnectWallet(); });
-
-  /* ── Copy user wallet address ── */
-  $('btn-copy-addr').addEventListener('click', function() {
-    if (!walletState.address) return;
-    navigator.clipboard.writeText(walletState.address).then(function() {
-      var btn = $('btn-copy-addr');
-      btn.textContent = 'Copied!';
-      btn.classList.add('copied');
-      setTimeout(function() { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
-    });
   });
 
   /* ── Shared helpers ── */
@@ -1395,7 +987,7 @@ async function signX402Payment(requirements) {
     return html;
   }
 
-  function renderResult(ev, proofBundle, timeMs, paidViaX402, settlement, sourceUrl) {
+  function renderResult(ev, proofBundle, timeMs, sourceUrl) {
     var cls = classColor(ev.classification);
     // ev.confidence is the top-class softmax probability (0.0–1.0)
     var confidence = (typeof ev.confidence === 'number') ? ev.confidence : 0;
@@ -1416,17 +1008,6 @@ async function signX402Payment(requirements) {
       else if (confidence >= 0.40) { tierLabel = 'Moderate'; tierColor = 'var(--caution)'; }
       else { tierLabel = 'Low'; tierColor = 'var(--dangerous)'; }
       html += '<span class="result-confidence" style="color:' + tierColor + '">Confidence: <strong>' + tierLabel + '</strong> <span style="font-size:0.78rem;color:var(--text-muted)">(' + confPct + '%)</span></span>';
-    }
-    if (paidViaX402) {
-      if (settlement && settlement.success && settlement.transaction) {
-        var txHash = settlement.transaction;
-        var shortTx = txHash.slice(0, 10) + '...' + txHash.slice(-8);
-        html += '<a href="' + CONFIG.baseExplorerUrl + '/tx/' + escHtml(txHash) + '" target="_blank" rel="noopener" class="payment-badge payment-link">&#x2714; x402 settled &middot; ' + shortTx + '</a>';
-      } else if (settlement && !settlement.success) {
-        html += '<span class="payment-badge payment-failed">&#x2718; x402 settlement failed</span>';
-      } else {
-        html += '<span class="payment-badge">Paid via x402</span>';
-      }
     }
     html += '</div>';
     if (isLowCertainty) {
@@ -1523,23 +1104,14 @@ async function signX402Payment(requirements) {
     });
   }
 
-  function parseSettlementHeader(response) {
-    // X-Payment-Response is base64-encoded JSON from the facilitator
-    var raw = response.headers.get('X-Payment-Response');
-    if (!raw) return null;
-    try { return JSON.parse(atob(raw)); } catch (e) { return null; }
-  }
-
-  function handleResponse(r, paidViaX402) {
-    // Capture settlement info before consuming response body
-    var settlement = paidViaX402 ? parseSettlementHeader(r) : null;
+  function handleResponse(r) {
     return safeJson(r).then(function(d) {
       if (!d) throw new Error('Server returned empty response (HTTP ' + r.status + ').');
       if (!r.ok || !d.success) throw new Error(d.error || 'Request failed (HTTP ' + r.status + ')');
       var html;
       if (d.evaluation) {
         var proof = d.evaluation.proof;
-        html = renderResult(d.evaluation, proof, d.processing_time_ms, paidViaX402, settlement, currentSkillUrl);
+        html = renderResult(d.evaluation, proof, d.processing_time_ms, currentSkillUrl);
       } else {
         html = '<div class="try-error">Unexpected response format.</div>';
       }
@@ -1577,75 +1149,12 @@ async function signX402Payment(requirements) {
     var reqBody = JSON.stringify(data);
 
     withTimeout(fetch(url, { method: 'POST', headers: getHeaders(), body: reqBody }), 60000, 'Classification request timed out')
-      .then(async function(r) {
+      .then(function(r) {
         if (r.status === 401) throw new Error('API key required. Provide a valid key under Advanced.');
-        if (r.status === 402) {
-          var requirements = await parse402Response(r);
-          if (!requirements || !requirements.accepts || !requirements.accepts.length) {
-            throw new Error('Payment required but server sent no payment details.');
-          }
-          // Connect wallet if needed
-          var walletReady;
-          if (!walletState.connected) {
-            showLoading('Connecting wallet \u2014 check your wallet popup...');
-            walletReady = connectWallet();
-          } else {
-            walletReady = Promise.resolve();
-          }
-
-          return walletReady.then(async function() {
-            // Ensure wallet is on Base (8453) before signing
-            var currentChain = await window.ethereum.request({ method: 'eth_chainId' });
-            if (currentChain !== BASE_CHAIN_ID) {
-              showLoading('Switching to Base network...');
-              await switchToBase();
-              walletState.chainId = BASE_CHAIN_ID;
-            }
-            // Check USDC balance before signing
-            var requiredAmount = parseInt(requirements.accepts[0].maxAmountRequired || requirements.accepts[0].amount) || 0;
-            return fetchUsdcBalance(walletState.address).then(function(bal) {
-              var balUnits = Math.round(parseFloat(bal) * 1e6);
-              if (balUnits < requiredAmount) {
-                var needed = (requiredAmount / 1e6).toFixed(4);
-                throw new Error('Insufficient USDC balance. You need at least $' + needed + ' USDC on Base. Your balance: ' + bal + ' USDC. Send USDC (Base network) to your wallet: ' + walletState.address);
-              }
-            }).catch(function(e) {
-              if (e.message && e.message.indexOf('Insufficient') !== -1) throw e;
-              // Balance check failed (network issue) — continue anyway
-            });
-          }).then(function() {
-            showLoading('Signing USDC payment \u2014 check your wallet...');
-            return signX402Payment(requirements);
-          }).then(function(paymentHeader) {
-            var headers = getHeaders();
-            headers['X-PAYMENT'] = paymentHeader;
-            showLoading('Classifying with zkML proof (paid via x402)...');
-            return fetch(url, { method: 'POST', headers: headers, body: reqBody });
-          }).then(function(r2) {
-            if (!r2.ok && r2.status !== 200) {
-              return safeJson(r2).then(function(d) {
-                var msg = (d && d.error) || 'Payment failed';
-                if (d && d.details) msg += ': ' + d.details;
-                msg += ' (HTTP ' + r2.status + ')';
-                throw new Error(msg);
-              });
-            }
-            return handleResponse(r2, true).then(function() {
-              // Refresh wallet balance after successful x402 payment
-              if (walletState.connected) {
-                fetchUsdcBalance(walletState.address);
-              }
-            });
-          });
-        }
-        return handleResponse(r, false);
+        return handleResponse(r);
       })
       .catch(function(err) {
-        if (err && err.code === 4001) {
-          showError('Payment rejected by user.');
-        } else {
-          showError(err.message || 'Network error');
-        }
+        showError(err.message || 'Network error');
       })
       .finally(function() {
         if (btnC) btnC.disabled = false;
